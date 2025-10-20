@@ -5,27 +5,32 @@ This is a web-based game where one human player competes against multiple AI age
 
 **Architecture**: Built with LangGraph for advanced multi-agent orchestration, providing a graph-based state machine for game flow management.
 
+## Quick Start ⚡
+
+**Get running in 5 minutes!** See **[QUICKSTART.md](QUICKSTART.md)**
+
+```bash
+# 1. Setup
+cp env.example .env && nano .env  # Add your OPENAI_API_KEY
+
+# 2. Start backend
+./start_local.sh
+
+# 3. In another terminal, expose via tunnel (choose one)
+./ngrok http 8000                              # Option A: ngrok
+ssh -R 80:localhost:8000 nokey@localhost.run   # Option B: localhost.run (no signup!)
+
+# 4. Deploy frontend to Streamlit Cloud with the tunnel URL
+```
+
+---
+
 ## Setup
 
 ### Prerequisites
 - Python 3.8+
-- Node.js 18+ (with npm). If you have an older version (like 10.x), you'll need to upgrade. On Ubuntu, the default apt version may be outdated. We recommend using Node Version Manager (nvm) to install Node.js 18:
-  1. Install nvm:
-     ```
-     curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh | bash
-     ```
-     Then close and reopen your terminal, or run `source ~/.bashrc`.
-  2. Install Node.js 18:
-     ```
-     nvm install 18
-     nvm use 18
-     ```
-  3. Verify:
-     ```
-     node -v  # Should show v18.x.x
-     npm -v
-     ```
 - An OpenAI API key for AI agents
+- (Optional) Node.js 18+ for React frontend
 
 ### Backend Setup
 1. Navigate to the backend directory:
@@ -127,30 +132,72 @@ Initialize → Discussion → AI Chat Agents → Voting → AI Vote Agents → E
 
 ## Documentation
 
-- **README.md** (this file) - General overview and setup
-- **QUICK_START.md** - Get running in 5 minutes
-- **STREAMLIT_README.md** - Streamlit frontend guide
-- **STREAMLIT_IMPLEMENTATION.md** - Technical implementation details
-- **LANGGRAPH_MIGRATION.md** - LangGraph architecture guide
-- **DEVELOPER_GUIDE.md** - Developer documentation
-- **IMPLEMENTATION_SUMMARY.md** - Complete implementation summary
+### Getting Started
+- **[QUICKSTART.md](QUICKSTART.md)** ⭐ - Get running in 5 minutes (start here!)
+- **[DEPLOYMENT.md](DEPLOYMENT.md)** - Complete deployment guide
+- **[TUNNELING_OPTIONS.md](TUNNELING_OPTIONS.md)** - All tunneling options (no sudo required)
+- **[SETUP_SUMMARY.md](SETUP_SUMMARY.md)** - Quick reference and troubleshooting
+
+### Technical Documentation
+- **[LANGGRAPH_MIGRATION.md](LANGGRAPH_MIGRATION.md)** - LangGraph architecture guide
+- **[STREAMLIT_IMPLEMENTATION.md](STREAMLIT_IMPLEMENTATION.md)** - Streamlit frontend implementation
+- **[DEVELOPER_GUIDE.md](DEVELOPER_GUIDE.md)** - Developer documentation
+- **[IMPLEMENTATION_SUMMARY.md](IMPLEMENTATION_SUMMARY.md)** - Complete implementation summary
+
+### Additional Guides
+- **[STREAMLIT_README.md](STREAMLIT_README.md)** - Streamlit frontend details
+- **README.md** (this file) - General overview
 
 ## Deployment
-To host the game publicly:
 
-### Backend (FastAPI)
-Deploy to a platform like Render, Heroku, or a VPS:
+### Recommended: Local Backend + Cloud Frontend ⭐
+
+The best setup for performance - run the heavy AI backend on your local machine and host the lightweight frontend on Streamlit Cloud:
+
+**Quick Start:**
+```bash
+# 1. Start local backend
+./start_local.sh
+
+# 2. In another terminal, expose via ngrok
+ngrok http 8000
+
+# 3. Deploy frontend to Streamlit Cloud with BACKEND_URL set to your ngrok URL
+```
+
+**Detailed instructions:** See [DEPLOYMENT.md](DEPLOYMENT.md)
+
+**Benefits:**
+- ⚡ Fast backend performance (runs on your machine)
+- 🆓 Free frontend hosting (Streamlit Cloud)
+- 🔧 Easy to develop and debug locally
+- 💰 No cloud backend costs
+
+### Alternative Deployment Options
+
+#### Full Local Development
+Run everything locally:
+```bash
+# Terminal 1: Backend
+uvicorn backend.main:app --reload
+
+# Terminal 2: Frontend
+streamlit run streamlit_app.py
+```
+
+#### Full Cloud Deployment
+Deploy both backend and frontend to cloud:
+
+**Backend (FastAPI)** - Deploy to Render, Railway, or Heroku:
 - Set OPENAI_API_KEY env var
-- Expose on a public URL (e.g., https://your-backend.onrender.com)
+- Get public URL (e.g., https://your-backend.onrender.com)
 
-### Frontend Options
+**Frontend (Streamlit)** - Deploy to Streamlit Cloud:
+- Set BACKEND_URL to your backend URL in secrets
+- Deploy `streamlit_cloud_app.py`
 
-**React/Vite**: Deploy to Vercel, Netlify, or similar
+**React Frontend Option** - Deploy to Vercel/Netlify:
 - Set REACT_APP_BACKEND_URL env var to your backend URL
-
-**Streamlit**: Deploy to Streamlit Cloud (free)
-- Connect GitHub repository
-- Deploy streamlit_app.py
-- Set BACKEND_URL environment variable
+- Build and deploy from `frontend/` directory
 
 Users access the frontend URL in their browser; each can play in their own room by entering a room code or auto-generating one.
