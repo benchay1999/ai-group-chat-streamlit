@@ -13,7 +13,7 @@ from fastapi.middleware.cors import CORSMiddleware
 import os
 from dotenv import load_dotenv
 
-from langgraph_game import (
+from .langgraph_game import (
     game_graph, 
     create_game_for_room,
     process_human_message,
