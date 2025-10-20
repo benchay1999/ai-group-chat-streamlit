@@ -91,7 +91,7 @@ def create_initial_state(room_code: str, num_ai_players: int) -> GameState:
     """
     import random
     import time
-    from config import GAME_TOPICS, AI_PERSONALITIES
+    from .config import GAME_TOPICS, AI_PERSONALITIES
     
     # Create AI player names
     ai_names = [f"Player {i}" for i in range(1, num_ai_players + 1)]
