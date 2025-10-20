@@ -65,25 +65,27 @@ def wait_for_backend(port=8000, timeout=30):
     print(f"⚠️ Backend did not start within {timeout} seconds")
     return False
 
-def run_streamlit():
-    """Run the Streamlit frontend."""
-    import streamlit.web.cli as stcli
+def is_running_in_streamlit():
+    """Check if we're already running in a Streamlit context."""
+    try:
+        import streamlit as st
+        # Try to access the runtime to see if it exists
+        from streamlit.runtime.scriptrunner import get_script_run_ctx
+        return get_script_run_ctx() is not None
+    except:
+        return False
+
+def run_streamlit_app():
+    """Import and run the Streamlit app directly."""
+    import importlib.util
     
-    print("🎨 Starting Streamlit frontend...")
+    print("🎨 Loading Streamlit frontend...")
     
-    # Set the main script
+    # Import the streamlit app module
     streamlit_script = str(Path(__file__).parent / "streamlit_app.py")
-    
-    sys.argv = [
-        "streamlit",
-        "run",
-        streamlit_script,
-        "--server.headless=true",
-        "--server.address=0.0.0.0",
-        "--server.port=8501"
-    ]
-    
-    sys.exit(stcli.main())
+    spec = importlib.util.spec_from_file_location("streamlit_app", streamlit_script)
+    streamlit_module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(streamlit_module)
 
 def main():
     """Main entry point."""
@@ -134,9 +136,24 @@ def main():
     # Small delay to ensure backend is stable
     time.sleep(1)
     
-    # Run Streamlit in the main thread
-    # This will block until Streamlit exits
-    run_streamlit()
+    # If running in Streamlit already (e.g., on Streamlit Cloud), just import the app
+    # Otherwise, we need to launch Streamlit
+    if is_running_in_streamlit():
+        print("🔍 Detected existing Streamlit runtime, importing app directly...")
+        run_streamlit_app()
+    else:
+        print("🚀 Launching Streamlit CLI...")
+        import streamlit.web.cli as stcli
+        streamlit_script = str(Path(__file__).parent / "streamlit_app.py")
+        sys.argv = [
+            "streamlit",
+            "run",
+            streamlit_script,
+            "--server.headless=true",
+            "--server.address=0.0.0.0",
+            "--server.port=8501"
+        ]
+        sys.exit(stcli.main())
 
 if __name__ == "__main__":
     main()
