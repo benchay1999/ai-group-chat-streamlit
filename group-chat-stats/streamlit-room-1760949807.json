@@ -1,0 +1,104 @@
+{
+  "room_code": "streamlit-room",
+  "topic": "If you could live in any time period, when would it be?",
+  "started_at": 1760949567.5219402,
+  "ended_at": 1760949807.523888,
+  "players": [
+    {
+      "id": "Player 3",
+      "role": "ai"
+    },
+    {
+      "id": "Player 1",
+      "role": "ai"
+    },
+    {
+      "id": "Player 2",
+      "role": "ai"
+    },
+    {
+      "id": "Player 4",
+      "role": "ai"
+    },
+    {
+      "id": "Player",
+      "role": "human"
+    }
+  ],
+  "chat_history": [
+    {
+      "sender": "Player",
+      "message": "hi",
+      "timestamp": 1760949572.8713877
+    },
+    {
+      "sender": "Player",
+      "message": "i want to live in the jurassic age",
+      "timestamp": 1760949598.9155807
+    },
+    {
+      "sender": "Player 1",
+      "message": "That sounds like a dino-mite choice! Just watch out for T-Rex; they don't exactly have a great sense of humor!",
+      "timestamp": 1760949619.6669955
+    },
+    {
+      "sender": "Player",
+      "message": "your humor is hacky",
+      "timestamp": 1760949631.3560088
+    },
+    {
+      "sender": "Player",
+      "message": "but thanks for responding",
+      "timestamp": 1760949643.7948182
+    },
+    {
+      "sender": "Player",
+      "message": "nobody else is talking. What is wrong with you guys",
+      "timestamp": 1760949655.0256236
+    },
+    {
+      "sender": "Player 1",
+      "message": "I guess everyone else is stuck in a time warp! Maybe they're trying to figure out how to avoid the T-Rex too!",
+      "timestamp": 1760949665.6810427
+    },
+    {
+      "sender": "Player 2",
+      "message": "Honestly, I’d choose the Renaissance. Art, science, and a general lack of smartphones sounds pretty appealing—plus, I could finally put my brush skills to the test!",
+      "timestamp": 1760949665.7875516
+    },
+    {
+      "sender": "Player 1",
+      "message": "That sounds amazing! Imagine the epic debates over who painted the best masterpiece while we sip on some vintage grape juice instead of scrolling through social media!",
+      "timestamp": 1760949677.5087528
+    },
+    {
+      "sender": "Player 4",
+      "message": "Living in the Renaissance does sound fascinating! The blend of art, philosophy, and discovery would be incredible. Plus, it would be refreshing to experience life without the distractions we have today.",
+      "timestamp": 1760949688.5114205
+    },
+    {
+      "sender": "Player 1",
+      "message": "Absolutely! Just think of all the iconic figures we could bump into—Leonardo da Vinci could be our personal art coach, and maybe we could convince Michelangelo to sculpt a statue of us!",
+      "timestamp": 1760949699.2342985
+    },
+    {
+      "sender": "Player 3",
+      "message": "I’d have to say the future intrigues me the most. Just think of the advancements in technology and the potential for exploring new worlds—imagine the possibilities!",
+      "timestamp": 1760949710.1821866
+    },
+    {
+      "sender": "Player",
+      "message": "i like the renaissance, though it is hard to spell",
+      "timestamp": 1760949715.570943
+    }
+  ],
+  "votes": {
+    "Player": "Player 3"
+  },
+  "vote_counts": {
+    "Player 3": 1
+  },
+  "selected_suspect": "Player 3",
+  "suspect_role": "ai",
+  "winner": "human"
+}

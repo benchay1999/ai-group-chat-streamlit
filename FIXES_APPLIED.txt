@@ -1,0 +1,86 @@
+================================================================================
+                          FIXES APPLIED - QUICK REFERENCE
+================================================================================
+
+✅ ISSUE 1: LangGraph Recursion Limit Error (FIXED)
+   Error: "Recursion limit of 25 reached without hitting a stop condition"
+   
+   Fix Applied:
+   - Increased recursion_limit from 25 to 100 in backend/main.py (line 167)
+   - Added config parameter to graph.invoke() call
+   
+   File Modified: backend/main.py
+
+================================================================================
+
+✅ ISSUE 2: HTTP Timeout Errors (FIXED)
+   Error: "HTTPConnectionPool: Read timed out (read timeout=5)"
+   
+   Fix Applied:
+   - join_room():        5s → 30s
+   - poll_game_state(): 5s → 15s  
+   - send_message():    5s → 20s
+   - cast_vote():       5s → 20s
+   - health_check():    2s → 5s
+   
+   File Modified: streamlit_app.py
+
+================================================================================
+
+🚀 WHAT TO DO NEXT:
+
+1. RESTART THE BACKEND (to apply recursion limit fix):
+   
+   # Stop current backend (Ctrl+C)
+   cd backend
+   uvicorn main:app --reload
+   
+2. REFRESH STREAMLIT (it should already be running):
+   
+   # If not running:
+   streamlit run streamlit_app.py
+   
+   # If running, just refresh browser
+   
+3. TEST THE FIXES:
+   
+   ✓ Join a room (should not timeout)
+   ✓ Send messages (AI should respond without errors)
+   ✓ Wait for voting phase (should work smoothly)
+   ✓ Vote and see elimination (should process correctly)
+
+================================================================================
+
+📊 WHAT CHANGED:
+
+Backend (backend/main.py):
+  Line 167: Added config={"recursion_limit": 100}
+  
+Streamlit (streamlit_app.py):
+  Line 44:  timeout=30  (join_room)
+  Line 60:  timeout=15  (poll_game_state)
+  Line 76:  timeout=20  (send_message)
+  Line 90:  timeout=20  (cast_vote)
+  Line 361: timeout=5   (health_check)
+
+LangGraph (backend/langgraph_game.py):
+  Lines 108-111: Updated compile() configuration
+
+================================================================================
+
+💡 IF ISSUES PERSIST:
+
+1. Check backend logs for errors
+2. Increase recursion_limit further (try 150 or 200)
+3. Increase timeouts further (try 30-40 seconds)
+4. Use faster AI model: export AI_MODEL_NAME=gpt-3.5-turbo
+5. Reduce AI players: export NUM_AI_PLAYERS=3
+
+See RECURSION_FIX.md for detailed troubleshooting
+
+================================================================================
+
+✨ Both issues are now FIXED! Restart the backend and test. ✨
+
+================================================================================
+

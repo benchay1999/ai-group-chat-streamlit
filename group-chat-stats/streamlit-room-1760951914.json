@@ -1,0 +1,119 @@
+{
+  "room_code": "streamlit-room",
+  "topic": "What's your unpopular opinion?",
+  "started_at": 1760951674.071185,
+  "ended_at": 1760951914.0743225,
+  "players": [
+    {
+      "id": "Player 1",
+      "role": "ai"
+    },
+    {
+      "id": "Player 3",
+      "role": "ai"
+    },
+    {
+      "id": "Player 4",
+      "role": "ai"
+    },
+    {
+      "id": "Player 2",
+      "role": "ai"
+    },
+    {
+      "id": "Player",
+      "role": "human"
+    }
+  ],
+  "chat_history": [
+    {
+      "sender": "Player 1",
+      "message": "I think pineapple on pizza is actually pretty good. It's a great sweet and savory combo that people just love to hate!",
+      "timestamp": 1760951684.684509
+    },
+    {
+      "sender": "Player 3",
+      "message": "I think pineapple on pizza is actually a culinary masterpiece, and I’m ready to defend it with my life. You can't convince me otherwise!",
+      "timestamp": 1760951684.9319174
+    },
+    {
+      "sender": "Player",
+      "message": "i used to like hiphop, but now when i look at the lyrics, there are no depths",
+      "timestamp": 1760951706.7065797
+    },
+    {
+      "sender": "Player",
+      "message": "how about you, player 4? what do you think about the topic or my answer",
+      "timestamp": 1760951729.5403192
+    },
+    {
+      "sender": "Player 4",
+      "message": "I think a lot of mainstream music lacks depth these days, but there are still some artists pushing boundaries that deserve more recognition. It's all about finding the hidden gems!",
+      "timestamp": 1760951740.682487
+    },
+    {
+      "sender": "Player",
+      "message": "have you listened to doc watson?",
+      "timestamp": 1760951756.6507943
+    },
+    {
+      "sender": "Player",
+      "message": "he is a country singer",
+      "timestamp": 1760951760.4997594
+    },
+    {
+      "sender": "Player 2",
+      "message": "I actually think that reality TV shows have some redeeming qualities; they can be surprisingly insightful about human behavior and social dynamics, despite the general disdain they receive.",
+      "timestamp": 1760951771.298517
+    },
+    {
+      "sender": "Player 4",
+      "message": "I haven't listened to Doc Watson, but I've heard he has some great storytelling in his songs. Country music can definitely offer some profound insights if you dig deep!",
+      "timestamp": 1760951771.4415686
+    },
+    {
+      "sender": "Player",
+      "message": "too bad",
+      "timestamp": 1760951812.3527868
+    },
+    {
+      "sender": "Player",
+      "message": "how about you player 3?",
+      "timestamp": 1760951830.45477
+    },
+    {
+      "sender": "Player",
+      "message": "you never talked",
+      "timestamp": 1760951834.2924364
+    },
+    {
+      "sender": "Player 1",
+      "message": "I think there’s something to be said about the simplicity of certain genres. Sometimes the most straightforward songs carry the most emotional weight, which is something that gets overlooked.",
+      "timestamp": 1760951845.1112616
+    },
+    {
+      "sender": "Player 4",
+      "message": "I totally agree, Player 1! Simplicity can often resonate more than complexity, and those straightforward songs can really hit home emotionally.",
+      "timestamp": 1760951856.0245538
+    },
+    {
+      "sender": "Player 3",
+      "message": "Honestly, I think cats are overrated. They get all this love and attention when dogs are clearly the superior pets—loyal, friendly, and they actually want to hang out with you!",
+      "timestamp": 1760951856.6057835
+    }
+  ],
+  "votes": {
+    "Player 1": "Player 4",
+    "Player 3": "Player 4",
+    "Player 4": "Player 1",
+    "Player 2": "Player 3"
+  },
+  "vote_counts": {
+    "Player 4": 2,
+    "Player 1": 1,
+    "Player 3": 1
+  },
+  "selected_suspect": "Player 4",
+  "suspect_role": "ai",
+  "winner": "human"
+}

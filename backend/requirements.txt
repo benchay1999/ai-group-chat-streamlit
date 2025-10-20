@@ -1,0 +1,10 @@
+fastapi
+uvicorn
+openai
+websockets
+python-dotenv
+langgraph
+langchain
+langchain-openai
+langchain-core
+streamlit>=1.28.0

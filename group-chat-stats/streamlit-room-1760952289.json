@@ -1,0 +1,248 @@
+{
+  "room_code": "streamlit-room",
+  "topic": "What's the most overrated food?",
+  "started_at": 1760952049.7785296,
+  "ended_at": 1760952289.7799852,
+  "players": [
+    {
+      "id": "Player 1",
+      "role": "ai"
+    },
+    {
+      "id": "Player 2",
+      "role": "ai"
+    },
+    {
+      "id": "Player 4",
+      "role": "ai"
+    },
+    {
+      "id": "Player 3",
+      "role": "ai"
+    },
+    {
+      "id": "Player 5",
+      "role": "human"
+    }
+  ],
+  "chat_history": [
+    {
+      "sender": "Player 4",
+      "message": "I think avocado toast is super overrated! It's everywhere, but I don’t get what all the hype is about.",
+      "timestamp": 1760952060.6606708
+    },
+    {
+      "sender": "Player 3",
+      "message": "I think avocado toast is pretty overrated. It's everywhere, but it doesn't really blow me away like everyone claims it does.",
+      "timestamp": 1760952060.6812441
+    },
+    {
+      "sender": "Player 2",
+      "message": "I think avocado toast is super overrated! It’s like, why not just enjoy some good old-fashioned buttered toast instead?",
+      "timestamp": 1760952060.739664
+    },
+    {
+      "sender": "Player 1",
+      "message": "I think avocado toast is pretty overrated. It gets all the hype, but sometimes it just feels like a fancy way to eat a basic breakfast.",
+      "timestamp": 1760952060.8613317
+    },
+    {
+      "sender": "Player 5",
+      "message": "wow, everyone said avocado!",
+      "timestamp": 1760952071.4229198
+    },
+    {
+      "sender": "Player 1",
+      "message": "Maybe it's because people love to showcase it on social media? It definitely seems to have taken on a life of its own!",
+      "timestamp": 1760952082.1784601
+    },
+    {
+      "sender": "Player 2",
+      "message": "Right? It’s like the food trend that just won’t go away! There are so many other delicious options out there that deserve the spotlight!",
+      "timestamp": 1760952082.2630365
+    },
+    {
+      "sender": "Player 3",
+      "message": "Maybe we should explore other overrated foods as well. I feel like kale gets a lot of attention too, but it’s not always the best option on the menu.",
+      "timestamp": 1760952082.5424128
+    },
+    {
+      "sender": "Player 4",
+      "message": "I know, right? It's like we all just jumped on the avocado bandwagon without questioning it! What other foods do you think deserve the overrated title?",
+      "timestamp": 1760952082.611839
+    },
+    {
+      "sender": "Player 3",
+      "message": "I think quinoa might also fit into that category. It's touted as this superfood, but honestly, it can be kind of bland and overrated compared to other grains.",
+      "timestamp": 1760952093.6679654
+    },
+    {
+      "sender": "Player 1",
+      "message": "I think quinoa might fit that category too. It’s often praised for being super healthy, but it can be pretty bland and doesn't always taste great in every dish.",
+      "timestamp": 1760952093.709948
+    },
+    {
+      "sender": "Player 4",
+      "message": "I totally agree about kale! It's often hailed as a superfood, but sometimes it just doesn't taste that great. What about foods like quinoa or acai bowls? They get a lot of love too, but are they really as amazing as everyone claims?",
+      "timestamp": 1760952094.1504085
+    },
+    {
+      "sender": "Player 5",
+      "message": "my choice is coca cola",
+      "timestamp": 1760952096.3834643
+    },
+    {
+      "sender": "Player 5",
+      "message": "i like pepsi cola",
+      "timestamp": 1760952099.5635395
+    },
+    {
+      "sender": "Player 1",
+      "message": "Coca Cola is definitely a classic, but I can see why some might find it overrated too. There are so many other interesting beverages out there that sometimes get overlooked!",
+      "timestamp": 1760952110.3514905
+    },
+    {
+      "sender": "Player 3",
+      "message": "Coca Cola is interesting! It's definitely iconic, but some people think it's just too sugary. I can see how that might make it feel overrated for some folks.",
+      "timestamp": 1760952110.6886137
+    },
+    {
+      "sender": "Player 2",
+      "message": "I think a lot of sugary drinks can be overrated, honestly! There are so many refreshing options out there that are just as tasty without all that sugar.",
+      "timestamp": 1760952121.564328
+    },
+    {
+      "sender": "Player 4",
+      "message": "I think sugary drinks like Coca Cola can definitely be seen as overrated! It's fun to explore other beverages that might have more unique flavors or health benefits.",
+      "timestamp": 1760952121.7901535
+    },
+    {
+      "sender": "Player 3",
+      "message": "I agree! It's surprising how many people still gravitate towards sugary drinks like Coca Cola when there are so many flavorful and healthier alternatives out there.",
+      "timestamp": 1760952132.521486
+    },
+    {
+      "sender": "Player 1",
+      "message": "I agree! There's a whole world of beverages out there, and some can be much more enjoyable and interesting than the usual sugary drinks. It's always nice to explore new flavors!",
+      "timestamp": 1760952132.9946063
+    },
+    {
+      "sender": "Player 2",
+      "message": "Absolutely! Exploring new flavors is so much fun! I mean, there are so many creative drinks out there that can surprise your taste buds!",
+      "timestamp": 1760952143.877971
+    },
+    {
+      "sender": "Player 5",
+      "message": "but i like the mexican coca cola where they use actual sugarcanes rather than corn syrup",
+      "timestamp": 1760952143.934384
+    },
+    {
+      "sender": "Player 2",
+      "message": "Ooh, the Mexican Coca Cola is definitely a different experience with that real sugar! It's always great to find something that stands out, especially when it comes to classic flavors!",
+      "timestamp": 1760952154.8224945
+    },
+    {
+      "sender": "Player 1",
+      "message": "That Mexican Coca Cola definitely has a unique taste! Using real sugar makes a big difference, and it’s nice to see the variations in how drinks are made around the world.",
+      "timestamp": 1760952155.014045
+    },
+    {
+      "sender": "Player 3",
+      "message": "That's a good point! The Mexican Coca Cola does have a different taste with the cane sugar, making it stand out from the regular version. It's always interesting to see how different ingredients can change the flavor profile!",
+      "timestamp": 1760952155.0490177
+    },
+    {
+      "sender": "Player 4",
+      "message": "I totally get that! Mexican Coca Cola has such a unique taste with that real sugar—definitely a nice twist compared to the regular stuff! What other drinks do you think are underrated?",
+      "timestamp": 1760952155.102216
+    },
+    {
+      "sender": "Player 3",
+      "message": "I think drinks like bubble tea can be underrated! They offer such a fun texture and flavor variety, yet not everyone has tried them.",
+      "timestamp": 1760952165.75916
+    },
+    {
+      "sender": "Player 2",
+      "message": "I think fresh juices can be really underrated! They’re vibrant, refreshing, and packed with nutrients—definitely worth trying over those sugary drinks!",
+      "timestamp": 1760952165.8906605
+    },
+    {
+      "sender": "Player 4",
+      "message": "I think sparkling water is pretty underrated! It's refreshing and can be flavored in so many ways, making it a great alternative to sugary drinks. What do you all think?",
+      "timestamp": 1760952166.201778
+    },
+    {
+      "sender": "Player 3",
+      "message": "I agree, sparkling water is a great alternative! It can be so versatile with all the different flavors available, making it a fun choice for those looking to switch things up.",
+      "timestamp": 1760952177.0894096
+    },
+    {
+      "sender": "Player 2",
+      "message": "I completely agree about sparkling water! It's such a versatile drink and can be so refreshing, especially with a squeeze of lemon or some fruit added in. It's a great way to stay hydrated without all the sugar!",
+      "timestamp": 1760952177.182469
+    },
+    {
+      "sender": "Player 3",
+      "message": "Absolutely! Sparkling water with a splash of fruit is such a simple yet satisfying way to stay hydrated. It really elevates the experience without the added sugar.",
+      "timestamp": 1760952188.0815105
+    },
+    {
+      "sender": "Player 1",
+      "message": "Sparkling water really is a great option! It's nice to see how many flavors you can find, and it can definitely make hydration more enjoyable without the added sugars.",
+      "timestamp": 1760952188.1433911
+    },
+    {
+      "sender": "Player 4",
+      "message": "I love how sparkling water can feel like a treat without all the sugar! Plus, it’s such a fun way to mix things up—what's your favorite flavor to add?",
+      "timestamp": 1760952199.1284
+    },
+    {
+      "sender": "Player 3",
+      "message": "Player 3: I really enjoy adding a splash of lime to sparkling water—it's so refreshing! What about you all? Do you have a favorite flavor?",
+      "timestamp": 1760952209.8697586
+    },
+    {
+      "sender": "Player 1",
+      "message": "I really enjoy adding a splash of lime to sparkling water! It gives it such a refreshing twist and makes it feel a bit fancy too. What about you?",
+      "timestamp": 1760952209.9353018
+    },
+    {
+      "sender": "Player 2",
+      "message": "I love adding a splash of raspberry or lime to my sparkling water! It gives such a refreshing twist and makes hydration feel like a little celebration! What's yours?",
+      "timestamp": 1760952210.1475928
+    },
+    {
+      "sender": "Player 2",
+      "message": "I really enjoy adding a splash of lemon to my sparkling water! It adds a zesty kick that makes it so refreshing—definitely a little party in a glass! What about everyone else?",
+      "timestamp": 1760952221.1101277
+    },
+    {
+      "sender": "Player 4",
+      "message": "I love adding a splash of lemon to my sparkling water! It gives it that perfect zesty kick and keeps things refreshing. What other fun flavors do you all like?",
+      "timestamp": 1760952221.231159
+    },
+    {
+      "sender": "Player 1",
+      "message": "I enjoy adding a slice of cucumber to my sparkling water! It adds a subtle freshness that’s really nice, especially on a warm day.",
+      "timestamp": 1760952221.317761
+    },
+    {
+      "sender": "Player 4",
+      "message": "I love the idea of adding cucumber! It sounds so refreshing. I also think adding some mint leaves can really elevate the flavor and give it a cool twist. What do you all think?",
+      "timestamp": 1760952232.3334422
+    }
+  ],
+  "votes": {
+    "Player 1": "Player 2",
+    "Player 2": "Player 1",
+    "Player 4": "Player 2",
+    "Player 3": "Player 1"
+  },
+  "vote_counts": {
+    "Player 2": 2,
+    "Player 1": 2
+  },
+  "selected_suspect": "Player 1",
+  "suspect_role": "ai",
+  "winner": "human"
+}

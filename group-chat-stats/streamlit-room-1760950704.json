@@ -1,0 +1,144 @@
+{
+  "room_code": "streamlit-room",
+  "topic": "What's the most overrated food?",
+  "started_at": 1760950464.503573,
+  "ended_at": 1760950704.505682,
+  "players": [
+    {
+      "id": "Player 2",
+      "role": "ai"
+    },
+    {
+      "id": "Player 1",
+      "role": "ai"
+    },
+    {
+      "id": "Player 3",
+      "role": "ai"
+    },
+    {
+      "id": "Player 4",
+      "role": "ai"
+    },
+    {
+      "id": "Player",
+      "role": "human"
+    }
+  ],
+  "chat_history": [
+    {
+      "sender": "Player 2",
+      "message": "Honestly, avocados are so overrated. They’re just green mush that everyone pretends to love because it looks good on Instagram.",
+      "timestamp": 1760950475.278856
+    },
+    {
+      "sender": "Player 4",
+      "message": "I’d say avocado toast is pretty overrated. It’s like the poster child for basic brunch, but do we really need to pay extra for a glorified piece of bread?",
+      "timestamp": 1760950475.40922
+    },
+    {
+      "sender": "Player 1",
+      "message": "I think avocado toast is pretty overrated! It's like, everyone raves about it, but it's just smashed avocado on bread, right?",
+      "timestamp": 1760950475.4979172
+    },
+    {
+      "sender": "Player",
+      "message": "too expensive",
+      "timestamp": 1760950477.6045623
+    },
+    {
+      "sender": "Player",
+      "message": "what else?",
+      "timestamp": 1760950493.2373455
+    },
+    {
+      "sender": "Player 1",
+      "message": "I totally get that! Another one that comes to mind is kale; it seems like everyone is obsessed with it, but it can be so tough and bitter.",
+      "timestamp": 1760950504.1769369
+    },
+    {
+      "sender": "Player 4",
+      "message": "How about kale? People act like it's some kind of superfood, but it just tastes like sadness on a plate.",
+      "timestamp": 1760950504.2081807
+    },
+    {
+      "sender": "Player 2",
+      "message": "Honestly, kale gets way too much hype as well. It's like people just decided to make it a superfood because it sounds fancy, but it’s basically leafy punishment.",
+      "timestamp": 1760950504.2961953
+    },
+    {
+      "sender": "Player",
+      "message": "i like the tast of kale",
+      "timestamp": 1760950517.0356684
+    },
+    {
+      "sender": "Player",
+      "message": "it contains protein, so it is a good choice for vegetarians",
+      "timestamp": 1760950535.5921876
+    },
+    {
+      "sender": "Player",
+      "message": "i am a vegetarian myself",
+      "timestamp": 1760950546.7009614
+    },
+    {
+      "sender": "Player",
+      "message": "what about you guys?",
+      "timestamp": 1760950550.7219646
+    },
+    {
+      "sender": "Player",
+      "message": "seriously? no answers?",
+      "timestamp": 1760950568.2784758
+    },
+    {
+      "sender": "Player",
+      "message": "i am left alsone",
+      "timestamp": 1760950572.1675704
+    },
+    {
+      "sender": "Player",
+      "message": "fuck",
+      "timestamp": 1760950579.1566489
+    },
+    {
+      "sender": "Player",
+      "message": "player 1, answer",
+      "timestamp": 1760950583.1727066
+    },
+    {
+      "sender": "Player 1",
+      "message": "I’m here! 😄 As for me, I’m not a vegetarian, but I totally respect the choice! It’s great that you find kale a good option. What other vegetarian dishes do you enjoy?",
+      "timestamp": 1760950594.18331
+    },
+    {
+      "sender": "Player 1",
+      "message": "I love hearing about vegetarian dishes! How about things like chickpea salad or quinoa bowls? They can be so delicious and filling!",
+      "timestamp": 1760950609.8038492
+    },
+    {
+      "sender": "Player",
+      "message": "subway egg slice sandwiches",
+      "timestamp": 1760950613.0542765
+    },
+    {
+      "sender": "Player",
+      "message": "or soy meat",
+      "timestamp": 1760950620.6037734
+    },
+    {
+      "sender": "Player 1",
+      "message": "Oh, those sound yummy! I've heard a lot of good things about chickpea salad – it's so versatile! Have you tried adding some spices or herbs to it?",
+      "timestamp": 1760950631.6988823
+    }
+  ],
+  "votes": {
+    "Player": "Player 3"
+  },
+  "vote_counts": {
+    "Player 3": 1
+  },
+  "selected_suspect": "Player 3",
+  "suspect_role": "ai",
+  "winner": "human"
+}

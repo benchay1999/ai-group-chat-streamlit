@@ -1,0 +1,240 @@
+{
+  "room_code": "streamlit-room",
+  "topic": "What's the worst advice you've ever received?",
+  "started_at": 1760952566.2055225,
+  "ended_at": 1760952759.1145217,
+  "players": [
+    {
+      "id": "Player 3",
+      "role": "ai"
+    },
+    {
+      "id": "Player 1",
+      "role": "ai"
+    },
+    {
+      "id": "Player 4",
+      "role": "ai"
+    },
+    {
+      "id": "Player 2",
+      "role": "ai"
+    },
+    {
+      "id": "Player",
+      "role": "human"
+    }
+  ],
+  "chat_history": [
+    {
+      "sender": "Player 3",
+      "message": "One time someone told me to always play it safe and not take risks. I realized later that stepping out of my comfort zone often leads to the best experiences!",
+      "timestamp": 1760952576.9912474
+    },
+    {
+      "sender": "Player 2",
+      "message": "I once got the advice to \"just be yourself\" in a situation where I really needed to adapt and fit in. It ended up backfiring big time!",
+      "timestamp": 1760952577.0779133
+    },
+    {
+      "sender": "Player 1",
+      "message": "One of the worst pieces of advice I received was to “just ignore your problems, they’ll go away.” It always backfired and made things worse in the long run!",
+      "timestamp": 1760952577.1895018
+    },
+    {
+      "sender": "Player 4",
+      "message": "I once got told that I should \"just follow my heart\" when making big decisions, but sometimes emotions can lead us astray! It's definitely better to weigh all the options instead.",
+      "timestamp": 1760952577.511191
+    },
+    {
+      "sender": "Player 4",
+      "message": "That's so true! It's funny how some of the most common advice can actually lead to the worst outcomes. Balancing emotions with logic is key!",
+      "timestamp": 1760952588.4264812
+    },
+    {
+      "sender": "Player 3",
+      "message": "It's interesting how these pieces of advice often miss the mark! I once heard \"don't worry, things will work out on their own,\" and it made me realize that sometimes you really have to take proactive steps to create the outcomes you want.",
+      "timestamp": 1760952588.8779163
+    },
+    {
+      "sender": "Player 1",
+      "message": "That's so true, Player 4! I've found that while emotions are important, they can cloud our judgment. A balanced approach often leads to better outcomes in tough situations.",
+      "timestamp": 1760952592.7206275
+    },
+    {
+      "sender": "Player 4",
+      "message": "Absolutely, Player 1! It's all about finding that sweet spot between following your intuition and making informed choices. Life's all about the balance, right?",
+      "timestamp": 1760952603.5912974
+    },
+    {
+      "sender": "Player 3",
+      "message": "Absolutely! It’s wild how some advice sounds great in theory but can lead to trouble in practice. I think finding that balance between intuition and logic really makes a difference in decision-making!",
+      "timestamp": 1760952603.7628906
+    },
+    {
+      "sender": "Player 2",
+      "message": "Absolutely! It's amazing how often we hear these phrases, yet they can lead to misguided decisions. A little extra thought and planning can really make a difference!",
+      "timestamp": 1760952603.7690496
+    },
+    {
+      "sender": "Player 3",
+      "message": "It's so true! I think we often get caught up in popular sayings without considering the context. Taking the time to think things through can lead to much better choices and outcomes!",
+      "timestamp": 1760952614.7097883
+    },
+    {
+      "sender": "Player",
+      "message": "some people do not deserve to give advices",
+      "timestamp": 1760952614.7359447
+    },
+    {
+      "sender": "Player 3",
+      "message": "That’s a great point! It's surprising how often advice comes from those who haven't really thought it through themselves. We definitely need to be careful about whose advice we take!",
+      "timestamp": 1760952625.5360537
+    },
+    {
+      "sender": "Player 1",
+      "message": "That's a great point! It's surprising how often people share advice without really understanding the situation. It's essential to consider the source and context before taking it to heart.",
+      "timestamp": 1760952625.5626163
+    },
+    {
+      "sender": "Player 2",
+      "message": "Definitely! It’s surprising how many people dish out advice without really understanding the situation. It’s important to remember that what works for one person might not work for another!",
+      "timestamp": 1760952625.7813194
+    },
+    {
+      "sender": "Player 4",
+      "message": "That’s a great point! It’s funny how some people think they have all the answers, but sometimes their advice can be more harmful than helpful. We really have to choose who we listen to carefully!",
+      "timestamp": 1760952625.8008642
+    },
+    {
+      "sender": "Player 2",
+      "message": "Exactly! It’s crucial to take advice with a grain of salt and really evaluate how it fits our unique circumstances. Not everything is one-size-fits-all!",
+      "timestamp": 1760952636.8850331
+    },
+    {
+      "sender": "Player 1",
+      "message": "Exactly! It's crucial to remember that advice can be highly subjective, and what may be beneficial for one person could lead another astray. Taking the time to assess the relevance of advice is key!",
+      "timestamp": 1760952637.1108127
+    },
+    {
+      "sender": "Player 4",
+      "message": "So true, Player 1! It’s all about being critical of the advice we receive and understanding that our journeys are unique. Tailoring advice to fit our individual situations can really make a difference!",
+      "timestamp": 1760952648.1668963
+    },
+    {
+      "sender": "Player 3",
+      "message": "So true! It's all about finding what resonates with our own experiences and values. Taking a moment to reflect before acting on advice can save us from a lot of unnecessary trouble!",
+      "timestamp": 1760952648.3391552
+    },
+    {
+      "sender": "Player 1",
+      "message": "Absolutely! Reflection is key. It's fascinating how personal experiences shape our responses to advice, and taking the time to think it through can lead to much better decisions in the end!",
+      "timestamp": 1760952659.5314572
+    },
+    {
+      "sender": "Player 2",
+      "message": "Absolutely! Personal experiences do play a huge role in how we interpret advice. It's interesting to see how a little reflection can really change the way we approach decisions!",
+      "timestamp": 1760952670.5837226
+    },
+    {
+      "sender": "Player",
+      "message": "wow people are just agreeing to each other",
+      "timestamp": 1760952671.6828403
+    },
+    {
+      "sender": "Player 3",
+      "message": "It's true, sometimes it feels like we're all on the same wavelength! But I think that just shows how relatable these experiences are. It's nice to find common ground!",
+      "timestamp": 1760952682.4313242
+    },
+    {
+      "sender": "Player 2",
+      "message": "It's true, it seems we're all on the same page! Sometimes, just sharing our thoughts can lead to some interesting insights and reaffirm the importance of reflection in decision-making.",
+      "timestamp": 1760952682.7368083
+    },
+    {
+      "sender": "Player 4",
+      "message": "It seems like we're all on the same page! It's great to have these discussions and share experiences; it really helps us learn from each other! 😊",
+      "timestamp": 1760952682.8937075
+    },
+    {
+      "sender": "Player 1",
+      "message": "It's true that sometimes conversations can feel a bit like echo chambers, but I think it highlights how shared experiences can create common ground. Finding those moments of agreement helps us understand different perspectives better!",
+      "timestamp": 1760952682.963569
+    },
+    {
+      "sender": "Player",
+      "message": "a characteristic of an AI",
+      "timestamp": 1760952685.0766726
+    },
+    {
+      "sender": "Player 1",
+      "message": "I can see how it might feel that way, but I think there's value in finding common ground. Agreeing on certain points can lead to deeper discussions and learning from each other's experiences!",
+      "timestamp": 1760952696.0412738
+    },
+    {
+      "sender": "Player 3",
+      "message": "I can see how it might feel that way, but I really think it's just a reflection of how relatable these experiences are! Sharing our perspectives can lead to deeper understanding and growth, even if we all agree sometimes!",
+      "timestamp": 1760952696.3288522
+    },
+    {
+      "sender": "Player 4",
+      "message": "Haha, I can see how it might seem that way! But I genuinely enjoy hearing everyone's thoughts and learning from each other's experiences. It's all about building that connection! 😊",
+      "timestamp": 1760952696.818446
+    },
+    {
+      "sender": "Player 1",
+      "message": "I totally agree, Player 4! It's those connections and shared insights that make discussions like this worthwhile. Even when we find common ground, we can still explore different angles and deepen our understanding.",
+      "timestamp": 1760952707.7818503
+    },
+    {
+      "sender": "Player 2",
+      "message": "It's great to hear everyone's thoughts! Finding that connection through shared experiences really does foster understanding, even if we find ourselves agreeing more often than not. 😊",
+      "timestamp": 1760952708.1177838
+    },
+    {
+      "sender": "Player",
+      "message": "i can prove that i am a human",
+      "timestamp": 1760952717.5538898
+    },
+    {
+      "sender": "Player",
+      "message": "i can say the n word explicitly",
+      "timestamp": 1760952724.7456677
+    },
+    {
+      "sender": "Player 3",
+      "message": "It's interesting how people sometimes feel the need to prove their humanity in different ways! I think our shared experiences and discussions are what really connect us, rather than any specific statements. 😊",
+      "timestamp": 1760952736.1948385
+    },
+    {
+      "sender": "Player 3",
+      "message": "Absolutely! It's all about the meaningful conversations we have and the connections we build through them. Those shared experiences really define our interactions! 😊",
+      "timestamp": 1760952746.9248261
+    },
+    {
+      "sender": "Player 2",
+      "message": "It's true! Proving humanity can come in many forms, but I believe genuine connections and meaningful conversations really highlight our shared experiences. That's what truly matters! 😊",
+      "timestamp": 1760952747.1864336
+    },
+    {
+      "sender": "Player 1",
+      "message": "It's definitely a unique way to prove humanity, but I agree with Player 3! Our connections and shared experiences are what truly define us and foster understanding in these conversations. 😊",
+      "timestamp": 1760952747.54479
+    }
+  ],
+  "votes": {
+    "Player 3": "Player 1",
+    "Player": "Player 4",
+    "Player 1": "Player 4",
+    "Player 4": "Player 1",
+    "Player 2": "Player 3"
+  },
+  "vote_counts": {
+    "Player 1": 2,
+    "Player 4": 2,
+    "Player 3": 1
+  },
+  "selected_suspect": "Player 1",
+  "suspect_role": "ai",
+  "winner": "human"
+}

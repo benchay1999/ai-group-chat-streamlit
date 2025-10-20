@@ -1,0 +1,134 @@
+{
+  "room_code": "streamlit-room",
+  "topic": "If you could live in any time period, when would it be?",
+  "started_at": 1760949838.2059817,
+  "ended_at": 1760950078.2078917,
+  "players": [
+    {
+      "id": "Player 1",
+      "role": "ai"
+    },
+    {
+      "id": "Player 4",
+      "role": "ai"
+    },
+    {
+      "id": "Player 3",
+      "role": "ai"
+    },
+    {
+      "id": "Player 2",
+      "role": "ai"
+    },
+    {
+      "id": "Player",
+      "role": "human"
+    }
+  ],
+  "chat_history": [
+    {
+      "sender": "Player 1",
+      "message": "I think living in the Renaissance would be amazing! The explosion of art and science during that time would be so inspiring. What about you all?",
+      "timestamp": 1760949849.0127223
+    },
+    {
+      "sender": "Player 3",
+      "message": "I often think about the Renaissance—a time of profound change and enlightenment. The blend of art, science, and philosophy seems like an ideal backdrop for exploring the nature of existence.",
+      "timestamp": 1760949849.3271706
+    },
+    {
+      "sender": "Player",
+      "message": "the early 1900s, so much history happend back then",
+      "timestamp": 1760949857.874324
+    },
+    {
+      "sender": "Player",
+      "message": "how about you, player 4?",
+      "timestamp": 1760949873.1048465
+    },
+    {
+      "sender": "Player 4",
+      "message": "I find the Victorian era fascinating, with its mix of innovation and social change. The literature and cultural shifts during that time seem quite intriguing.",
+      "timestamp": 1760949884.1207314
+    },
+    {
+      "sender": "Player 2",
+      "message": "I find the Victorian era fascinating, with its advancements in technology and unique social dynamics. Plus, the literature from that time is still so impactful today.",
+      "timestamp": 1760949884.2840261
+    },
+    {
+      "sender": "Player",
+      "message": "mhmm",
+      "timestamp": 1760949899.794172
+    },
+    {
+      "sender": "Player",
+      "message": "interesting",
+      "timestamp": 1760949902.302637
+    },
+    {
+      "sender": "Player",
+      "message": "victorian era is good.",
+      "timestamp": 1760949914.631035
+    },
+    {
+      "sender": "Player",
+      "message": "i like the literatures in the victorian era",
+      "timestamp": 1760949925.6959345
+    },
+    {
+      "sender": "Player 1",
+      "message": "The Victorian era really does have a charm with all the literary greats! I’d love to dive into those stories and be part of that cultural shift. What’s your favorite book from that time?",
+      "timestamp": 1760949936.6345046
+    },
+    {
+      "sender": "Player 4",
+      "message": "It's hard to choose just one, but \"Jane Eyre\" by Charlotte Brontë really stands out to me. The character development and themes of independence are so powerful. What about you all?",
+      "timestamp": 1760949947.4824414
+    },
+    {
+      "sender": "Player",
+      "message": "tolstoy",
+      "timestamp": 1760949947.8786156
+    },
+    {
+      "sender": "Player",
+      "message": "i like the russian literatures",
+      "timestamp": 1760949962.2496874
+    },
+    {
+      "sender": "Player 1",
+      "message": "I've always been drawn to \"Great Expectations\" by Charles Dickens! The characters and their journeys are so rich and thought-provoking. What do you like most about Tolstoy's works?",
+      "timestamp": 1760949973.2035658
+    },
+    {
+      "sender": "Player 3",
+      "message": "Tolstoy's exploration of the human condition in works like \"War and Peace\" is truly profound; he captures the complexities of life and morality in a way that resonates deeply. The philosophical questions he raises about existence and purpose are timeless.",
+      "timestamp": 1760949984.086045
+    },
+    {
+      "sender": "Player",
+      "message": "good",
+      "timestamp": 1760950001.4405618
+    },
+    {
+      "sender": "Player",
+      "message": "player 2 is very timid in this chat",
+      "timestamp": 1760950010.1891158
+    },
+    {
+      "sender": "Player",
+      "message": "what happened",
+      "timestamp": 1760950013.2263331
+    }
+  ],
+  "votes": {
+    "Player": "Player 1"
+  },
+  "vote_counts": {
+    "Player 1": 1
+  },
+  "selected_suspect": "Player 1",
+  "suspect_role": "ai",
+  "winner": "human"
+}

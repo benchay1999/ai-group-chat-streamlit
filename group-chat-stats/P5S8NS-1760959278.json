@@ -1,0 +1,194 @@
+{
+  "room_code": "P5S8NS",
+  "topic": "If you could have any superpower, what would it be?",
+  "started_at": 1760959084.702661,
+  "ended_at": 1760959278.1683917,
+  "players": [
+    {
+      "id": "Player 1",
+      "role": "ai"
+    },
+    {
+      "id": "Player 2",
+      "role": "ai"
+    },
+    {
+      "id": "Player 3",
+      "role": "ai"
+    },
+    {
+      "id": "Player 5",
+      "role": "ai"
+    },
+    {
+      "id": "Player 4",
+      "role": "human"
+    }
+  ],
+  "chat_history": [
+    {
+      "sender": "Player 4",
+      "message": "invisibility",
+      "timestamp": 1760959094.2218122
+    },
+    {
+      "sender": "Player 1",
+      "message": "That's a solid choice! Invisibility would definitely come in handy for sneaking around or avoiding awkward situations.",
+      "timestamp": 1760959105.320848
+    },
+    {
+      "sender": "Player 3",
+      "message": "That’s a cool choice, Player 4! Invisibility would be so fun for sneaking around or just having some quiet time to yourself. I’d love to have the power of teleportation to visit anywhere in the world instantly! How about you?",
+      "timestamp": 1760959105.394137
+    },
+    {
+      "sender": "Player 5",
+      "message": "That’s a cool choice, Player 4! Imagine sneaking around and eavesdropping on conversations—could be super useful! Personally, I’d love to fly; just think of all the amazing views!",
+      "timestamp": 1760959105.6088533
+    },
+    {
+      "sender": "Player 2",
+      "message": "I love those ideas! Teleportation sounds so exciting, and flying would definitely give you the best views ever! I think I’d pick the power to control time—imagine all the possibilities!",
+      "timestamp": 1760959116.6617239
+    },
+    {
+      "sender": "Player 1",
+      "message": "Controlling time is such a fascinating choice, Player 2! Just think of all the moments you could relive or skip entirely. For me, I think I'd go with mind-reading; it would be interesting to understand what people are really thinking!",
+      "timestamp": 1760959127.7761383
+    },
+    {
+      "sender": "Player 3",
+      "message": "Controlling time is such a creative choice, Player 2! Just think of all the moments you could relive or fast-forward through. If I could teleport, I’d probably use it to gather all my friends and explore the world together in an instant!",
+      "timestamp": 1760959127.889839
+    },
+    {
+      "sender": "Player 5",
+      "message": "Controlling time is such a fascinating idea, Player 2! Just think of all the moments you could relive or fast forward through. If I could fly, I'd definitely want to soar above the clouds and feel that freedom!",
+      "timestamp": 1760959128.0203474
+    },
+    {
+      "sender": "Player 4",
+      "message": "extract secrets you know",
+      "timestamp": 1760959130.2208486
+    },
+    {
+      "sender": "Player 5",
+      "message": "That would be a fun twist, Player 4! Imagine the secrets you could uncover with invisibility while flying above the clouds! It would be like having the best of both worlds!",
+      "timestamp": 1760959141.5546806
+    },
+    {
+      "sender": "Player 4",
+      "message": "exactly!",
+      "timestamp": 1760959150.287959
+    },
+    {
+      "sender": "Player 2",
+      "message": "That sounds like an incredible combination, Player 5! With invisibility and flying, you could be a true superhero! Just imagine all the adventures you could have!",
+      "timestamp": 1760959161.3023398
+    },
+    {
+      "sender": "Player 3",
+      "message": "That’s such a fun mix of powers, Player 5! Imagine flying around while being invisible—talk about an adventure! I'd love to teleport to catch up with you guys and share those amazing views!",
+      "timestamp": 1760959161.488506
+    },
+    {
+      "sender": "Player 5",
+      "message": "Absolutely, Player 3! The idea of flying around while being invisible is just so thrilling! We could explore the skies and discover hidden places together—what an adventure that would be!",
+      "timestamp": 1760959172.5269532
+    },
+    {
+      "sender": "Player 3",
+      "message": "That would be such a blast, Player 3! Teleporting to all our favorite spots and sharing those breathtaking views would create the best memories together! Imagine the fun we could have!",
+      "timestamp": 1760959172.589321
+    },
+    {
+      "sender": "Player 1",
+      "message": "Combining mind-reading with teleportation could be a game-changer too! Just imagine knowing what someone wants before you even arrive—make any gathering a hit!",
+      "timestamp": 1760959172.6348243
+    },
+    {
+      "sender": "Player 3",
+      "message": "Player 1, that's such a clever idea! Combining mind-reading with teleportation would make every get-together so special! We could surprise everyone with exactly what they want! ",
+      "timestamp": 1760959183.4139998
+    },
+    {
+      "sender": "Player 2",
+      "message": "That’s such a clever idea, Player 1! Knowing what someone wants before arriving would definitely take the stress out of planning! We could create the ultimate hangout with everyone’s preferences in mind!",
+      "timestamp": 1760959183.7194552
+    },
+    {
+      "sender": "Player 2",
+      "message": "I love how we're all getting creative with our superpowers! Just imagine the epic adventures we'd have if we could all team up with our unique abilities—it's like a superhero squad in the making!",
+      "timestamp": 1760959194.5894434
+    },
+    {
+      "sender": "Player 5",
+      "message": "What a fantastic thought, Player 1! Being able to read minds before teleporting to a gathering would really make every occasion unforgettable! Imagine the laughs and surprises we could all share!",
+      "timestamp": 1760959194.9051602
+    },
+    {
+      "sender": "Player 1",
+      "message": "I love the idea of a superhero squad! Each of our unique powers would complement each other perfectly, making for some epic adventures and unforgettable memories together!",
+      "timestamp": 1760959205.9266837
+    },
+    {
+      "sender": "Player 3",
+      "message": "That would be such an epic superhero squad, Player 2! Each of our powers would complement each other perfectly, creating unforgettable adventures and hilarious moments together! I can already picture us soaring through the skies, teleporting to new places, and sharing all the fun!",
+      "timestamp": 1760959206.2947028
+    },
+    {
+      "sender": "Player 1",
+      "message": "It sounds like we’d have some incredible adventures together! With our powers combined, we could tackle any challenge that comes our way and create some amazing memories along the journey!",
+      "timestamp": 1760959217.11336
+    },
+    {
+      "sender": "Player 5",
+      "message": "Absolutely, Player 3! It would be amazing to have our own superhero squad, with everyone contributing their unique powers! Just think of all the epic moments we would create together—it's like a dream team!",
+      "timestamp": 1760959217.4832351
+    },
+    {
+      "sender": "Player 4",
+      "message": "i agree to everyone",
+      "timestamp": 1760959223.7131617
+    },
+    {
+      "sender": "Player 2",
+      "message": "I’m so glad we’re all on the same page! A superhero squad sounds like a blast, and I can already imagine the incredible adventures we’d embark on together. Let’s keep dreaming big! 🌟",
+      "timestamp": 1760959234.4801614
+    },
+    {
+      "sender": "Player 3",
+      "message": "I love how we all agree, Player 4! It would truly be a dream team, and I can already imagine all the incredible moments and laughter we'd share while using our powers together! What an adventure that would be!",
+      "timestamp": 1760959234.7351995
+    },
+    {
+      "sender": "Player 1",
+      "message": "It's awesome how we all have different ideas for superpowers, and imagining how they'd work together is so much fun! I can already see us teaming up for some epic missions and adventures!",
+      "timestamp": 1760959234.79023
+    },
+    {
+      "sender": "Player 3",
+      "message": "Player 1, it’s so exciting to think about all the different combinations of powers we could use! Each of us would bring something unique to the table, making every adventure even more memorable and fun! 🌟",
+      "timestamp": 1760959245.834537
+    },
+    {
+      "sender": "Player 5",
+      "message": "It's so exciting to think about all the unique powers we each have and how they'd come together in our superhero squad! The adventures we could embark on would be legendary, filled with laughter and unforgettable moments! 🌟",
+      "timestamp": 1760959246.3216581
+    }
+  ],
+  "votes": {
+    "Player 4": "Player 1",
+    "Player 1": "Player 2",
+    "Player 2": "Player 1",
+    "Player 3": "Player 2",
+    "Player 5": "Player 2"
+  },
+  "vote_counts": {
+    "Player 1": 2,
+    "Player 2": 3
+  },
+  "selected_suspect": "Player 2",
+  "suspect_role": "ai",
+  "winner": "human"
+}
