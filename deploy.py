@@ -86,6 +86,10 @@ def run_streamlit_app():
     spec = importlib.util.spec_from_file_location("streamlit_app", streamlit_script)
     streamlit_module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(streamlit_module)
+    
+    # Explicitly call the main function
+    if hasattr(streamlit_module, 'main'):
+        streamlit_module.main()
 
 def main():
     """Main entry point."""
