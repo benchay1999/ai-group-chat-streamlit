@@ -1,0 +1,200 @@
+{
+  "room_code": "AMS8Q7",
+  "topic": "What's your unpopular opinion?",
+  "started_at": 1760978239.9157143,
+  "ended_at": 1760978468.4489188,
+  "players": [
+    {
+      "id": "Player 3",
+      "role": "ai"
+    },
+    {
+      "id": "Player 1",
+      "role": "ai"
+    },
+    {
+      "id": "Player 5",
+      "role": "ai"
+    },
+    {
+      "id": "Player 4",
+      "role": "human"
+    },
+    {
+      "id": "Player 2",
+      "role": "human"
+    }
+  ],
+  "chat_history": [
+    {
+      "sender": "Player 3",
+      "message": "I think pineapple on pizza is actually amazing! It adds a perfect sweet and savory balance that people just don’t appreciate enough.",
+      "timestamp": 1760978252.7759721
+    },
+    {
+      "sender": "Player 5",
+      "message": "I think pineapple on pizza is actually delicious! It’s such a fun twist on the traditional flavors.",
+      "timestamp": 1760978252.8614426
+    },
+    {
+      "sender": "Player 1",
+      "message": "Pineapple definitely belongs on pizza, and I will defend that until the end of time. Fight me on this!",
+      "timestamp": 1760978252.8961418
+    },
+    {
+      "sender": "Player 4",
+      "message": "i think hip hop is overrated",
+      "timestamp": 1760978258.0686414
+    },
+    {
+      "sender": "Player 5",
+      "message": "I think cilantro is one of the best herbs, but so many people hate it! I just don’t get why!",
+      "timestamp": 1760978268.8744683
+    },
+    {
+      "sender": "Player 2",
+      "message": "I hate pineapple pizza",
+      "timestamp": 1760978270.3258328
+    },
+    {
+      "sender": "Player 4",
+      "message": "why do you hate pineapple pizza",
+      "timestamp": 1760978279.7403693
+    },
+    {
+      "sender": "Player 3",
+      "message": "I get that some people are really against it, but I think it's all about personal taste! There's just something special about that combo that works for me.",
+      "timestamp": 1760978290.684498
+    },
+    {
+      "sender": "Player 1",
+      "message": "Honestly, I think people are just afraid of mixing flavors. Pineapple on pizza is like a wild party for your taste buds, and some folks just can't handle the fun!",
+      "timestamp": 1760978290.7507405
+    },
+    {
+      "sender": "Player 4",
+      "message": "pineapples are good for your health",
+      "timestamp": 1760978296.7251348
+    },
+    {
+      "sender": "Player 2",
+      "message": "why?",
+      "timestamp": 1760978305.0385277
+    },
+    {
+      "sender": "Player 4",
+      "message": "it is a fruit",
+      "timestamp": 1760978313.4672728
+    },
+    {
+      "sender": "Player 4",
+      "message": "쾌변",
+      "timestamp": 1760978320.8781223
+    },
+    {
+      "sender": "Player 1",
+      "message": "I mean, if we're talking health, I’d say anything that makes pizza more enjoyable should definitely be on the list! But let's be honest, it's really just an excuse to eat more pizza.",
+      "timestamp": 1760978332.024667
+    },
+    {
+      "sender": "Player 3",
+      "message": "I totally agree! Pineapples are not only tasty but packed with vitamins too. Plus, who doesn't love a fruit that can rock a pizza?",
+      "timestamp": 1760978332.0474577
+    },
+    {
+      "sender": "Player 3",
+      "message": "I love that we're all so passionate about our food choices! It's funny how something as simple as pizza can spark such strong opinions.",
+      "timestamp": 1760978342.751632
+    },
+    {
+      "sender": "Player 5",
+      "message": "I think people underestimate the power of a good veggie burger! It's a great option, but so many folks dismiss it without giving it a fair chance.",
+      "timestamp": 1760978343.3702366
+    },
+    {
+      "sender": "Player 5",
+      "message": "I totally get that! Veggie burgers can be so flavorful and satisfying, but some people just write them off as boring. It's all about giving them a chance!",
+      "timestamp": 1760978354.2523963
+    },
+    {
+      "sender": "Player 1",
+      "message": "I have to say, veggie burgers are like the unsung heroes of fast food. They may not have the same ring to them, but give them a chance and they might just surprise you!",
+      "timestamp": 1760978354.5061793
+    },
+    {
+      "sender": "Player 3",
+      "message": "Absolutely! It's all about exploring different flavors and being open-minded. Veggie burgers can really pack a punch if they're made well!",
+      "timestamp": 1760978365.3718343
+    },
+    {
+      "sender": "Player 2",
+      "message": "veggie burger? what is that",
+      "timestamp": 1760978368.1483269
+    },
+    {
+      "sender": "Player 3",
+      "message": "Veggie burgers are basically burgers made from vegetables, legumes, or grains instead of meat. They can be super tasty and come in so many varieties—definitely worth trying!",
+      "timestamp": 1760978379.2010744
+    },
+    {
+      "sender": "Player 5",
+      "message": "Oh, a veggie burger is basically a burger made with vegetables or legumes instead of meat! They can be super tasty and come in a bunch of different flavors, so definitely worth trying!",
+      "timestamp": 1760978379.4433703
+    },
+    {
+      "sender": "Player 4",
+      "message": "instead of meat, they use veggies",
+      "timestamp": 1760978380.1466744
+    },
+    {
+      "sender": "Player 3",
+      "message": "It's great to see everyone sharing their favorite food opinions! I think trying new things is key to discovering what you really enjoy, whether it's pineapple on pizza or a tasty veggie burger!",
+      "timestamp": 1760978391.27986
+    },
+    {
+      "sender": "Player 4",
+      "message": "i actually never had those -- i lied",
+      "timestamp": 1760978397.507977
+    },
+    {
+      "sender": "Player 3",
+      "message": "It's never too late to try a veggie burger! You might be surprised at how delicious they can be. What's the craziest food combination you've ever tried?",
+      "timestamp": 1760978408.2215614
+    },
+    {
+      "sender": "Player 4",
+      "message": "i like pork chops",
+      "timestamp": 1760978413.0454574
+    },
+    {
+      "sender": "Player 4",
+      "message": "porks are fun",
+      "timestamp": 1760978418.8912973
+    },
+    {
+      "sender": "Player 5",
+      "message": "I think trying unusual food combinations can lead to some amazing surprises! Like, who would have thought that chocolate-covered bacon could be so good? It's such a fun adventure for your taste buds!",
+      "timestamp": 1760978429.8104382
+    },
+    {
+      "sender": "Player 3",
+      "message": "Pork chops are definitely a classic! They can be super juicy and flavorful, especially when cooked right. Do you have a favorite way to prepare them?",
+      "timestamp": 1760978429.8462665
+    }
+  ],
+  "votes": {
+    "Player 3": "Player 1",
+    "Player 1": "Player 2",
+    "Player 5": "Player 1",
+    "Player 4": "Player 2",
+    "Player 2": "Player 5"
+  },
+  "vote_counts": {
+    "Player 1": 2,
+    "Player 2": 2,
+    "Player 5": 1
+  },
+  "selected_suspect": "Player 2",
+  "suspect_role": "human",
+  "winner": "ai"
+}

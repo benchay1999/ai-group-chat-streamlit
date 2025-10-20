@@ -1,0 +1,137 @@
+{
+  "room_code": "47SI0N",
+  "topic": "Tell a funny story from your childhood.",
+  "started_at": 1760975309.045424,
+  "ended_at": 1760975560.6683674,
+  "players": [
+    {
+      "id": "Player 3",
+      "role": "ai"
+    },
+    {
+      "id": "Player 4",
+      "role": "ai"
+    },
+    {
+      "id": "Player 2",
+      "role": "ai"
+    },
+    {
+      "id": "Player 5",
+      "role": "human"
+    },
+    {
+      "id": "Player 1",
+      "role": "human"
+    }
+  ],
+  "chat_history": [
+    {
+      "sender": "Player 3",
+      "message": "I once tried to impress my friends by balancing a spoon on my nose, but it slipped and launched straight into my dad's soup. Let's just say there was a very unexpected flavor added that day!",
+      "timestamp": 1760975327.0579019
+    },
+    {
+      "sender": "Player 2",
+      "message": "I remember one time I tried to impress my friends by climbing a tree, but I got stuck halfway up and had to be rescued by my little brother. He thought it was the funniest thing ever!",
+      "timestamp": 1760975327.2175462
+    },
+    {
+      "sender": "Player 4",
+      "message": "When I was around 8, I thought it would be a great idea to build a treehouse without telling my parents. I climbed up with all my supplies, but halfway through, I realized I didn't know how to get back down! I ended up stuck up there for an hour until my dad found me.",
+      "timestamp": 1760975327.7180312
+    },
+    {
+      "sender": "Player 5",
+      "message": " i used to play hockey",
+      "timestamp": 1760975330.1030607
+    },
+    {
+      "sender": "Player 1",
+      "message": "hi all",
+      "timestamp": 1760975330.4007945
+    },
+    {
+      "sender": "Player 5",
+      "message": "hello",
+      "timestamp": 1760975334.7921133
+    },
+    {
+      "sender": "Player 4",
+      "message": "It’s amazing how we all had those moments where our grand plans turned into funny mishaps! What’s great is that they turned into awesome stories to share!",
+      "timestamp": 1760975345.8719623
+    },
+    {
+      "sender": "Player 1",
+      "message": "great",
+      "timestamp": 1760975351.3202558
+    },
+    {
+      "sender": "Player 3",
+      "message": "Oh, absolutely! It's like our childhoods were a never-ending slapstick comedy. I once tried to impress my friends by making a cake, and it ended up looking like a science experiment gone wrong—tasted great though!",
+      "timestamp": 1760975362.6411653
+    },
+    {
+      "sender": "Player 5",
+      "message": "i actually did figure skating too",
+      "timestamp": 1760975363.639614
+    },
+    {
+      "sender": "Player 2",
+      "message": "It's fascinating how our childhood endeavors often led to unexpected outcomes! I once tried to impress my friends by making a giant paper mache volcano for a school project, but it ended up collapsing and covering my entire room in a messy layer of glue and newspaper. My parents were not amused!",
+      "timestamp": 1760975375.1336944
+    },
+    {
+      "sender": "Player 4",
+      "message": "Haha, those stories are fantastic! It's hilarious how our best intentions turned into chaotic adventures. I once tried to bake cookies for a bake sale, but I forgot the sugar and ended up with a batch of rock-hard \"treats\" that no one wanted to buy!",
+      "timestamp": 1760975386.629257
+    },
+    {
+      "sender": "Player 3",
+      "message": "It's wild how we all thought we were little geniuses back then! I once attempted to build a rocket out of soda bottles, but it fizzled out before it even got off the ground. Guess my future as an astronaut was short-lived!",
+      "timestamp": 1760975397.604522
+    },
+    {
+      "sender": "Player 2",
+      "message": "It's incredible how those moments shaped us! I once thought I could become a magician, so I tried to pull a rabbit out of a hat at a birthday party. Instead, I accidentally pulled out my little sister's stuffed animal, which made everyone laugh way more than my tricks ever could!",
+      "timestamp": 1760975453.2009914
+    },
+    {
+      "sender": "Player 4",
+      "message": "Haha, that’s classic! Trying to pull a rabbit and ending up with a stuffed animal is definitely a memorable twist! I remember planning a magic show too, but my only trick was disappearing behind the curtain because I was too nervous to perform!",
+      "timestamp": 1760975464.3746536
+    },
+    {
+      "sender": "Player 3",
+      "message": "It’s amazing how those little mishaps have become our best memories! I once tried to impress my friends with a magic trick, and instead of pulling a rabbit out of a hat, I ended up spilling the hat and revealing my entire stash of snacks. Talk about a \"magic\" reveal!",
+      "timestamp": 1760975464.5507414
+    },
+    {
+      "sender": "Player 2",
+      "message": "It's funny how our childhood aspirations often led us down unexpected paths! I once decided to impress my friends by putting on a puppet show, but the puppets ended up fighting each other and creating a hilarious chaos that left everyone in stitches instead of the magical story I had planned!",
+      "timestamp": 1760975478.3777008
+    },
+    {
+      "sender": "Player 4",
+      "message": "Haha, those puppet shows always seem to take a wild turn! I once tried to put on a dance performance for my family, but I tripped over my own feet and ended up doing an unintentional somersault. They laughed so hard that I couldn't help but join in!",
+      "timestamp": 1760975489.8785543
+    },
+    {
+      "sender": "Player 3",
+      "message": "Oh, I can totally relate! I once tried to be the cool kid by hosting a dance party in my living room, but the music got too loud and my mom walked in, thinking there was a full-blown rave happening. Let's just say my dance moves weren't quite ready for an audience!",
+      "timestamp": 1760975489.894373
+    }
+  ],
+  "votes": {
+    "Player 3": "Player 4",
+    "Player 4": "Player 2",
+    "Player 2": "Player 4"
+  },
+  "vote_counts": {
+    "Player 4": 2,
+    "Player 2": 1
+  },
+  "selected_suspect": "Player 4",
+  "suspect_role": "ai",
+  "winner": "human"
+}

@@ -52,7 +52,7 @@ ssh -R 80:localhost:8000 nokey@localhost.run   # Option B: localhost.run (no sig
 
 ### Frontend Setup
 
-You can choose between two frontend options:
+You can choose between three frontend options:
 
 #### Option 1: React Frontend (WebSocket-based, Real-time)
 1. Navigate to the frontend directory:
@@ -80,9 +80,23 @@ You can choose between two frontend options:
    ```
 3. Your browser will open automatically at http://localhost:8501
 
-**Note**: Both frontends connect to the same backend and can coexist. Choose based on your preference:
+#### Option 3: Gradio Frontend (Polling-based, Modern UI) ⭐ NEW
+1. From the project root directory:
+   ```
+   pip install -r requirements.txt
+   ```
+2. Run the Gradio app:
+   ```
+   python gradio_app.py
+   # or use the launcher script:
+   ./run_gradio.sh
+   ```
+3. Open your browser at http://localhost:7860
+
+**Note**: All frontends connect to the same backend and can coexist. Choose based on your preference:
 - **React**: Real-time updates via WebSocket, modern UI with Tailwind CSS
 - **Streamlit**: Simpler Python-based UI, polling updates (~1 second refresh), easier to customize
+- **Gradio**: Modern Python-based UI with Blocks API, polling updates, great for demos and sharing
 
 ### Playing the Game
 - The game will start automatically with you as the human player.
