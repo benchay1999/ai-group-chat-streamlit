@@ -15,7 +15,7 @@ from langchain_openai import ChatOpenAI
 from langchain_core.messages import HumanMessage, SystemMessage
 
 from .langgraph_state import GameState, Phase, ChatMessage, create_initial_state
-from config import (
+from .config import (
     AI_MODEL_NAME, 
     AI_TEMPERATURE, 
     GAME_TOPICS, 
