@@ -10,6 +10,356 @@ import time
 import os
 import json
 from datetime import datetime
+from streamlit_js_eval import streamlit_js_eval
+
+# -----------------------------------------------------------------------------
+# WebSocket Bridge for Real-Time Communication
+# -----------------------------------------------------------------------------
+
+def get_websocket_bridge_js(backend_url: str, room_code: str, player_id: str) -> str:
+    """
+    Generate JavaScript code for WebSocket bridge.
+    This runs in the browser and communicates with backend WebSocket.
+    Messages are stored in sessionStorage for Streamlit to read.
+    """
+    # Extract ws URL from backend URL (http -> ws, https -> wss)
+    ws_url = backend_url.replace('http://', 'ws://').replace('https://', 'wss://')
+    
+    return f"""
+    <script>
+    (function() {{
+        const BACKEND_WS_URL = '{ws_url}/ws/{room_code}/{player_id}';
+        const STORAGE_KEY = 'ws_messages_{room_code}';
+        const STATUS_KEY = 'ws_status_{room_code}';
+        
+        let ws = null;
+        let reconnectAttempts = 0;
+        let reconnectTimeout = null;
+        const MAX_RECONNECT_DELAY = 30000; // 30 seconds
+        
+        function getStoredMessages() {{
+            try {{
+                const stored = sessionStorage.getItem(STORAGE_KEY);
+                return stored ? JSON.parse(stored) : [];
+            }} catch(e) {{
+                console.error('Error reading stored messages:', e);
+                return [];
+            }}
+        }}
+        
+        function storeMessage(message) {{
+            try {{
+                const messages = getStoredMessages();
+                messages.push({{
+                    ...message,
+                    received_at: Date.now()
+                }});
+                // Keep only last 100 messages
+                const trimmed = messages.slice(-100);
+                sessionStorage.setItem(STORAGE_KEY, JSON.stringify(trimmed));
+            }} catch(e) {{
+                console.error('Error storing message:', e);
+            }}
+        }}
+        
+        function setStatus(status) {{
+            try {{
+                sessionStorage.setItem(STATUS_KEY, JSON.stringify({{
+                    status: status,
+                    timestamp: Date.now()
+                }}));
+            }} catch(e) {{
+                console.error('Error setting status:', e);
+            }}
+        }}
+        
+        function connect() {{
+            if (ws && (ws.readyState === WebSocket.CONNECTING || ws.readyState === WebSocket.OPEN)) {{
+                console.log('WebSocket already connected or connecting');
+                return;
+            }}
+            
+            console.log('Connecting to WebSocket:', BACKEND_WS_URL);
+            setStatus('connecting');
+            
+            try {{
+                ws = new WebSocket(BACKEND_WS_URL);
+                
+                ws.onopen = function() {{
+                    console.log('✅ WebSocket connected');
+                    setStatus('connected');
+                    reconnectAttempts = 0;
+                    
+                    // Store connection event
+                    storeMessage({{
+                        type: 'connection',
+                        status: 'connected',
+                        timestamp: Date.now()
+                    }});
+                }};
+                
+                ws.onmessage = function(event) {{
+                    try {{
+                        const data = JSON.parse(event.data);
+                        console.log('📨 WebSocket message:', data.type);
+                        storeMessage(data);
+                    }} catch(e) {{
+                        console.error('Error parsing WebSocket message:', e);
+                    }}
+                }};
+                
+                ws.onerror = function(error) {{
+                    console.error('❌ WebSocket error:', error);
+                    setStatus('error');
+                }};
+                
+                ws.onclose = function(event) {{
+                    console.log('🔌 WebSocket closed:', event.code, event.reason);
+                    setStatus('disconnected');
+                    
+                    // Store disconnection event
+                    storeMessage({{
+                        type: 'connection',
+                        status: 'disconnected',
+                        timestamp: Date.now()
+                    }});
+                    
+                    // Attempt reconnection with exponential backoff
+                    if (!event.wasClean) {{
+                        const delay = Math.min(
+                            1000 * Math.pow(2, reconnectAttempts),
+                            MAX_RECONNECT_DELAY
+                        );
+                        reconnectAttempts++;
+                        console.log(`Reconnecting in ${{delay}}ms (attempt ${{reconnectAttempts}})...`);
+                        
+                        clearTimeout(reconnectTimeout);
+                        reconnectTimeout = setTimeout(connect, delay);
+                    }}
+                }};
+            }} catch(e) {{
+                console.error('Error creating WebSocket:', e);
+                setStatus('error');
+            }}
+        }}
+        
+        // Start connection
+        connect();
+        
+        // Cleanup on page unload
+        window.addEventListener('beforeunload', function() {{
+            if (ws) {{
+                ws.close();
+            }}
+        }});
+        
+        // Store reference for debugging
+        window._wsDebug = {{
+            getMessages: getStoredMessages,
+            getStatus: () => sessionStorage.getItem(STATUS_KEY),
+            reconnect: connect,
+            ws: ws
+        }};
+    }})();
+    </script>
+    """
+
+def init_websocket_bridge(backend_url: str, room_code: str, player_id: str):
+    """
+    Initialize WebSocket bridge by injecting JavaScript into the page.
+    This should be called once when entering a game room.
+    """
+    js_code = get_websocket_bridge_js(backend_url, room_code, player_id)
+    components.html(js_code, height=0)
+
+def get_websocket_messages(room_code: str):
+    """
+    Retrieve WebSocket messages from browser sessionStorage.
+    Uses streamlit-js-eval to execute JavaScript and return data.
+    """
+    js_code = f"""
+    (function() {{
+        try {{
+            const stored = sessionStorage.getItem('ws_messages_{room_code}');
+            return stored ? JSON.parse(stored) : [];
+        }} catch(e) {{
+            console.error('Error reading messages:', e);
+            return [];
+        }}
+    }})();
+    """
+    try:
+        messages = streamlit_js_eval(js_code, key=f"ws_messages_{room_code}_{time.time()}")
+        return messages if messages else []
+    except Exception as e:
+        print(f"Error getting WebSocket messages: {e}")
+        return []
+
+def get_websocket_status(room_code: str):
+    """
+    Get current WebSocket connection status.
+    Returns: 'connected', 'connecting', 'disconnected', 'error', or None
+    """
+    js_code = f"""
+    (function() {{
+        try {{
+            const stored = sessionStorage.getItem('ws_status_{room_code}');
+            if (stored) {{
+                const status = JSON.parse(stored);
+                return status.status;
+            }}
+            return 'unknown';
+        }} catch(e) {{
+            return 'error';
+        }}
+    }})();
+    """
+    try:
+        status = streamlit_js_eval(js_code, key=f"ws_status_{room_code}_{time.time()}")
+        return status if status else 'unknown'
+    except Exception as e:
+        print(f"Error getting WebSocket status: {e}")
+        return 'unknown'
+
+def clear_websocket_messages(room_code: str):
+    """Clear processed WebSocket messages from browser storage."""
+    js_code = f"""
+    sessionStorage.removeItem('ws_messages_{room_code}');
+    """
+    try:
+        streamlit_js_eval(js_code, key=f"clear_ws_{room_code}_{time.time()}")
+    except Exception as e:
+        print(f"Error clearing messages: {e}")
+
+def process_ws_messages(room_code: str):
+    """
+    Process incoming WebSocket messages and update session state.
+    Returns True if state was updated, False otherwise.
+    """
+    messages = get_websocket_messages(room_code)
+    
+    if not messages:
+        return False
+    
+    state_updated = False
+    
+    # Track last processed message time
+    if 'last_ws_message_id' not in st.session_state:
+        st.session_state.last_ws_message_id = 0
+    
+    for msg in messages:
+        # Skip already processed messages
+        msg_id = msg.get('received_at', 0)
+        if msg_id <= st.session_state.last_ws_message_id:
+            continue
+        
+        msg_type = msg.get('type')
+        
+        if msg_type == 'message':
+            # New chat message
+            sender = msg.get('sender')
+            message = msg.get('message')
+            if sender and message:
+                # Add to local cache
+                chat_msg = {
+                    'sender': sender,
+                    'message': message,
+                    'timestamp': msg.get('timestamp', time.time())
+                }
+                if chat_msg not in st.session_state.local_chat_cache:
+                    st.session_state.local_chat_cache.append(chat_msg)
+                    state_updated = True
+        
+        elif msg_type == 'phase':
+            # Phase change
+            new_phase = msg.get('phase')
+            if new_phase and st.session_state.game_state:
+                old_phase = st.session_state.game_state.get('phase', '')
+                if old_phase != new_phase:
+                    st.session_state.game_state['phase'] = new_phase
+                    st.session_state.last_phase = new_phase
+                    st.session_state.phase_start_time = time.time()
+                    state_updated = True
+        
+        elif msg_type == 'voted':
+            # Player voted
+            player = msg.get('player')
+            if player and st.session_state.game_state:
+                # Update player voted status
+                for p in st.session_state.game_state.get('players', []):
+                    if p['id'] == player:
+                        p['voted'] = True
+                        state_updated = True
+                        break
+        
+        elif msg_type == 'typing':
+            # Typing indicator
+            player = msg.get('player')
+            status = msg.get('status')
+            if player and status:
+                if 'typing_players' not in st.session_state.game_state:
+                    st.session_state.game_state['typing_players'] = set()
+                
+                if status == 'start':
+                    st.session_state.game_state['typing_players'].add(player)
+                else:
+                    st.session_state.game_state['typing_players'].discard(player)
+                state_updated = True
+        
+        elif msg_type == 'player_list':
+            # Player list update
+            players = msg.get('players')
+            if players and st.session_state.game_state:
+                st.session_state.game_state['players'] = players
+                state_updated = True
+        
+        elif msg_type == 'topic':
+            # Topic update
+            topic = msg.get('topic')
+            if topic and st.session_state.game_state:
+                st.session_state.game_state['topic'] = topic
+                state_updated = True
+        
+        elif msg_type == 'elimination':
+            # Player eliminated
+            eliminated = msg.get('eliminated')
+            if eliminated and st.session_state.game_state:
+                for p in st.session_state.game_state.get('players', []):
+                    if p['id'] == eliminated:
+                        p['eliminated'] = True
+                        state_updated = True
+                        break
+        
+        elif msg_type == 'game_over':
+            # Game over
+            winner = msg.get('winner')
+            if winner and st.session_state.game_state:
+                st.session_state.game_state['winner'] = winner
+                st.session_state.game_state['phase'] = 'game_over'
+                state_updated = True
+        
+        elif msg_type == 'voting_result':
+            # Voting result
+            suspect = msg.get('suspect')
+            role = msg.get('role')
+            if st.session_state.game_state:
+                st.session_state.game_state['selected_suspect'] = suspect
+                st.session_state.game_state['suspect_role'] = role
+                state_updated = True
+        
+        elif msg_type == 'connection':
+            # Connection status change
+            status = msg.get('status')
+            print(f"WebSocket connection status: {status}")
+        
+        # Update last processed message
+        st.session_state.last_ws_message_id = msg_id
+    
+    # Clear processed messages
+    if state_updated:
+        clear_websocket_messages(room_code)
+    
+    return state_updated
 
 # -----------------------------------------------------------------------------
 # UI Styling Helpers
@@ -462,6 +812,22 @@ if 'voted_for' not in st.session_state:
 if 'pending_vote_choice' not in st.session_state:
     st.session_state.pending_vote_choice = None
 
+# WebSocket session state
+if 'ws_enabled' not in st.session_state:
+    st.session_state.ws_enabled = True  # Enable WebSocket by default
+if 'ws_initialized' not in st.session_state:
+    st.session_state.ws_initialized = False
+if 'ws_status' not in st.session_state:
+    st.session_state.ws_status = 'unknown'
+if 'last_ws_message_id' not in st.session_state:
+    st.session_state.last_ws_message_id = 0
+if 'ws_check_interval' not in st.session_state:
+    st.session_state.ws_check_interval = 0.5  # Check for WebSocket messages every 0.5s
+if 'last_ws_check_time' not in st.session_state:
+    st.session_state.last_ws_check_time = 0
+if 'fallback_poll_interval' not in st.session_state:
+    st.session_state.fallback_poll_interval = 10.0  # Fallback polling every 10s (vs 0.4s)
+
 # Matching room system session state
 if 'current_page' not in st.session_state:
     st.session_state.current_page = 'lobby'  # 'lobby' or 'game'
@@ -667,6 +1033,41 @@ def render_header(game_state):
         st.markdown(f"""
         <div class="topic-card">💭 <strong>Topic:</strong> {topic}</div>
         """, unsafe_allow_html=True)
+
+
+def render_connection_status():
+    """Render connection status indicator in sidebar."""
+    if not st.session_state.ws_enabled:
+        st.sidebar.caption("📡 Polling mode (legacy)")
+        return
+    
+    status = st.session_state.ws_status
+    
+    status_icons = {
+        'connected': '🟢',
+        'connecting': '🟡',
+        'disconnected': '🔴',
+        'error': '🔴',
+        'unknown': '⚪'
+    }
+    
+    status_labels = {
+        'connected': 'Connected',
+        'connecting': 'Connecting...',
+        'disconnected': 'Disconnected',
+        'error': 'Connection Error',
+        'unknown': 'Initializing...'
+    }
+    
+    icon = status_icons.get(status, '⚪')
+    label = status_labels.get(status, 'Unknown')
+    
+    if status == 'connected':
+        st.sidebar.success(f"{icon} {label} (Real-time)")
+    elif status == 'connecting' or status == 'unknown':
+        st.sidebar.info(f"{icon} {label}")
+    else:
+        st.sidebar.warning(f"{icon} {label} (Fallback to polling)")
 
 
 def render_player_list(game_state):
@@ -1550,19 +1951,32 @@ def main():
     # GAME PAGE - Main game UI
     # =================================================================================
     elif current_page == 'game':
+        # Initialize WebSocket bridge if enabled and not yet initialized
+        if st.session_state.ws_enabled and not st.session_state.ws_initialized and st.session_state.joined:
+            room_code = st.session_state.room_code
+            player_id = st.session_state.player_id
+            print(f"🔌 Initializing WebSocket bridge for room {room_code}, player {player_id}")
+            init_websocket_bridge(BACKEND_URL, room_code, player_id)
+            st.session_state.ws_initialized = True
+            st.session_state.ws_status = 'connecting'
+        
         # Sidebar - Player list and controls
         with st.sidebar:
             st.title("🎮 Game Setup")
             
             if st.session_state.joined:
                 st.success(f"✅ Connected as **{st.session_state.player_id}**")
+                
+                # Show connection status
+                render_connection_status()
+                
                 if st.button("Leave Room", use_container_width=True):
                     # Notify backend about leaving
                     room_code = st.session_state.room_code
                     player_id = st.session_state.player_id
                     leave_result = leave_room_api(room_code, player_id)
                     
-                    # Reset local state
+                    # Reset local state including WebSocket
                     st.session_state.joined = False
                     st.session_state.game_state = None
                     st.session_state.local_chat_cache = []
@@ -1570,6 +1984,8 @@ def main():
                     st.session_state.current_page = 'lobby'
                     st.session_state.waiting_for_players = False
                     st.session_state.player_id = 'You'
+                    st.session_state.ws_initialized = False
+                    st.session_state.ws_status = 'unknown'
                     
                     # Show result message
                     if leave_result:
@@ -1583,28 +1999,72 @@ def main():
                 
                 st.divider()
     
-    # Poll game state
+    # Update game state using WebSocket or polling
     current_time = time.time()
-    poll_interval = 0.4 if st.session_state.pending_message else POLL_INTERVAL
+    state_updated = False
     
-    if current_time - st.session_state.last_poll_time >= poll_interval:
-        game_state = poll_game_state(st.session_state.room_code, st.session_state.player_id)
+    if st.session_state.ws_enabled and st.session_state.ws_initialized:
+        # WebSocket mode: Check for new messages
+        if current_time - st.session_state.last_ws_check_time >= st.session_state.ws_check_interval:
+            # Update WebSocket status from browser
+            new_status = get_websocket_status(st.session_state.room_code)
+            if new_status and new_status != st.session_state.ws_status:
+                st.session_state.ws_status = new_status
+                print(f"WebSocket status changed: {new_status}")
+            
+            # Process WebSocket messages
+            if process_ws_messages(st.session_state.room_code):
+                state_updated = True
+                print("State updated from WebSocket messages")
+            
+            st.session_state.last_ws_check_time = current_time
         
-        # If room no longer exists, return to lobby
-        if not game_state or not game_state.get('exists'):
-            st.error("⚠️ Room no longer exists (may have been terminated)")
-            st.session_state.joined = False
-            st.session_state.waiting_for_players = False
-            st.session_state.current_page = 'lobby'
-            st.session_state.game_state = None
-            time.sleep(2)  # Show message briefly
-            st.rerun()
-            return
+        # Fallback polling if WebSocket is disconnected (every 10s instead of 0.4s)
+        use_fallback = st.session_state.ws_status in ['disconnected', 'error', 'unknown']
+        if use_fallback and current_time - st.session_state.last_poll_time >= st.session_state.fallback_poll_interval:
+            print(f"Using fallback polling (WebSocket status: {st.session_state.ws_status})")
+            game_state = poll_game_state(st.session_state.room_code, st.session_state.player_id)
+            
+            # If room no longer exists, return to lobby
+            if not game_state or not game_state.get('exists'):
+                st.error("⚠️ Room no longer exists (may have been terminated)")
+                st.session_state.joined = False
+                st.session_state.waiting_for_players = False
+                st.session_state.current_page = 'lobby'
+                st.session_state.game_state = None
+                st.session_state.ws_initialized = False
+                time.sleep(2)  # Show message briefly
+                st.rerun()
+                return
+            
+            if game_state:
+                st.session_state.game_state = game_state
+                st.session_state.last_poll_time = current_time
+                check_phase_change(game_state)
+                state_updated = True
+    else:
+        # Legacy polling mode (when WebSocket disabled)
+        poll_interval = 0.4 if st.session_state.pending_message else POLL_INTERVAL
         
-        if game_state:
-            st.session_state.game_state = game_state
-            st.session_state.last_poll_time = current_time
-            check_phase_change(game_state)
+        if current_time - st.session_state.last_poll_time >= poll_interval:
+            game_state = poll_game_state(st.session_state.room_code, st.session_state.player_id)
+            
+            # If room no longer exists, return to lobby
+            if not game_state or not game_state.get('exists'):
+                st.error("⚠️ Room no longer exists (may have been terminated)")
+                st.session_state.joined = False
+                st.session_state.waiting_for_players = False
+                st.session_state.current_page = 'lobby'
+                st.session_state.game_state = None
+                time.sleep(2)  # Show message briefly
+                st.rerun()
+                return
+            
+            if game_state:
+                st.session_state.game_state = game_state
+                st.session_state.last_poll_time = current_time
+                check_phase_change(game_state)
+                state_updated = True
     
     game_state = st.session_state.game_state
     
@@ -1624,7 +2084,12 @@ def main():
         winner = game_state.get('winner')
         
         if not winner and phase in ['discussion', 'voting']:
-            time.sleep(POLL_INTERVAL)
+            # WebSocket mode: Check for messages more frequently, but less aggressively than polling
+            if st.session_state.ws_enabled and st.session_state.ws_status == 'connected':
+                time.sleep(st.session_state.ws_check_interval)  # 0.5s
+            else:
+                # Fallback or legacy polling mode
+                time.sleep(POLL_INTERVAL)  # 0.4s
             st.rerun()
 
 
