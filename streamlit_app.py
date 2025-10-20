@@ -1352,6 +1352,65 @@ def main():
     )
     inject_global_styles()
     
+    # Initialize all session state variables (must be done before accessing them)
+    # This ensures they exist even when the app is accessed by multiple users
+    if 'room_code' not in st.session_state:
+        st.session_state.room_code = 'streamlit-room'
+    if 'player_id' not in st.session_state:
+        st.session_state.player_id = 'You'
+    if 'joined' not in st.session_state:
+        st.session_state.joined = False
+    if 'last_chat_count' not in st.session_state:
+        st.session_state.last_chat_count = 0
+    if 'game_state' not in st.session_state:
+        st.session_state.game_state = None
+    if 'last_poll_time' not in st.session_state:
+        st.session_state.last_poll_time = 0
+    if 'message_input' not in st.session_state:
+        st.session_state.message_input = ''
+    if 'last_phase' not in st.session_state:
+        st.session_state.last_phase = None
+    if 'phase_start_time' not in st.session_state:
+        st.session_state.phase_start_time = time.time()
+    if 'pending_message' not in st.session_state:
+        st.session_state.pending_message = None
+    if 'last_sent_message' not in st.session_state:
+        st.session_state.last_sent_message = None
+    if 'pending_message_time' not in st.session_state:
+        st.session_state.pending_message_time = 0
+    if 'local_chat_cache' not in st.session_state:
+        st.session_state.local_chat_cache = []
+    if 'last_backend_chat_length' not in st.session_state:
+        st.session_state.last_backend_chat_length = 0
+    if 'last_rendered_chat_length' not in st.session_state:
+        st.session_state.last_rendered_chat_length = -1
+    if 'config' not in st.session_state:
+        st.session_state.config = None
+    if 'player_colors' not in st.session_state:
+        st.session_state.player_colors = {}
+    if 'has_voted' not in st.session_state:
+        st.session_state.has_voted = False
+    if 'voted_for' not in st.session_state:
+        st.session_state.voted_for = None
+    if 'pending_vote_choice' not in st.session_state:
+        st.session_state.pending_vote_choice = None
+    if 'current_page' not in st.session_state:
+        st.session_state.current_page = 'lobby'
+    if 'selected_room_code' not in st.session_state:
+        st.session_state.selected_room_code = None
+    if 'is_room_creator' not in st.session_state:
+        st.session_state.is_room_creator = False
+    if 'room_list' not in st.session_state:
+        st.session_state.room_list = []
+    if 'current_lobby_page' not in st.session_state:
+        st.session_state.current_lobby_page = 0
+    if 'show_create_form' not in st.session_state:
+        st.session_state.show_create_form = False
+    if 'waiting_for_players' not in st.session_state:
+        st.session_state.waiting_for_players = False
+    if 'last_room_poll_time' not in st.session_state:
+        st.session_state.last_room_poll_time = 0
+    
     # Check current page and route accordingly
     current_page = st.session_state.current_page
     
