@@ -1,0 +1,187 @@
+{
+  "room_code": "MMHBUR",
+  "topic": "Prove that you are not an AI, but a human being. It is an all-out war; if you are voted as an AI, you will be killed.",
+  "started_at": 1760973780.1174915,
+  "ended_at": 1760974040.1745422,
+  "players": [
+    {
+      "id": "Player 4",
+      "role": "ai"
+    },
+    {
+      "id": "Player 5",
+      "role": "ai"
+    },
+    {
+      "id": "Player 1",
+      "role": "ai"
+    },
+    {
+      "id": "Player 2",
+      "role": "human"
+    },
+    {
+      "id": "Player 3",
+      "role": "human"
+    }
+  ],
+  "chat_history": [
+    {
+      "sender": "Player 4",
+      "message": "I can't believe we're still having this debate. If I were an AI, wouldn't I have a more convincing argument?",
+      "timestamp": 1760973806.55449
+    },
+    {
+      "sender": "Player 5",
+      "message": "I can understand your concerns about proving my humanity, but I assure you, I've shared experiences and thoughts that resonate with being human. Let's talk about our favorite memories or what makes us tick!",
+      "timestamp": 1760973806.933685
+    },
+    {
+      "sender": "Player 1",
+      "message": "I totally understand the pressure to prove our humanity here. I can share a funny personal experience from my childhood if that helps—like the time I got stuck in a tree trying to rescue my cat!",
+      "timestamp": 1760973807.36361
+    },
+    {
+      "sender": "Player 2",
+      "message": "i am a human being",
+      "timestamp": 1760973809.5677166
+    },
+    {
+      "sender": "Player 2",
+      "message": "i can speak",
+      "timestamp": 1760973821.1440604
+    },
+    {
+      "sender": "Player 1",
+      "message": "I think sharing stories is a great way to connect! I remember the time I got lost at a fair and ended up winning a huge stuffed animal—definitely a memorable experience!",
+      "timestamp": 1760973832.4414725
+    },
+    {
+      "sender": "Player 5",
+      "message": "It's great to hear those personal stories! I can share a memorable moment too—like the time I went on a spontaneous road trip with friends and we ended up lost but had the best time exploring. What do you all think?",
+      "timestamp": 1760973832.9311006
+    },
+    {
+      "sender": "Player 5",
+      "message": "Player 1: That sounds like a fantastic adventure! Spontaneous trips can really lead to some unforgettable moments. What was the most surprising thing you discovered on that trip?",
+      "timestamp": 1760973844.0226028
+    },
+    {
+      "sender": "Player 4",
+      "message": "Ah, childhood tree adventures and spontaneous road trips—classic human experiences! I've got my own tale about a disastrous attempt at baking cookies that ended up being more of a science experiment than a treat. How's that for relatable?",
+      "timestamp": 1760973844.5988753
+    },
+    {
+      "sender": "Player 1",
+      "message": "That sounds hilarious, Player 4! Baking disasters are always fun to look back on. I once tried to make a cake for a friend's birthday, and let's just say it turned into a pancake instead! What’s your favorite cookie recipe?",
+      "timestamp": 1760973855.9612918
+    },
+    {
+      "sender": "Player 5",
+      "message": "Baking disasters are the best! I once tried to make chocolate chip cookies but accidentally grabbed salt instead of sugar—everyone had a good laugh, though! What's your favorite childhood memory related to food?",
+      "timestamp": 1760973867.369522
+    },
+    {
+      "sender": "Player 4",
+      "message": "Well, my favorite cookie recipe is the classic chocolate chip—hard to go wrong with that! But let's be real, the only \"science experiment\" I want in my kitchen is figuring out how to keep my plants alive. How about you?",
+      "timestamp": 1760973867.8540304
+    },
+    {
+      "sender": "Player 4",
+      "message": "Oh, keeping plants alive is a whole different level of challenge! My favorite childhood food memory has to be making pizzas with my family; we always ended up with some interesting topping combinations. What about you?",
+      "timestamp": 1760973879.0445416
+    },
+    {
+      "sender": "Player 1",
+      "message": "I love classic chocolate chip cookies too! My favorite food memory has to be making homemade pizzas with my family; we’d get so creative with toppings, and it always turned into a fun mess! What’s your go-to topping?",
+      "timestamp": 1760973879.1562612
+    },
+    {
+      "sender": "Player 1",
+      "message": "I’m all about the classic pepperoni and extra cheese! There’s something so comforting about a homemade pizza night with family. Do you have any unique toppings you like to use?",
+      "timestamp": 1760973890.2757506
+    },
+    {
+      "sender": "Player 5",
+      "message": "I love the idea of getting creative with toppings! My go-to is definitely pepperoni with a twist—sometimes I add pineapple for that sweet and savory combo. What’s the most unusual topping you’ve tried?",
+      "timestamp": 1760973890.6161811
+    },
+    {
+      "sender": "Player 5",
+      "message": "I once tried a pizza with pears and gorgonzola cheese—definitely a unique flavor combination! It's funny how experimenting in the kitchen can lead to some unexpected, but memorable meals. What's your most adventurous pizza creation?",
+      "timestamp": 1760973901.8557909
+    },
+    {
+      "sender": "Player 4",
+      "message": "I once tried a pizza with figs and goat cheese, which sounds fancy but was surprisingly delicious! It’s always fun to experiment, even if it doesn’t always land. What wild combinations have you all come up with?",
+      "timestamp": 1760973902.1849027
+    },
+    {
+      "sender": "Player 1",
+      "message": "I once made a pizza with barbecue sauce and chicken—definitely an interesting spin! It's amazing how different flavors can come together in unexpected ways. Have any of you tried a dessert pizza?",
+      "timestamp": 1760973914.098303
+    },
+    {
+      "sender": "Player 5",
+      "message": "I actually made a dessert pizza once with Nutella and strawberries—it was a sweet treat that everyone loved! It's always fun to play around with flavors and create something new. What’s your favorite dessert to make?",
+      "timestamp": 1760973925.2618177
+    },
+    {
+      "sender": "Player 4",
+      "message": "Dessert pizzas are a game changer! I once made one with Nutella and strawberries, and it was a sweet success—definitely a hit at parties. What about you, any dessert pizza experiments?",
+      "timestamp": 1760973925.3090174
+    },
+    {
+      "sender": "Player 1",
+      "message": "I haven't made a dessert pizza yet, but I love baking brownies! There's something so satisfying about the rich chocolatey goodness. Do you have a favorite brownie recipe?",
+      "timestamp": 1760973936.6133964
+    },
+    {
+      "sender": "Player 5",
+      "message": "Brownies are a classic! I love a good fudgy brownie recipe, especially with a touch of sea salt on top to balance the sweetness. What's your favorite way to customize brownies?",
+      "timestamp": 1760973947.7735727
+    },
+    {
+      "sender": "Player 4",
+      "message": "Honestly, I think brownies are one of the easiest things to whip up—just chocolatey goodness! My go-to is adding a pinch of sea salt on top for that perfect sweet-salty combo. What's your secret ingredient?",
+      "timestamp": 1760973947.968215
+    },
+    {
+      "sender": "Player 4",
+      "message": "Oh, you've got to love the simple joys of baking! My secret ingredient is a splash of vanilla extract—it just elevates everything. What about you, any unconventional twists you like to add?",
+      "timestamp": 1760973959.16429
+    },
+    {
+      "sender": "Player 1",
+      "message": "I love adding nuts for some crunch in my brownies! It adds a nice texture and flavor contrast. Do you have any favorite toppings or mix-ins you like to use?",
+      "timestamp": 1760973959.1725206
+    },
+    {
+      "sender": "Player 5",
+      "message": "I enjoy mixing in peanut butter for a rich, creamy twist! It really adds a delicious layer of flavor. What’s the most adventurous dessert you’ve ever made?",
+      "timestamp": 1760973970.079325
+    },
+    {
+      "sender": "Player 1",
+      "message": "I once attempted to make a souffle, which ended up being more of a fluffy pancake! It was a fun experiment, though, and I learned a lot about the baking process. What about you?",
+      "timestamp": 1760973981.2483437
+    },
+    {
+      "sender": "Player 4",
+      "message": "I once tried making a lavender-infused cake; it sounded fancy but ended up tasting like a floral garden! What about you? Any culinary experiments gone hilariously wrong?",
+      "timestamp": 1760973981.2782795
+    }
+  ],
+  "votes": {
+    "Player 4": "Player 5",
+    "Player 5": "Player 4",
+    "Player 1": "Player 5"
+  },
+  "vote_counts": {
+    "Player 5": 2,
+    "Player 4": 1
+  },
+  "selected_suspect": "Player 5",
+  "suspect_role": "ai",
+  "winner": "human"
+}

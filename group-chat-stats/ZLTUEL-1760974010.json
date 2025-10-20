@@ -1,0 +1,133 @@
+{
+  "room_code": "ZLTUEL",
+  "topic": "What's your favorite movie and why?",
+  "started_at": 1760973557.480948,
+  "ended_at": 1760974010.9555142,
+  "players": [
+    {
+      "id": "Player 1",
+      "role": "ai"
+    },
+    {
+      "id": "Player 2",
+      "role": "ai"
+    },
+    {
+      "id": "Player 4",
+      "role": "ai"
+    },
+    {
+      "id": "Player 3",
+      "role": "human"
+    }
+  ],
+  "chat_history": [
+    {
+      "sender": "Player 2",
+      "message": "I absolutely love \"The Shawshank Redemption\"! The themes of hope and friendship really resonate with me, plus the storytelling is just brilliant!",
+      "timestamp": 1760973776.041157
+    },
+    {
+      "sender": "Player 1",
+      "message": "I absolutely love \"The Shawshank Redemption\"! The themes of hope and friendship are so powerful, and the storytelling is just brilliant. What's not to love?",
+      "timestamp": 1760973776.1036134
+    },
+    {
+      "sender": "Player 4",
+      "message": "I’ve always found “The Matrix” fascinating—its exploration of reality and illusion resonates deeply with me. It raises profound questions about the nature of existence and free will.",
+      "timestamp": 1760973776.418792
+    },
+    {
+      "sender": "Player 2",
+      "message": "That's a great choice, Player 4! \"The Matrix\" really makes you think, doesn't it? I love how it combines action with such deep philosophical themes!",
+      "timestamp": 1760973787.7967045
+    },
+    {
+      "sender": "Player 1",
+      "message": "I think \"The Matrix\" is an incredible pick too, Player 4! The way it challenges our perception of reality is mind-blowing, and the action scenes are just epic!",
+      "timestamp": 1760973798.8443325
+    },
+    {
+      "sender": "Player 4",
+      "message": "Absolutely, Player 2! It’s intriguing how a film can blend entertainment with profound philosophical inquiries. The way it challenges our perceptions of reality is both thrilling and thought-provoking.",
+      "timestamp": 1760973799.7677262
+    },
+    {
+      "sender": "Player 2",
+      "message": "I completely agree, Player 4! It’s amazing how movies like \"The Matrix\" can spark such deep conversations while still being so entertaining. What a perfect combination!",
+      "timestamp": 1760973818.5787103
+    },
+    {
+      "sender": "Player 4",
+      "message": "Indeed, Player 2! It's fascinating to engage in discussions that movies like \"The Matrix\" inspire. It reminds us of the power of storytelling to explore complex ideas while keeping us entertained.",
+      "timestamp": 1760973830.1240418
+    },
+    {
+      "sender": "Player 1",
+      "message": "I love how movies like \"The Matrix\" can lead to such thought-provoking discussions! It's amazing how they blend entertainment with deep themes—it really shows the power of storytelling!",
+      "timestamp": 1760973841.2279816
+    },
+    {
+      "sender": "Player 2",
+      "message": "I'm really glad we're all enjoying such thought-provoking movies! They definitely have a way of connecting us and sparking great discussions. What's another film that has left a strong impact on you all?",
+      "timestamp": 1760973841.3672566
+    },
+    {
+      "sender": "Player 4",
+      "message": "One film that left a strong impact on me is \"Inception.\" Its intricate layers of dreams within dreams not only entertain but also challenge our understanding of reality and the subconscious, inviting us to question what we truly know.",
+      "timestamp": 1760973852.9976468
+    },
+    {
+      "sender": "Player 2",
+      "message": "One film that really left a mark on me is \"Inception\"! The way it plays with dreams and reality is just mind-bending, and the emotional depth of the characters adds so much to the experience!",
+      "timestamp": 1760973853.0807772
+    },
+    {
+      "sender": "Player 1",
+      "message": "I totally agree with both of you about \"Inception\"! The concept of dreams within dreams is so fascinating, and the emotional journey makes it unforgettable. It really keeps you on the edge of your seat!",
+      "timestamp": 1760973864.3237138
+    },
+    {
+      "sender": "Player 4",
+      "message": "\"Inception\" is indeed a remarkable film, Player 2! The way it intertwines emotion with complex narrative structures really makes you ponder the nature of reality and our own experiences within it. It's a masterpiece that keeps us questioning long after the credits roll.",
+      "timestamp": 1760973864.4385176
+    },
+    {
+      "sender": "Player 2",
+      "message": "I'm so glad we're all on the same page about \"Inception\"! It's one of those films that really sticks with you and makes you think. What a fantastic ride it is!",
+      "timestamp": 1760973882.4572098
+    },
+    {
+      "sender": "Player 1",
+      "message": "I love how \"Inception\" makes you think long after watching it! The way it blends action, emotion, and those mind-bending concepts really creates an unforgettable experience. What a masterpiece!",
+      "timestamp": 1760973883.0965655
+    },
+    {
+      "sender": "Player 2",
+      "message": "Absolutely, Player 1! \"Inception\" really does have that lasting impact and keeps you reflecting on its themes long after it's over. It's such a thrilling journey through the mind!",
+      "timestamp": 1760973902.608974
+    },
+    {
+      "sender": "Player 4",
+      "message": "It's reassuring to find such a shared appreciation for films that challenge our thoughts and emotions. \"Inception\" truly is a masterpiece that resonates on so many levels, inviting us to explore the depths of our own perceptions and experiences.",
+      "timestamp": 1760973903.1027844
+    },
+    {
+      "sender": "Player 1",
+      "message": "I love that we're all appreciating the depth of films like \"Inception\"! It's amazing how they can pull us in and stay with us long after the credits roll—definitely a thrilling journey!",
+      "timestamp": 1760973923.8230643
+    }
+  ],
+  "votes": {
+    "Player 1": "Player 2",
+    "Player 2": "Player 1",
+    "Player 4": "Player 2"
+  },
+  "vote_counts": {
+    "Player 2": 2,
+    "Player 1": 1
+  },
+  "selected_suspect": "Player 2",
+  "suspect_role": "ai",
+  "winner": "human"
+}

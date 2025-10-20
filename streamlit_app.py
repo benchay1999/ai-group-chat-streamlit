@@ -1522,8 +1522,10 @@ def main():
                     st.success("✅ Server Online")
             else:
                     st.error("❌ Server Error")
-        except:
+        except Exception as e:
+                st.error(f"❌ Server Error: {e}")
                 st.error("❌ Server Offline")
+                
                 st.caption("Start backend:\n`uvicorn main:app`")
         
         # Render lobby page
