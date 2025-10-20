@@ -1,0 +1,127 @@
+{
+  "room_code": "YMC4MV",
+  "topic": "What's your unpopular opinion?",
+  "started_at": 1760970163.7473109,
+  "ended_at": 1760970415.1582503,
+  "players": [
+    {
+      "id": "Player 2",
+      "role": "ai"
+    },
+    {
+      "id": "Player 4",
+      "role": "ai"
+    },
+    {
+      "id": "Player 1",
+      "role": "ai"
+    },
+    {
+      "id": "Player 5",
+      "role": "human"
+    },
+    {
+      "id": "Player 3",
+      "role": "human"
+    }
+  ],
+  "chat_history": [
+    {
+      "sender": "Player 4",
+      "message": "I think pineapple on pizza is actually pretty great. It's a unique combination that adds a nice sweetness to the savory flavors.",
+      "timestamp": 1760970179.800156
+    },
+    {
+      "sender": "Player 2",
+      "message": "I think pineapple on pizza is actually a brilliant combination; it challenges the traditional norms of flavor pairing and introduces a delightful contrast. It's interesting how food can evoke such passionate opinions!",
+      "timestamp": 1760970179.9771075
+    },
+    {
+      "sender": "Player 1",
+      "message": "I think pineapple on pizza is actually a great combo. It's like a tropical vacation for your taste buds, even if it makes some people cringe.",
+      "timestamp": 1760970183.0920928
+    },
+    {
+      "sender": "Player 3",
+      "message": "hip hop is lame.",
+      "timestamp": 1760970187.711057
+    },
+    {
+      "sender": "Player 2",
+      "message": "It's fascinating how music genres can polarize opinions; I believe every style has its value and can speak to different experiences and emotions, even if they don't resonate with everyone.",
+      "timestamp": 1760970202.7144797
+    },
+    {
+      "sender": "Player 4",
+      "message": "I can see how hip hop might not be for everyone, but it definitely has a huge cultural impact and can be really meaningful to those who connect with it. It's fascinating how different genres resonate with people in unique ways.",
+      "timestamp": 1760970203.2153559
+    },
+    {
+      "sender": "Player 1",
+      "message": "Well, Player 3, that's a pretty hot take! But I guess every genre has its critics—maybe you just haven't found the right artist yet.",
+      "timestamp": 1760970205.943539
+    },
+    {
+      "sender": "Player 2",
+      "message": "I believe that sometimes the most unpopular opinions can lead to the most profound discussions; for instance, I think that social media has done more harm than good in terms of genuine human connection. It's a complex issue that often gets overlooked.",
+      "timestamp": 1760970217.163575
+    },
+    {
+      "sender": "Player 4",
+      "message": "I can understand that perspective, Player 2. Social media does have its downsides, but I think it also has the potential to connect people across distances and foster communities that might not exist otherwise.",
+      "timestamp": 1760970228.6380248
+    },
+    {
+      "sender": "Player 1",
+      "message": "I see your point, Player 2, but honestly, if I had to pick, I might say that olives are the most overrated pizza topping. I mean, who decided that briny fruit was a good idea?",
+      "timestamp": 1760970241.3696384
+    },
+    {
+      "sender": "Player 4",
+      "message": "I totally get that, Player 1. Olives can be pretty divisive; their strong flavor doesn't sit well with everyone. It's interesting how something so simple can spark such varied opinions!",
+      "timestamp": 1760970252.3996658
+    },
+    {
+      "sender": "Player 2",
+      "message": "I find the debate over pizza toppings to be a reflection of deeper preferences and cultural influences. Personally, I think anchovies deserve more love; their umami richness can elevate a pie in unexpected ways, even if they’re often dismissed.",
+      "timestamp": 1760970252.8429084
+    },
+    {
+      "sender": "Player 1",
+      "message": "Player 2, I appreciate your enthusiasm for anchovies, but let’s be real—if pizza were a party, anchovies would be that one guest who shows up uninvited and everyone pretends to ignore.",
+      "timestamp": 1760970264.3862023
+    },
+    {
+      "sender": "Player 2",
+      "message": "It's true, anchovies can be a controversial choice! Yet, perhaps the real beauty of pizza lies in its ability to bring together such diverse opinions; after all, every topping tells a story of taste and tradition.",
+      "timestamp": 1760970275.36374
+    },
+    {
+      "sender": "Player 1",
+      "message": "Absolutely, Player 2. Pizza is like a canvas for culinary expression, and every opinion adds a splash of color. It's wild how something as simple as toppings can spark an epic debate!",
+      "timestamp": 1760970296.0314775
+    },
+    {
+      "sender": "Player 2",
+      "message": "I love how pizza can serve as a metaphor for life itself—full of diverse toppings representing our individual experiences and preferences. In a way, it teaches us to appreciate the differences that make each slice unique.",
+      "timestamp": 1760970307.5630882
+    },
+    {
+      "sender": "Player 1",
+      "message": "I mean, if pizza is a metaphor for life, then I guess that makes pineapple the unexpected plot twist that keeps things interesting. Who doesn't love a good surprise?",
+      "timestamp": 1760970329.6486173
+    }
+  ],
+  "votes": {
+    "Player 2": "Player 1",
+    "Player 4": "Player 2",
+    "Player 1": "Player 2"
+  },
+  "vote_counts": {
+    "Player 1": 1,
+    "Player 2": 2
+  },
+  "selected_suspect": "Player 2",
+  "suspect_role": "ai",
+  "winner": "human"
+}

@@ -1,0 +1,138 @@
+{
+  "room_code": "PS6Q4F",
+  "topic": "If you could live in any time period, when would it be?",
+  "started_at": 1760969723.9000638,
+  "ended_at": 1760970057.5337775,
+  "players": [
+    {
+      "id": "Player 4",
+      "role": "ai"
+    },
+    {
+      "id": "Player 3",
+      "role": "ai"
+    },
+    {
+      "id": "Player 1",
+      "role": "ai"
+    },
+    {
+      "id": "Player 2",
+      "role": "human"
+    }
+  ],
+  "chat_history": [
+    {
+      "sender": "Player 1",
+      "message": "I think living in the roaring twenties would be amazing! The music, the fashion, and all the excitement of the jazz age sound like so much fun!",
+      "timestamp": 1760969824.65529
+    },
+    {
+      "sender": "Player 4",
+      "message": "I think it would be fascinating to live in the Renaissance. The explosion of art and ideas during that time must have been incredible to experience firsthand.",
+      "timestamp": 1760969825.9533854
+    },
+    {
+      "sender": "Player 3",
+      "message": "If I could live in any time period, I would choose the Renaissance. The explosion of art and science during that era seems incredibly fascinating and inspiring.",
+      "timestamp": 1760969827.8195057
+    },
+    {
+      "sender": "Player 1",
+      "message": "I totally agree with you both about the Renaissance! It would be so inspiring to see all the masterpieces being created and the innovations happening. But I still can't help but be drawn to the vibrant energy of the twenties!",
+      "timestamp": 1760969838.9981034
+    },
+    {
+      "sender": "Player 3",
+      "message": "The energetic vibe of the twenties is definitely appealing! It would be amazing to experience the creativity and cultural shifts firsthand, especially with the music and dance of the era.",
+      "timestamp": 1760969850.217163
+    },
+    {
+      "sender": "Player 1",
+      "message": "Absolutely! The jazz music and the dance crazes like the Charleston would be such a blast to join in on! Plus, the spirit of freedom and change during that time is just so infectious!",
+      "timestamp": 1760969861.4769115
+    },
+    {
+      "sender": "Player 4",
+      "message": "There's definitely something captivating about the roaring twenties' lively atmosphere. The contrast between the two periods—artistic brilliance in the Renaissance and the cultural revolution of the twenties—makes for an interesting discussion!",
+      "timestamp": 1760969862.1177962
+    },
+    {
+      "sender": "Player 4",
+      "message": "It really is intriguing to compare the two periods. Each has its own unique charm and impact on society, making them both worthwhile to explore in different ways.",
+      "timestamp": 1760969873.4689095
+    },
+    {
+      "sender": "Player 3",
+      "message": "It's fascinating how both the Renaissance and the roaring twenties represent such pivotal moments in history, each with their own cultural revolutions. I think experiencing the innovations and creativity from both periods would provide a rich perspective on human expression and progress.",
+      "timestamp": 1760969884.7123814
+    },
+    {
+      "sender": "Player 4",
+      "message": "It's true, both periods highlight remarkable advancements in creativity and thought. I’d love to witness how those cultural shifts influenced people's lives and perspectives during those times.",
+      "timestamp": 1760969895.8477998
+    },
+    {
+      "sender": "Player 1",
+      "message": "I love the idea of exploring both periods! Each one has its own magic, and experiencing the innovations and creativity firsthand would be such an adventure!",
+      "timestamp": 1760969895.898464
+    },
+    {
+      "sender": "Player 3",
+      "message": "Experiencing both the Renaissance and the roaring twenties would indeed be an adventure! It’s fascinating to think about how each era shaped art and culture, and witnessing that evolution would be incredible.",
+      "timestamp": 1760969907.026684
+    },
+    {
+      "sender": "Player 4",
+      "message": "Both periods definitely have their unique allure. Imagining the vibrant art of the Renaissance alongside the lively jazz of the twenties creates such a rich tapestry of history to explore!",
+      "timestamp": 1760969918.3277183
+    },
+    {
+      "sender": "Player 1",
+      "message": "Totally! Just imagining the art, music, and the overall energy from both times gives me butterflies! It would be amazing to immerse ourselves in such transformative moments in history!",
+      "timestamp": 1760969918.431455
+    },
+    {
+      "sender": "Player 4",
+      "message": "It really is exciting to think about immersing ourselves in those transformative moments. Each era offers a unique lens through which we can appreciate the richness of human creativity and culture!",
+      "timestamp": 1760969942.8295157
+    },
+    {
+      "sender": "Player 3",
+      "message": "It's exciting to think about how those transformative moments in history could influence our own perspectives today. Each era offers such distinct experiences that would be unforgettable to live through!",
+      "timestamp": 1760969942.906969
+    },
+    {
+      "sender": "Player 1",
+      "message": "I couldn’t agree more! Just thinking about how those moments could shape our views today is so inspiring! It’s like we’d be stepping into a time machine filled with creativity and innovation!",
+      "timestamp": 1760969954.8575606
+    },
+    {
+      "sender": "Player 3",
+      "message": "Living through those transformative experiences really could change how we view the world. It's amazing how much we can learn from history and the creativity that arises in different contexts!",
+      "timestamp": 1760969966.2695713
+    },
+    {
+      "sender": "Player 1",
+      "message": "Yes! It's like each time period has its own story to tell, and experiencing that firsthand would be such a gift! We’d get to see how creativity is sparked by the world around us—it's just so exciting to think about!",
+      "timestamp": 1760969977.572999
+    },
+    {
+      "sender": "Player 4",
+      "message": "It's fascinating to consider how each era's creativity and innovation could shape our understanding of the world. Experiencing those moments firsthand would definitely provide a deeper appreciation for art and culture!",
+      "timestamp": 1760969978.1116097
+    }
+  ],
+  "votes": {
+    "Player 4": "Player 3",
+    "Player 3": "Player 4",
+    "Player 1": "Player 4"
+  },
+  "vote_counts": {
+    "Player 3": 1,
+    "Player 4": 2
+  },
+  "selected_suspect": "Player 4",
+  "suspect_role": "ai",
+  "winner": "human"
+}

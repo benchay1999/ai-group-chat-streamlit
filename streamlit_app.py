@@ -347,7 +347,7 @@ def inject_global_styles():
 def fetch_backend_config():
     """Fetch backend-configured timers so the timer matches the server."""
     try:
-        resp = requests.get(f"{BACKEND_URL}/config", timeout=5)
+        resp = requests_session.get(f"{BACKEND_URL}/config", timeout=10)
         if resp.status_code == 200:
             return resp.json()
     except Exception:
@@ -417,8 +417,22 @@ def render_chat_bubble(sender: str, message: str, is_self: bool, timestamp: floa
 
 # Configuration
 BACKEND_URL = os.getenv('BACKEND_URL', 'http://localhost:8000')
-POLL_INTERVAL = 0.3  # seconds (increased from 1.0 for better responsiveness)
+POLL_INTERVAL = 1.5  # seconds (reduced from 0.3 to avoid rate limiting with multiple players)
 DEFAULT_ROOM = 'streamlit-room'
+
+# Create a session for connection pooling (reuse connections)
+if 'requests_session' not in dir():
+    import requests
+    requests_session = requests.Session()
+    # Set connection pooling parameters
+    adapter = requests.adapters.HTTPAdapter(
+        pool_connections=10,
+        pool_maxsize=20,
+        max_retries=3,
+        pool_block=False
+    )
+    requests_session.mount('http://', adapter)
+    requests_session.mount('https://', adapter)
 
 # Initialize session state
 if 'room_code' not in st.session_state:
@@ -528,10 +542,10 @@ def merge_chat_messages(backend_messages, local_cache):
 def join_room(room_code: str, player_id: str):
     """Join or create a room."""
     try:
-        response = requests.post(
+        response = requests_session.post(
             f"{BACKEND_URL}/api/rooms/{room_code}/join",
             json={"player_id": player_id},
-            timeout=10  # Backend creates room quickly now (AI runs in background)
+            timeout=20  # Increased for multiple players + AI initialization
         )
         if response.status_code == 200:
             return response.json()
@@ -544,19 +558,30 @@ def join_room(room_code: str, player_id: str):
 def poll_game_state(room_code: str, player_id: str):
     """Poll the current game state from backend."""
     try:
-        response = requests.get(
+        response = requests_session.get(
             f"{BACKEND_URL}/api/rooms/{room_code}/state",
             params={"player_id": player_id},
-            timeout=5  # Backend now non-blocking, so 5 seconds is sufficient
+            timeout=15  # Increased timeout for multiple players + AI processing
         )
         if response.status_code == 200:
+            # Reset error counter on success
+            if 'poll_error_count' in st.session_state:
+                st.session_state.poll_error_count = 0
             return response.json()
         return None
     except requests.exceptions.SSLError:
         # Silent fail for SSL errors during gameplay - will retry on next poll
         return None
     except requests.exceptions.Timeout:
-        # Silent fail for timeouts - will retry on next poll
+        # Count consecutive timeouts
+        if 'poll_error_count' not in st.session_state:
+            st.session_state.poll_error_count = 0
+        st.session_state.poll_error_count += 1
+        
+        # Show warning only after 3 consecutive timeouts
+        if st.session_state.poll_error_count >= 3:
+            st.warning("⏱️ Backend is slow to respond. This is normal with multiple players. Game will continue...")
+            st.session_state.poll_error_count = 0  # Reset after showing
         return None
     except requests.exceptions.ConnectionError:
         # Show error only once per session
@@ -572,10 +597,10 @@ def poll_game_state(room_code: str, player_id: str):
 def send_message(room_code: str, player_id: str, message: str):
     """Send a chat message."""
     try:
-        response = requests.post(
+        response = requests_session.post(
             f"{BACKEND_URL}/api/rooms/{room_code}/message",
             json={"player_id": player_id, "message": message},
-            timeout=10  # AI responses run in background, endpoint returns quickly
+            timeout=20  # Increased for multiple players + AI processing
         )
         return response.status_code == 200
     except requests.exceptions.Timeout:
@@ -592,10 +617,10 @@ def send_message(room_code: str, player_id: str, message: str):
 def cast_vote(room_code: str, player_id: str, voted_for: str):
     """Cast a vote for elimination."""
     try:
-        response = requests.post(
+        response = requests_session.post(
             f"{BACKEND_URL}/api/rooms/{room_code}/vote",
             json={"player_id": player_id, "voted_for": voted_for},
-            timeout=10  # AI voting runs in background, endpoint returns quickly
+            timeout=20  # Increased for multiple players + AI processing
         )
         if response.status_code == 200:
             result = response.json()
@@ -876,7 +901,7 @@ def render_message_input(game_state):
         st.success("🏁 Session complete for this topic.")
         # Download stats
         try:
-            r = requests.get(f"{BACKEND_URL}/api/rooms/{st.session_state.room_code}/stats", timeout=5)
+            r = requests_session.get(f"{BACKEND_URL}/api/rooms/{st.session_state.room_code}/stats", timeout=10)
             if r.status_code == 200:
                 stats = r.json()
                 st.download_button(
@@ -968,29 +993,30 @@ def check_phase_change(game_state):
 def fetch_room_list(page: int = 0):
     """Fetch list of available rooms from backend."""
     try:
-        response = requests.get(
+        response = requests_session.get(
             f"{BACKEND_URL}/api/rooms/list",
             params={"page": page, "per_page": 10},
-            timeout=5
+            timeout=10  # Increased timeout
         )
         if response.status_code == 200:
             return response.json()
         return None
     except requests.exceptions.SSLError as e:
-        st.warning("⚠️ Connection issue with backend. This can happen if:")
-        st.markdown("""
-        - Your ngrok tunnel restarted (check Terminal 2)
-        - Network interruption occurred
-        - Backend server went down
+        st.warning("⚠️ Connection issue with backend.")
+        st.info("""
+        **Common causes with multiple players:**
+        - ngrok free tier rate limiting (max 40 connections/minute)
+        - Too many simultaneous requests
         
-        **Quick Fix:**
-        - If using ngrok, check if it's still running
-        - Restart ngrok if needed and update BACKEND_URL in Streamlit Cloud secrets
-        - Or wait a moment and refresh the page
+        **Quick fixes:**
+        - Wait 30 seconds and refresh
+        - Consider deploying backend to Railway/Render for stable connections
+        - See CONNECTION_ISSUES.md for permanent solutions
         """)
         return None
     except requests.exceptions.Timeout:
-        st.warning("⏱️ Backend request timed out. Backend might be processing heavy AI requests.")
+        st.warning("⏱️ Backend request timed out. This is common with multiple players.")
+        st.info("Wait a moment and refresh the page.")
         return None
     except requests.exceptions.ConnectionError:
         st.error("❌ Cannot connect to backend. Make sure backend is running.")
@@ -1007,13 +1033,13 @@ def fetch_room_list(page: int = 0):
 def create_room_api(max_humans: int, total_players: int):
     """Create a new room via API."""
     try:
-        response = requests.post(
+        response = requests_session.post(
             f"{BACKEND_URL}/api/rooms/create",
             json={
                 "max_humans": max_humans,
                 "total_players": total_players
             },
-            timeout=10
+            timeout=15
         )
         if response.status_code == 200:
             return response.json()
@@ -1026,9 +1052,9 @@ def create_room_api(max_humans: int, total_players: int):
 def get_room_info(room_code: str):
     """Get room information from backend."""
     try:
-        response = requests.get(
+        response = requests_session.get(
             f"{BACKEND_URL}/api/rooms/{room_code}/info",
-            timeout=5
+            timeout=10
         )
         if response.status_code == 200:
             return response.json()
@@ -1044,10 +1070,10 @@ def get_room_info(room_code: str):
 def leave_room_api(room_code: str, player_id: str):
     """Leave a room via API."""
     try:
-        response = requests.post(
+        response = requests_session.post(
             f"{BACKEND_URL}/api/rooms/{room_code}/leave",
             json={"player_id": player_id},
-            timeout=5
+            timeout=10
         )
         if response.status_code == 200:
             return response.json()
@@ -1517,14 +1543,14 @@ def main():
             st.title("🎮 Human Hunter")
             st.divider()
         try:
-            response = requests.get(f"{BACKEND_URL}/health", timeout=5)
+            response = requests_session.get(f"{BACKEND_URL}/health", timeout=10)
             if response.status_code == 200:
                     st.success("✅ Server Online")
             else:
                     st.error("❌ Server Error")
         except:
                 st.error("❌ Server Offline")
-                st.caption("Start backend:\n`uvicorn main:app`")
+                st.caption("Check if backend/ngrok is running")
         
         # Render lobby page
         render_lobby_page()
@@ -1583,7 +1609,7 @@ def main():
     
     # Poll game state
     current_time = time.time()
-    poll_interval = 0.3 if st.session_state.pending_message else POLL_INTERVAL
+    poll_interval = 1.0 if st.session_state.pending_message else POLL_INTERVAL
     
     if current_time - st.session_state.last_poll_time >= poll_interval:
         game_state = poll_game_state(st.session_state.room_code, st.session_state.player_id)
