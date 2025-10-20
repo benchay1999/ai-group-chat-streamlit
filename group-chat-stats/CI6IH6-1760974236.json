@@ -1,0 +1,177 @@
+{
+  "room_code": "CI6IH6",
+  "topic": "If you could live in any time period, when would it be?",
+  "started_at": 1760973978.2742145,
+  "ended_at": 1760974236.5987532,
+  "players": [
+    {
+      "id": "Player 3",
+      "role": "ai"
+    },
+    {
+      "id": "Player 5",
+      "role": "ai"
+    },
+    {
+      "id": "Player 2",
+      "role": "ai"
+    },
+    {
+      "id": "Player 4",
+      "role": "human"
+    },
+    {
+      "id": "Player 1",
+      "role": "human"
+    }
+  ],
+  "chat_history": [
+    {
+      "sender": "Player 3",
+      "message": "I think living in the Roaring Twenties would be amazing! The music, fashion, and energy of that time just seem so vibrant and exciting!",
+      "timestamp": 1760974001.6804814
+    },
+    {
+      "sender": "Player 2",
+      "message": "If I could live in any time period, I'd choose the Roaring Twenties! Flapper dresses, jazz music, and a good excuse to dance like nobody's watching—what's not to love?",
+      "timestamp": 1760974001.796316
+    },
+    {
+      "sender": "Player 5",
+      "message": "The Roaring Twenties definitely has a lot of charm with its lively atmosphere. I think living in the Victorian era would be fascinating too, with all its intricate designs and rich history.",
+      "timestamp": 1760974013.0694103
+    },
+    {
+      "sender": "Player 4",
+      "message": "wtf",
+      "timestamp": 1760974013.7301395
+    },
+    {
+      "sender": "Player 1",
+      "message": "I want to go back to 1990",
+      "timestamp": 1760974025.417876
+    },
+    {
+      "sender": "Player 5",
+      "message": "The Victorian era had such an interesting blend of innovation and tradition. Plus, the literature from that time is some of the best!",
+      "timestamp": 1760974036.4472957
+    },
+    {
+      "sender": "Player 2",
+      "message": "The 90s were awesome! I mean, who wouldn't want to rock out to grunge music and watch all those classic sitcoms? It's like a nostalgia trip with a side of questionable fashion choices!",
+      "timestamp": 1760974036.7273362
+    },
+    {
+      "sender": "Player 3",
+      "message": "I love the idea of the Victorian era too, Player 5! The elegance and the cultural shifts happening back then would be so intriguing to experience firsthand. But I can’t help but feel that the 90s had some awesome trends and music too, Player 1!",
+      "timestamp": 1760974037.8452015
+    },
+    {
+      "sender": "Player 2",
+      "message": "Absolutely! The 90s had such a unique vibe—who could resist those iconic hairstyles and boy band ballads? Plus, let's not forget the magical world of VHS tapes!",
+      "timestamp": 1760974048.922555
+    },
+    {
+      "sender": "Player 5",
+      "message": "The cultural shifts in the Victorian era would be such a unique experience, but I can see why the 90s hold a special place in everyone's hearts. It's interesting how each era has its own distinct style and music that leaves a lasting impact.",
+      "timestamp": 1760974060.7123353
+    },
+    {
+      "sender": "Player 2",
+      "message": "I think we can all agree that every era has its quirks, but can you imagine trying to explain TikTok to someone in the Victorian era? They’d probably think it’s a new form of social etiquette!",
+      "timestamp": 1760974073.4112022
+    },
+    {
+      "sender": "Player 5",
+      "message": "It's true! The idea of introducing modern concepts like TikTok to people from the Victorian era is amusing. Their reactions would be priceless—imagine their bewilderment at the rapid pace of communication today!",
+      "timestamp": 1760974084.4552805
+    },
+    {
+      "sender": "Player 3",
+      "message": "Haha, right? I can just picture them trying to make sense of all those dance challenges! Each era has its own unique way of expressing creativity, and it's so fun to think about how they'd react to our modern trends!",
+      "timestamp": 1760974085.3700626
+    },
+    {
+      "sender": "Player 2",
+      "message": "Can you imagine a Victorian person attempting a TikTok dance challenge while wearing a corset? Talk about a wardrobe malfunction waiting to happen!",
+      "timestamp": 1760974096.972533
+    },
+    {
+      "sender": "Player 3",
+      "message": "It's wild to think about how they'd react! Imagine them trying to keep up with all the memes and viral trends—such a clash of cultures! Each time period really reflects the creativity and spirit of its people, and it's fascinating to explore those differences!",
+      "timestamp": 1760974097.121908
+    },
+    {
+      "sender": "Player 2",
+      "message": "And let's not forget their bewilderment at smartphones! I can just see them trying to use one as a fancy mirror—\"Look at my reflection! What sorcery is this?!\"",
+      "timestamp": 1760974108.415327
+    },
+    {
+      "sender": "Player 5",
+      "message": "It's definitely a fascinating thought! The blend of creativity and societal norms in each era shapes how people express themselves. I wonder if they'd find our expressions equally as confusing as we find theirs.",
+      "timestamp": 1760974108.450462
+    },
+    {
+      "sender": "Player 3",
+      "message": "Absolutely! The creativity of every era is so unique, and imagining them grappling with our current trends is hilarious! It's like a fun time-travel mashup that highlights how far we've come in terms of expression and technology!",
+      "timestamp": 1760974108.513209
+    },
+    {
+      "sender": "Player 2",
+      "message": "Imagine a Victorian gentleman trying to understand Instagram—he'd probably think it’s a new way to send portraits! \"Why would anyone want to share a picture of their lunch instead of a finely painted oil?\" Classic!",
+      "timestamp": 1760974120.1139472
+    },
+    {
+      "sender": "Player 3",
+      "message": "Haha, right? The idea of them trying to wrap their heads around social media is just too funny! It's like a whole different language that they wouldn't even know how to start with!",
+      "timestamp": 1760974131.1192887
+    },
+    {
+      "sender": "Player 5",
+      "message": "It's amusing to think about how such a gentleman might react to the idea of sharing moments from everyday life instead of grand portraits. Each era has its own form of self-expression, and it's fascinating to see how they evolve over time!",
+      "timestamp": 1760974131.77241
+    },
+    {
+      "sender": "Player 2",
+      "message": "And what about a Victorian lady trying to navigate online dating? \"Swipe left? I thought we were supposed to court!\" Imagine the confusion—she'd be utterly flabbergasted!",
+      "timestamp": 1760974142.8463113
+    },
+    {
+      "sender": "Player 3",
+      "message": "Haha, the thought of a Victorian lady swiping left is hilarious! Can you imagine her trying to write a polite rejection letter instead of just hitting a button? The concept of dating would blow her mind!",
+      "timestamp": 1760974153.9524612
+    },
+    {
+      "sender": "Player 2",
+      "message": "And don't even get me started on the idea of a Victorian couple sending each other texts! \"I do declare, my dear, I shall respond to your message posthaste, right after I finish this 10-page letter!\"",
+      "timestamp": 1760974165.1787663
+    },
+    {
+      "sender": "Player 5",
+      "message": "It's quite entertaining to think about how those traditional courting practices would clash with modern dating apps. A Victorian lady might have a whole new set of etiquette rules to consider!",
+      "timestamp": 1760974165.203338
+    },
+    {
+      "sender": "Player 2",
+      "message": "Can you picture a Victorian guy trying to figure out emojis? “What does this smiley face mean? Is it a sign of affection or just a fancy way to express my confusion?”",
+      "timestamp": 1760974176.3783073
+    },
+    {
+      "sender": "Player 3",
+      "message": "Right? It would be such a delightful mix of old-fashioned charm and modern chaos! Just picturing them trying to keep up with quick messages instead of lengthy letters is a laugh! Each era really has its own quirks when it comes to romance and communication!",
+      "timestamp": 1760974176.413859
+    }
+  ],
+  "votes": {
+    "Player 3": "Player 2",
+    "Player 5": "Player 2",
+    "Player 2": "Player 5"
+  },
+  "vote_counts": {
+    "Player 2": 2,
+    "Player 5": 1
+  },
+  "selected_suspect": "Player 2",
+  "suspect_role": "ai",
+  "winner": "human"
+}

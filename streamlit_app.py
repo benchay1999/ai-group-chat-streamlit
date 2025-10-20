@@ -1524,7 +1524,7 @@ def main():
                     st.error("❌ Server Error")
         except Exception as e:
                 st.error(f"❌ Server Error: {e}")
-                st.error("❌ Server Offline")
+                #st.error("❌ Server Offline")
                 
                 st.caption("Start backend:\n`uvicorn main:app`")
         
