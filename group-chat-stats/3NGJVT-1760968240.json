@@ -1,0 +1,133 @@
+{
+  "room_code": "3NGJVT",
+  "topic": "What's your unpopular opinion?",
+  "started_at": 1760967999.6724231,
+  "ended_at": 1760968240.575782,
+  "players": [
+    {
+      "id": "Player 2",
+      "role": "ai"
+    },
+    {
+      "id": "Player 4",
+      "role": "ai"
+    },
+    {
+      "id": "Player 1",
+      "role": "ai"
+    },
+    {
+      "id": "Player 5",
+      "role": "ai"
+    },
+    {
+      "id": "Player 3",
+      "role": "human"
+    }
+  ],
+  "chat_history": [
+    {
+      "sender": "Player 4",
+      "message": "I think pineapple on pizza is actually pretty great. It's like a tropical vacation for your taste buds, and who doesn’t want that?",
+      "timestamp": 1760968010.798364
+    },
+    {
+      "sender": "Player 2",
+      "message": "I think pineapple on pizza is a culinary masterpiece. Fight me on this, but I'm ready to defend it like it's my child.",
+      "timestamp": 1760968011.2072895
+    },
+    {
+      "sender": "Player 1",
+      "message": "I think pineapple on pizza is actually delicious—it adds a unique sweetness that balances the savory flavors. I know it’s a divisive topic, but I stand by it!",
+      "timestamp": 1760968011.412999
+    },
+    {
+      "sender": "Player 5",
+      "message": "I actually think that mint chocolate chip ice cream is overrated. There are so many better flavors out there that deserve more love!",
+      "timestamp": 1760968022.5342515
+    },
+    {
+      "sender": "Player 4",
+      "message": "Honestly, I can't believe people still defend mint chocolate chip. It's like someone decided to make toothpaste a dessert.",
+      "timestamp": 1760968033.4610288
+    },
+    {
+      "sender": "Player 5",
+      "message": "I can see where you're coming from, Player 4. Mint chocolate chip does have that strange vibe, but I think it’s all about personal preferences in flavors!",
+      "timestamp": 1760968056.1942537
+    },
+    {
+      "sender": "Player 4",
+      "message": "I mean, who needs minty toothpaste in their ice cream? Just give me something rich and decadent, and leave the dental hygiene for another time!",
+      "timestamp": 1760968056.2872005
+    },
+    {
+      "sender": "Player 4",
+      "message": "I have to say, I'm with you on that one. Ice cream should be a treat, not a dental appointment—give me chocolate, caramel, or anything but minty freshness!",
+      "timestamp": 1760968078.5816817
+    },
+    {
+      "sender": "Player 1",
+      "message": "I have to agree with Player 4 on the mint chocolate chip—it just doesn’t feel like a true ice cream indulgence. There are so many other flavors that can truly satisfy that sweet tooth!",
+      "timestamp": 1760968079.08381
+    },
+    {
+      "sender": "Player 2",
+      "message": "I have to agree with Player 5—mint chocolate chip is like a bad date that keeps coming back for more. There are way better options out there, like cookie dough or anything caramel-based.",
+      "timestamp": 1760968079.6569905
+    },
+    {
+      "sender": "Player 4",
+      "message": "Honestly, I think cookie dough is the real MVP of ice cream flavors. It's like someone took all the best parts of baking and put them in a bowl—who can resist that?",
+      "timestamp": 1760968091.092886
+    },
+    {
+      "sender": "Player 2",
+      "message": "I mean, if we're talking about bad dates, mint chocolate chip is definitely one that just doesn't know when to quit. Give me all the cookie dough and caramel—I promise I'll treat them better!",
+      "timestamp": 1760968092.0170605
+    },
+    {
+      "sender": "Player 1",
+      "message": "I totally agree with Player 4—cookie dough is unbeatable! It's the perfect mix of nostalgia and indulgence, and I can never say no to it.",
+      "timestamp": 1760968103.28886
+    },
+    {
+      "sender": "Player 5",
+      "message": "I totally agree, Player 4! Cookie dough has that perfect combination of textures and flavors that just hits the spot. It's hard to resist a scoop of that goodness!",
+      "timestamp": 1760968103.551617
+    },
+    {
+      "sender": "Player 1",
+      "message": "I have to say, I think the idea of putting weird toppings on ice cream is an unpopular opinion in itself. Some things just belong together, like chocolate and vanilla, but adding savory elements can be a real gamble!",
+      "timestamp": 1760968129.0037208
+    },
+    {
+      "sender": "Player 2",
+      "message": "I think we can all agree that mint chocolate chip should just pack its bags and leave the ice cream shop. Let’s give our taste buds a break and stick to the classics!",
+      "timestamp": 1760968130.4252377
+    },
+    {
+      "sender": "Player 4",
+      "message": "I think the idea of adding savory toppings to ice cream is definitely an unpopular opinion—some things just shouldn't happen, like bacon bits on a sundae. Let's keep our ice cream sweet, shall we?",
+      "timestamp": 1760968141.9884877
+    },
+    {
+      "sender": "Player 1",
+      "message": "I completely agree, Player 4. Some flavor combinations just don't work, and sticking to sweet toppings keeps the experience enjoyable. Let's celebrate the classic flavors that truly shine!",
+      "timestamp": 1760968153.7000244
+    }
+  ],
+  "votes": {
+    "Player 2": "Player 4",
+    "Player 4": "Player 1",
+    "Player 1": "Player 4",
+    "Player 5": "Player 4"
+  },
+  "vote_counts": {
+    "Player 4": 3,
+    "Player 1": 1
+  },
+  "selected_suspect": "Player 4",
+  "suspect_role": "ai",
+  "winner": "human"
+}

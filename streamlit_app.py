@@ -1118,9 +1118,18 @@ def render_lobby_page():
 
 def render_create_room_form():
     """Render the create room form."""
+    # Initialize creating flag if not exists
+    if 'is_creating' not in st.session_state:
+        st.session_state.is_creating = False
+    
     st.markdown("### 🎮 Create New Room")
     
     st.info("ℹ️ Room name and player names are automatically assigned")
+    
+    # Show creating status
+    if st.session_state.is_creating:
+        st.info("⏳ Creating room and joining... Please wait")
+        return
     
     # Sliders outside form for real-time updates
     col1, col2 = st.columns(2)
@@ -1138,15 +1147,21 @@ def render_create_room_form():
     # Buttons in columns for layout
     col_submit, col_cancel = st.columns(2)
     with col_submit:
-        submitted = st.button("Create & Join", use_container_width=True, type="primary", key="create_submit")
+        submitted = st.button("Create & Join", use_container_width=True, type="primary", 
+                             key="create_submit", disabled=st.session_state.is_creating)
     with col_cancel:
-        cancelled = st.button("Cancel", use_container_width=True, key="create_cancel")
+        cancelled = st.button("Cancel", use_container_width=True, key="create_cancel",
+                             disabled=st.session_state.is_creating)
     
     if cancelled:
         st.session_state.show_create_form = False
+        st.session_state.is_creating = False
         st.rerun()
     
     if submitted:
+        # Set flag to prevent double-clicking
+        st.session_state.is_creating = True
+        
         # Create room (room name and player name auto-generated)
         result = create_room_api(max_humans, total_players)
         
@@ -1181,13 +1196,19 @@ def render_create_room_form():
                     st.session_state.current_page = 'waiting'
                     st.session_state.waiting_for_players = True
                 
-                    st.rerun()
+                # Reset creating flag
+                st.session_state.is_creating = False
+                st.rerun()
             else:
                 error_msg = join_result.get('error') if join_result else 'Failed to join room'
                 st.error(f"❌ {error_msg}")
+                # Reset creating flag on error
+                st.session_state.is_creating = False
         else:
             error_msg = result.get('error') if result else 'Failed to create room'
             st.error(f"❌ {error_msg}")
+            # Reset creating flag on error
+            st.session_state.is_creating = False
 
 
 def render_waiting_screen():
@@ -1269,6 +1290,10 @@ def render_join_page():
     """Render the join page."""
     room_code = st.session_state.selected_room_code
     
+    # Initialize joining flag if not exists
+    if 'is_joining' not in st.session_state:
+        st.session_state.is_joining = False
+    
     st.markdown("""
     <div class="lobby-header">
         <div class="lobby-title">🎮 Join Room</div>
@@ -1284,6 +1309,7 @@ def render_join_page():
         if st.button("← Back to Lobby"):
             st.session_state.current_page = 'lobby'
             st.session_state.selected_room_code = None
+            st.session_state.is_joining = False
             st.rerun()
         return
     
@@ -1304,11 +1330,20 @@ def render_join_page():
     
     st.divider()
     
+    # Show joining status
+    if st.session_state.is_joining:
+        st.info("⏳ Joining room... Please wait")
+        return
+    
     st.info("🎲 Click 'Join Game' and you'll be assigned a random player number")
     
     col1, col2 = st.columns(2)
     with col1:
-        if st.button("Join Game", type="primary", use_container_width=True):
+        # Disable button if already joining
+        if st.button("Join Game", type="primary", use_container_width=True, disabled=st.session_state.is_joining):
+            # Set flag to prevent double-clicking
+            st.session_state.is_joining = True
+            
             # Join the room (backend assigns player number)
             join_result = join_room(room_code, "")
             
@@ -1330,15 +1365,20 @@ def render_join_page():
                     st.session_state.current_page = 'waiting'
                     st.session_state.waiting_for_players = True
                 
+                # Reset joining flag
+                st.session_state.is_joining = False
                 st.rerun()
             else:
                 error_msg = join_result.get('error') if join_result else 'Failed to join room'
                 st.error(f"❌ {error_msg}")
+                # Reset joining flag on error
+                st.session_state.is_joining = False
     
     with col2:
-        if st.button("Cancel", use_container_width=True):
+        if st.button("Cancel", use_container_width=True, disabled=st.session_state.is_joining):
             st.session_state.current_page = 'lobby'
             st.session_state.selected_room_code = None
+            st.session_state.is_joining = False
             st.rerun()
 
 
@@ -1351,65 +1391,6 @@ def main():
         initial_sidebar_state="expanded"
     )
     inject_global_styles()
-    
-    # Initialize all session state variables (must be done before accessing them)
-    # This ensures they exist even when the app is accessed by multiple users
-    if 'room_code' not in st.session_state:
-        st.session_state.room_code = 'streamlit-room'
-    if 'player_id' not in st.session_state:
-        st.session_state.player_id = 'You'
-    if 'joined' not in st.session_state:
-        st.session_state.joined = False
-    if 'last_chat_count' not in st.session_state:
-        st.session_state.last_chat_count = 0
-    if 'game_state' not in st.session_state:
-        st.session_state.game_state = None
-    if 'last_poll_time' not in st.session_state:
-        st.session_state.last_poll_time = 0
-    if 'message_input' not in st.session_state:
-        st.session_state.message_input = ''
-    if 'last_phase' not in st.session_state:
-        st.session_state.last_phase = None
-    if 'phase_start_time' not in st.session_state:
-        st.session_state.phase_start_time = time.time()
-    if 'pending_message' not in st.session_state:
-        st.session_state.pending_message = None
-    if 'last_sent_message' not in st.session_state:
-        st.session_state.last_sent_message = None
-    if 'pending_message_time' not in st.session_state:
-        st.session_state.pending_message_time = 0
-    if 'local_chat_cache' not in st.session_state:
-        st.session_state.local_chat_cache = []
-    if 'last_backend_chat_length' not in st.session_state:
-        st.session_state.last_backend_chat_length = 0
-    if 'last_rendered_chat_length' not in st.session_state:
-        st.session_state.last_rendered_chat_length = -1
-    if 'config' not in st.session_state:
-        st.session_state.config = None
-    if 'player_colors' not in st.session_state:
-        st.session_state.player_colors = {}
-    if 'has_voted' not in st.session_state:
-        st.session_state.has_voted = False
-    if 'voted_for' not in st.session_state:
-        st.session_state.voted_for = None
-    if 'pending_vote_choice' not in st.session_state:
-        st.session_state.pending_vote_choice = None
-    if 'current_page' not in st.session_state:
-        st.session_state.current_page = 'lobby'
-    if 'selected_room_code' not in st.session_state:
-        st.session_state.selected_room_code = None
-    if 'is_room_creator' not in st.session_state:
-        st.session_state.is_room_creator = False
-    if 'room_list' not in st.session_state:
-        st.session_state.room_list = []
-    if 'current_lobby_page' not in st.session_state:
-        st.session_state.current_lobby_page = 0
-    if 'show_create_form' not in st.session_state:
-        st.session_state.show_create_form = False
-    if 'waiting_for_players' not in st.session_state:
-        st.session_state.waiting_for_players = False
-    if 'last_room_poll_time' not in st.session_state:
-        st.session_state.last_room_poll_time = 0
     
     # Check current page and route accordingly
     current_page = st.session_state.current_page
