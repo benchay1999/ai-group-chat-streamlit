@@ -19,7 +19,7 @@ from .langgraph_game import (
     process_human_message,
     process_human_vote
 )
-from langgraph_state import GameState, Phase
+from .langgraph_state import GameState, Phase
 from config import NUM_AI_PLAYERS, DISCUSSION_TIME, VOTING_TIME
 import json
 import os
