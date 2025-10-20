@@ -552,8 +552,20 @@ def poll_game_state(room_code: str, player_id: str):
         if response.status_code == 200:
             return response.json()
         return None
+    except requests.exceptions.SSLError:
+        # Silent fail for SSL errors during gameplay - will retry on next poll
+        return None
+    except requests.exceptions.Timeout:
+        # Silent fail for timeouts - will retry on next poll
+        return None
+    except requests.exceptions.ConnectionError:
+        # Show error only once per session
+        if 'connection_error_shown' not in st.session_state:
+            st.session_state.connection_error_shown = True
+            st.error("❌ Lost connection to backend. Check if backend/ngrok is running.")
+        return None
     except Exception as e:
-        st.error(f"Error polling game state: {str(e)}")
+        # Silent fail for other errors during gameplay to avoid spam
         return None
 
 
@@ -566,8 +578,14 @@ def send_message(room_code: str, player_id: str, message: str):
             timeout=10  # AI responses run in background, endpoint returns quickly
         )
         return response.status_code == 200
+    except requests.exceptions.Timeout:
+        st.warning("⏱️ Message sending timed out. The message may still have been sent.")
+        return False
+    except (requests.exceptions.SSLError, requests.exceptions.ConnectionError):
+        st.error("❌ Connection lost. Please check if backend/ngrok is running.")
+        return False
     except Exception as e:
-        st.error(f"Error sending message: {str(e)}")
+        st.error(f"❌ Error sending message. Please try again.")
         return False
 
 
@@ -586,8 +604,14 @@ def cast_vote(room_code: str, player_id: str, voted_for: str):
                 return False
             return True
         return False
+    except requests.exceptions.Timeout:
+        st.warning("⏱️ Vote submission timed out. Your vote may have been recorded.")
+        return False
+    except (requests.exceptions.SSLError, requests.exceptions.ConnectionError):
+        st.error("❌ Connection lost. Your vote may not have been recorded.")
+        return False
     except Exception as e:
-        st.error(f"Error casting vote: {str(e)}")
+        st.error(f"❌ Error casting vote. Please try again.")
         return False
 
 
@@ -952,8 +976,31 @@ def fetch_room_list(page: int = 0):
         if response.status_code == 200:
             return response.json()
         return None
+    except requests.exceptions.SSLError as e:
+        st.warning("⚠️ Connection issue with backend. This can happen if:")
+        st.markdown("""
+        - Your ngrok tunnel restarted (check Terminal 2)
+        - Network interruption occurred
+        - Backend server went down
+        
+        **Quick Fix:**
+        - If using ngrok, check if it's still running
+        - Restart ngrok if needed and update BACKEND_URL in Streamlit Cloud secrets
+        - Or wait a moment and refresh the page
+        """)
+        return None
+    except requests.exceptions.Timeout:
+        st.warning("⏱️ Backend request timed out. Backend might be processing heavy AI requests.")
+        return None
+    except requests.exceptions.ConnectionError:
+        st.error("❌ Cannot connect to backend. Make sure backend is running.")
+        return None
     except Exception as e:
-        st.error(f"Error fetching room list: {str(e)}")
+        # Only show detailed error in debug mode
+        if 'SSL' in str(e) or 'EOF' in str(e):
+            st.warning("⚠️ Connection interrupted. Please refresh the page.")
+        else:
+            st.error(f"⚠️ Error: {str(e)[:100]}")
         return None
 
 
@@ -986,8 +1033,11 @@ def get_room_info(room_code: str):
         if response.status_code == 200:
             return response.json()
         return None
+    except (requests.exceptions.SSLError, requests.exceptions.Timeout, requests.exceptions.ConnectionError):
+        # Silent fail for connection issues - will retry
+        return None
     except Exception as e:
-        st.error(f"Error fetching room info: {str(e)}")
+        # Silent fail for other errors
         return None
 
 

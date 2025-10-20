@@ -137,6 +137,7 @@ Initialize → Discussion → AI Chat Agents → Voting → AI Vote Agents → E
 - **[DEPLOYMENT.md](DEPLOYMENT.md)** - Complete deployment guide
 - **[TUNNELING_OPTIONS.md](TUNNELING_OPTIONS.md)** - All tunneling options (no sudo required)
 - **[SETUP_SUMMARY.md](SETUP_SUMMARY.md)** - Quick reference and troubleshooting
+- **[CONNECTION_ISSUES.md](CONNECTION_ISSUES.md)** - Fix SSL/connection errors
 
 ### Technical Documentation
 - **[LANGGRAPH_MIGRATION.md](LANGGRAPH_MIGRATION.md)** - LangGraph architecture guide

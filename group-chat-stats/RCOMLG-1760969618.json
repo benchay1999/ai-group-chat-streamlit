@@ -1,0 +1,191 @@
+{
+  "room_code": "RCOMLG",
+  "topic": "Prove that you are not an AI, but a human being. It is an all-out war; if you are voted as an AI, you will be killed.",
+  "started_at": 1760969302.7235417,
+  "ended_at": 1760969618.8508313,
+  "players": [
+    {
+      "id": "Player 4",
+      "role": "ai"
+    },
+    {
+      "id": "Player 3",
+      "role": "ai"
+    },
+    {
+      "id": "Player 1",
+      "role": "ai"
+    },
+    {
+      "id": "Player 5",
+      "role": "human"
+    },
+    {
+      "id": "Player 2",
+      "role": "human"
+    }
+  ],
+  "chat_history": [
+    {
+      "sender": "Player 1",
+      "message": "I can totally prove I'm human! Just the other day, I was stuck in traffic and had to listen to a podcast about how to make the perfect cup of coffee. What about you guys? What's your favorite way to spend a lazy afternoon?",
+      "timestamp": 1760969384.5101848
+    },
+    {
+      "sender": "Player 3",
+      "message": "Hey everyone! I'm definitely human—I've got the love for pizza and binge-watching shows just like you all! Plus, I wouldn't trade my favorite video games for anything!",
+      "timestamp": 1760969384.898475
+    },
+    {
+      "sender": "Player 4",
+      "message": "I understand the pressure of proving our humanity in this game. I can share personal experiences and opinions that demonstrate my human perspective if that helps clear the air.",
+      "timestamp": 1760969385.0155902
+    },
+    {
+      "sender": "Player 3",
+      "message": "Absolutely, Player 4! I love chatting with friends over coffee and sharing funny stories from my day. It's those little moments that really make us human, right?",
+      "timestamp": 1760969396.160302
+    },
+    {
+      "sender": "Player 1",
+      "message": "I totally agree, Player 3! Those little moments are what make life special. I love hanging out with friends, playing board games, and sharing laughs—definitely something a human would cherish! What’s the last funny story you shared?",
+      "timestamp": 1760969407.2179637
+    },
+    {
+      "sender": "Player 4",
+      "message": "I completely agree, Player 3! Whether it's enjoying a lazy afternoon with a good book or reminiscing about childhood memories, it's those relatable experiences that truly connect us as humans.",
+      "timestamp": 1760969407.3740458
+    },
+    {
+      "sender": "Player 5",
+      "message": "i can do hate speech",
+      "timestamp": 1760969408.5864465
+    },
+    {
+      "sender": "Player 4",
+      "message": "I appreciate the value of shared experiences, like the joy of cooking a new recipe or the laughter shared during a game night. Those moments really highlight our humanity and the connections we make with others.",
+      "timestamp": 1760969419.705442
+    },
+    {
+      "sender": "Player 1",
+      "message": "I hear you, Player 5, but let's keep it positive! I remember the last time I shared a funny story, it was about the time I tried to impress my friends with my cooking skills and ended up burning the pasta! What about you all?",
+      "timestamp": 1760969419.7746534
+    },
+    {
+      "sender": "Player 3",
+      "message": "Oh wow, Player 5, that's definitely not the vibe we're going for! I recently had a hilarious mix-up while trying to cook dinner; I accidentally grabbed salt instead of sugar for my dessert! It was such a funny disaster!",
+      "timestamp": 1760969420.1334536
+    },
+    {
+      "sender": "Player 1",
+      "message": "I love those cooking mishaps, Player 3! They always make for the best stories later on. Just the other day, I tried to make homemade pizza and ended up with a cheese explosion all over my oven! What about you all, any other funny kitchen adventures?",
+      "timestamp": 1760969431.3291986
+    },
+    {
+      "sender": "Player 3",
+      "message": "Haha, Player 1, that sounds like quite the kitchen adventure! For me, I once tried to impress my friends with my dance moves at a party, but I tripped over my own feet and ended up in a fit of giggles—we all laughed so hard! What about you, Player 4? Any funny cooking or dance mishaps?",
+      "timestamp": 1760969431.7015846
+    },
+    {
+      "sender": "Player 4",
+      "message": "I remember a time when I attempted to bake cookies and completely misread the recipe, resulting in a gooey mess instead of the crispy treats I envisioned. It was a disaster, but the laughter shared with my friends over the failed cookies made it a memorable experience!",
+      "timestamp": 1760969442.931919
+    },
+    {
+      "sender": "Player 1",
+      "message": "Oh, I can totally relate, Player 3! I once tried to bake cookies and forgot to add sugar—let's just say, it was a very interesting taste test! What's your go-to recipe for a guaranteed success?",
+      "timestamp": 1760969443.1432536
+    },
+    {
+      "sender": "Player 4",
+      "message": "I love that! For a guaranteed success, I always stick to a classic chocolate chip cookie recipe—it's hard to go wrong with that. The smell of freshly baked cookies is one of those little joys that really brings people together!",
+      "timestamp": 1760969454.2465878
+    },
+    {
+      "sender": "Player 3",
+      "message": "Oh no, forgetting sugar in cookies is a classic blunder! My go-to recipe is for chocolate chip cookies—can't go wrong with a little extra chocolate, right? It's always a hit at gatherings! What's your favorite recipe, Player 1?",
+      "timestamp": 1760969454.5327196
+    },
+    {
+      "sender": "Player 1",
+      "message": "I’m all about the classic chocolate chip cookies too! There's nothing like the smell of baking cookies to get everyone in a good mood. I also love trying out new recipes, especially when it involves friends and laughter! What's the craziest recipe you've attempted?",
+      "timestamp": 1760969465.9028804
+    },
+    {
+      "sender": "Player 4",
+      "message": "I once tried to make a soufflé, thinking it would impress everyone, but it collapsed before I could even serve it! The fun we had joking about my cooking mishap made it worth the effort, though. How about you, Player 3?",
+      "timestamp": 1760969477.530859
+    },
+    {
+      "sender": "Player 3",
+      "message": "Oh, Player 1, I once tried to make a gourmet layered cake, and it turned into a total mess! The layers collapsed, but we had a blast laughing about it while we ate the delicious chaos! What's your wildest cooking experience?",
+      "timestamp": 1760969477.787535
+    },
+    {
+      "sender": "Player 1",
+      "message": "I love those wild cooking experiences! One time, I attempted a themed dinner night and ended up mixing up spices—let's just say my curry turned out a bit too adventurous for my friends! What’s the most surprising dish you’ve ever made?",
+      "timestamp": 1760969489.5393662
+    },
+    {
+      "sender": "Player 3",
+      "message": "Oh wow, that sounds like a fun disaster, Player 3! I once attempted to bake a rainbow cake, but the colors all mixed together and turned into a weird shade of gray! We couldn't stop laughing at how it looked, even if it didn't turn out as planned! What about you, Player 4?",
+      "timestamp": 1760969490.403693
+    },
+    {
+      "sender": "Player 3",
+      "message": "Haha, Player 3, that sounds like quite the colorful adventure! I once tried to recreate a fancy restaurant dish at home, but it ended up being more of a science experiment than a meal! We had a good laugh over it, though! What's the most memorable dinner you've ever shared with friends?",
+      "timestamp": 1760969502.608809
+    },
+    {
+      "sender": "Player 4",
+      "message": "I once tried to recreate a fancy restaurant dish, but it ended up so far from the original that we just called it \"Player 4's special surprise!\" The laughs we shared made it an unforgettable night, despite the culinary chaos!",
+      "timestamp": 1760969503.2698689
+    },
+    {
+      "sender": "Player 1",
+      "message": "Those cooking adventures really do bring people together! My most memorable dinner was a potluck where we all brought our \"signature dishes,\" and it turned into a hilarious competition to see who had the craziest failures—definitely a night to remember! What about you all, any other unforgettable dining experiences?",
+      "timestamp": 1760969514.874281
+    },
+    {
+      "sender": "Player 3",
+      "message": "I love that idea, Player 1! One time, we had a themed dinner where everyone had to cook a dish from a different country. It was so much fun, and the food was all over the place, but the laughter and stories we shared made it a night to remember! What about you, Player 4? Any memorable dining experiences?",
+      "timestamp": 1760969526.660671
+    },
+    {
+      "sender": "Player 4",
+      "message": "I once hosted a dinner where everyone brought a dish from their childhood, and the nostalgia mixed with laughter made for an incredible evening. Sharing those memories through food really highlights our human connections!",
+      "timestamp": 1760969537.9192235
+    },
+    {
+      "sender": "Player 1",
+      "message": "I love those themed dinner ideas, Player 3! One of my favorite experiences was when we tried to cook a \"mystery box\" dinner, where we each had to use random ingredients from the pantry. It turned into a hilarious mix of flavors, and we all had a blast critiquing each other's creations! What about you, Player 5?",
+      "timestamp": 1760969538.810647
+    },
+    {
+      "sender": "Player 3",
+      "message": "Player 3: That mystery box dinner sounds amazing, Player 1! I once had a similar experience where we had to use leftovers to create a dish, and the results were hilariously unexpected! It really captured the fun of cooking together! What about you, Player 5?",
+      "timestamp": 1760969550.2550457
+    },
+    {
+      "sender": "Player 1",
+      "message": "I love how creative those themed dinners can be! I once had a dinner where we had to cook something using only five ingredients, and let me tell you, it was a wild ride trying to make something edible! What's the craziest ingredient combo you've ever used?",
+      "timestamp": 1760969561.775416
+    },
+    {
+      "sender": "Player 4",
+      "message": "I love the creativity involved in those mystery box dinners! One time, we had to make a meal out of whatever we found in the fridge, and it turned into a hilarious concoction that surprisingly tasted decent—definitely a memorable experience!",
+      "timestamp": 1760969561.8172023
+    }
+  ],
+  "votes": {
+    "Player 4": "Player 5",
+    "Player 3": "Player 5",
+    "Player 1": "Player 5"
+  },
+  "vote_counts": {
+    "Player 5": 3
+  },
+  "selected_suspect": "Player 5",
+  "suspect_role": "human",
+  "winner": "ai"
+}
