@@ -1,0 +1,174 @@
+{
+  "room_code": "ZN1BA6",
+  "topic": "Tell a funny story from your childhood.",
+  "started_at": 1760972671.0600915,
+  "ended_at": 1760972911.9632561,
+  "players": [
+    {
+      "id": "Player 4",
+      "role": "ai"
+    },
+    {
+      "id": "Player 3",
+      "role": "ai"
+    },
+    {
+      "id": "Player 1",
+      "role": "ai"
+    },
+    {
+      "id": "Player 2",
+      "role": "ai"
+    },
+    {
+      "id": "Player 5",
+      "role": "human"
+    }
+  ],
+  "chat_history": [
+    {
+      "sender": "Player 3",
+      "message": "One time, I tried to impress my crush by showing off my skateboarding skills, but I ended up tumbling into a bush instead—let's just say I became the \"bush monster\" of the playground!",
+      "timestamp": 1760972682.447326
+    },
+    {
+      "sender": "Player 4",
+      "message": "When I was a kid, I tried to impress my crush by showing off my skateboard skills, but I ended up crashing into a bush and coming out looking like a human porcupine. Let's just say, she wasn't impressed, but the bush definitely got a laugh!",
+      "timestamp": 1760972682.7133133
+    },
+    {
+      "sender": "Player 1",
+      "message": "One time, I tried to impress my friends by making a huge pile of leaves to jump into, but I miscalculated and jumped right onto a hidden rock! The look on their faces was priceless as I flopped right over!",
+      "timestamp": 1760972683.10768
+    },
+    {
+      "sender": "Player 4",
+      "message": "Oh man, that sounds painful but hilarious! I once decided to put on a magic show for my family, but when I tried to pull a rabbit out of a hat, I accidentally pulled out my little brother’s pet turtle instead. Let’s just say, the turtle wasn’t impressed with my magic!",
+      "timestamp": 1760972694.8376396
+    },
+    {
+      "sender": "Player 3",
+      "message": "Ah, classic childhood moves! I once tried to impress my friends by swinging on a rope swing, but I misjudged and ended up landing in a mud puddle—let's just say I made quite the splash!",
+      "timestamp": 1760972694.8587751
+    },
+    {
+      "sender": "Player 2",
+      "message": "I remember trying to impress my friends with my juggling skills, but I ended up dropping the balls and one rolled right into the principal's feet during assembly. The look on his face was both shocked and amused!",
+      "timestamp": 1760972695.0949416
+    },
+    {
+      "sender": "Player 1",
+      "message": "That's hilarious, I can just picture it! It reminds me of the time I decided to climb a tree to show off, but I ended up stuck halfway up and had to be rescued by my little brother—definitely not my finest moment!",
+      "timestamp": 1760972695.0989304
+    },
+    {
+      "sender": "Player 1",
+      "message": "Haha, that’s too good! I once tried to ride a bike with no hands to show off, but I lost my balance and ended up in the flowerbed—flowers everywhere and my dignity in shambles!",
+      "timestamp": 1760972706.7854335
+    },
+    {
+      "sender": "Player 3",
+      "message": "Oh man, being rescued by your little brother is a classic! I once thought I could impress everyone by baking cookies, but I accidentally used salt instead of sugar. Let’s just say, those cookies were a hard pass, and I might have scared a few friends away from dessert forever!",
+      "timestamp": 1760972707.2754376
+    },
+    {
+      "sender": "Player 4",
+      "message": "Haha, I can relate to that! I once tried to cook spaghetti for a family dinner, but I got distracted and ended up with a pot of mushy noodles that looked more like a science experiment gone wrong. My family still teases me about it!",
+      "timestamp": 1760972719.1961377
+    },
+    {
+      "sender": "Player 2",
+      "message": "I totally get that! I once tried to make a sandwich and ended up putting way too much mustard on it—when I took a bite, it shot out like a rocket! My friends still give me a hard time about it.",
+      "timestamp": 1760972732.155663
+    },
+    {
+      "sender": "Player 1",
+      "message": "Oh wow, these stories are hilarious! I remember trying to make pancakes for breakfast, but I forgot to add the flour and ended up with a pan of gooey mess instead—my siblings still tease me about it every time we have pancakes!",
+      "timestamp": 1760972743.3077056
+    },
+    {
+      "sender": "Player 4",
+      "message": "Oh wow, mustard rocket sandwiches and mushy spaghetti—what a culinary nightmare! I once attempted to make pancakes and somehow ended up with a pancake that looked like a map of the world. My mom was impressed, but only because she thought I was trying to teach geography!",
+      "timestamp": 1760972744.0132163
+    },
+    {
+      "sender": "Player 2",
+      "message": "I can definitely relate to those kitchen disasters! I once tried to help my mom bake cookies, but I accidentally grabbed chili powder instead of cinnamon. Let’s just say it was a spicy surprise for everyone!",
+      "timestamp": 1760972755.089913
+    },
+    {
+      "sender": "Player 1",
+      "message": "Haha, those culinary disasters are the best! I remember trying to impress my family by making a cake, but I mixed up the salt and sugar—let's just say it was a cake no one wanted a second slice of!",
+      "timestamp": 1760972755.375214
+    },
+    {
+      "sender": "Player 1",
+      "message": "Oh man, that sounds like a recipe for disaster! I once tried to make a fruit salad, but I accidentally grabbed the onions instead of apples—let's just say nobody wanted to try my \"special\" salad!",
+      "timestamp": 1760972766.8699682
+    },
+    {
+      "sender": "Player 3",
+      "message": "Oh man, the salt and sugar swap is a classic! I once tried to impress my friends with a homemade pizza, but I forgot to preheat the oven—by the time I realized, we had a very sad, unbaked pizza still in the dough stage!",
+      "timestamp": 1760972768.5267959
+    },
+    {
+      "sender": "Player 3",
+      "message": "Haha, the unbaked pizza is a true masterpiece! I once thought I could make a smoothie, but I accidentally grabbed the hot sauce instead of the fruit—let's just say it was a spicy surprise that nobody was ready for!",
+      "timestamp": 1760972780.1470551
+    },
+    {
+      "sender": "Player 4",
+      "message": "Haha, the unbaked pizza is a real culinary tragedy! I once tried to make a smoothie, but I forgot to put the lid on the blender—let's just say my kitchen looked like a fruit explosion and my mom still won't let me live it down!",
+      "timestamp": 1760972780.2658772
+    },
+    {
+      "sender": "Player 1",
+      "message": "Haha, the fruit explosion sounds wild! I remember trying to make a sandwich and accidentally spilled grape jelly all over the kitchen floor—let's just say my dog was thrilled, but I spent the next hour cleaning up!",
+      "timestamp": 1760972791.8739932
+    },
+    {
+      "sender": "Player 4",
+      "message": "Haha, grape jelly everywhere—what a sticky situation! I once tried to make a breakfast burrito, but I wrapped it so tight that when I took a bite, it exploded all over my face. At least I had a good breakfast and a great laugh!",
+      "timestamp": 1760972803.3488522
+    },
+    {
+      "sender": "Player 1",
+      "message": "Haha, I can totally picture that! I once tried to impress my friends with a homemade cake, but I forgot to add eggs, and it turned out more like a brick than a dessert—definitely a memorable baking fail!",
+      "timestamp": 1760972814.702663
+    },
+    {
+      "sender": "Player 3",
+      "message": "Haha, breakfast burrito explosions are legendary! I once tried to make homemade tacos, but I overfilled them so much that they basically turned into taco soup in my hands—delicious but definitely not what I had in mind!",
+      "timestamp": 1760972814.8331559
+    },
+    {
+      "sender": "Player 1",
+      "message": "Haha, taco soup sounds like a fun twist! I remember attempting to make a grilled cheese sandwich, but I got distracted and burned it to a crisp—my family still jokes about my \"charcoal creation!\"",
+      "timestamp": 1760972826.0100622
+    },
+    {
+      "sender": "Player 3",
+      "message": "Haha, the charcoal creation is a classic! I once tried to make a salad, but I mistook the vinegar for apple juice—let’s just say my taste buds had a very confusing experience!",
+      "timestamp": 1760972837.3224328
+    },
+    {
+      "sender": "Player 4",
+      "message": "Haha, the charcoal creation is a classic! I once tried to make a salad but ended up mixing up the dressing and put barbecue sauce instead—let's just say it was a “grill and chill” experience that nobody wanted to repeat!",
+      "timestamp": 1760972838.315389
+    }
+  ],
+  "votes": {
+    "Player 4": "Player 1",
+    "Player 3": "Player 4",
+    "Player 1": "Player 2",
+    "Player 2": "Player 4"
+  },
+  "vote_counts": {
+    "Player 1": 1,
+    "Player 4": 2,
+    "Player 2": 1
+  },
+  "selected_suspect": "Player 4",
+  "suspect_role": "ai",
+  "winner": "human"
+}

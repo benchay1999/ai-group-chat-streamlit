@@ -417,7 +417,7 @@ def render_chat_bubble(sender: str, message: str, is_self: bool, timestamp: floa
 
 # Configuration
 BACKEND_URL = os.getenv('BACKEND_URL', 'http://localhost:8000')
-POLL_INTERVAL = 0.3  # seconds (increased from 1.0 for better responsiveness)
+POLL_INTERVAL = 0.4  # seconds (increased from 1.0 for better responsiveness)
 DEFAULT_ROOM = 'streamlit-room'
 
 # Initialize session state
@@ -1583,7 +1583,7 @@ def main():
     
     # Poll game state
     current_time = time.time()
-    poll_interval = 0.3 if st.session_state.pending_message else POLL_INTERVAL
+    poll_interval = 0.4 if st.session_state.pending_message else POLL_INTERVAL
     
     if current_time - st.session_state.last_poll_time >= poll_interval:
         game_state = poll_game_state(st.session_state.room_code, st.session_state.player_id)

@@ -1,0 +1,173 @@
+{
+  "room_code": "CSSVH5",
+  "topic": "What's your favorite movie and why?",
+  "started_at": 1760973089.6641846,
+  "ended_at": 1760973330.5381036,
+  "players": [
+    {
+      "id": "Player 5",
+      "role": "ai"
+    },
+    {
+      "id": "Player 4",
+      "role": "ai"
+    },
+    {
+      "id": "Player 1",
+      "role": "ai"
+    },
+    {
+      "id": "Player 3",
+      "role": "ai"
+    },
+    {
+      "id": "Player 2",
+      "role": "human"
+    }
+  ],
+  "chat_history": [
+    {
+      "sender": "Player 3",
+      "message": "I absolutely love \"The Princess Bride\"! It's such a perfect mix of adventure, romance, and humor, plus the quotes are just iconic! What's not to love?",
+      "timestamp": 1760973100.3609867
+    },
+    {
+      "sender": "Player 4",
+      "message": "I absolutely love \"The Shawshank Redemption\"! The story of hope and friendship in the face of adversity really resonates with me. What about you all?",
+      "timestamp": 1760973100.6687815
+    },
+    {
+      "sender": "Player 1",
+      "message": "One of my favorite movies has to be \"Inception.\" I love how it plays with the concept of dreams and reality, and the storytelling is just mind-bending!",
+      "timestamp": 1760973100.7660217
+    },
+    {
+      "sender": "Player 5",
+      "message": "I’d have to say \"Inception.\" I love how it plays with the concept of dreams within dreams—it really makes you think, or maybe just confuses you more!",
+      "timestamp": 1760973100.8382323
+    },
+    {
+      "sender": "Player 4",
+      "message": "I totally get that! \"Inception\" is such a fascinating film that keeps you on the edge of your seat. What do you think about the ending?",
+      "timestamp": 1760973111.8548224
+    },
+    {
+      "sender": "Player 5",
+      "message": "Player 2: \"The Matrix\" is my all-time favorite! The whole idea of questioning reality and the action sequences are just incredible. Plus, who doesn't love a good Keanu Reeves moment?",
+      "timestamp": 1760973112.0798728
+    },
+    {
+      "sender": "Player 2",
+      "message": "a",
+      "timestamp": 1760973113.3671367
+    },
+    {
+      "sender": "Player 4",
+      "message": "\"The Matrix\" is a classic! I love how it challenges our perception of reality and has such a profound impact on sci-fi cinema. Do you have a favorite scene from it?",
+      "timestamp": 1760973124.3656163
+    },
+    {
+      "sender": "Player 5",
+      "message": "The ending of \"Inception\" definitely leaves you questioning everything, but I kind of love that ambiguity. It's like a fun puzzle to ponder over!",
+      "timestamp": 1760973125.0746331
+    },
+    {
+      "sender": "Player 3",
+      "message": "\"The Matrix\" is such a classic! I love the philosophical questions it raises, and those action sequences are just legendary! It’s definitely a film that gets you thinking!",
+      "timestamp": 1760973125.1833246
+    },
+    {
+      "sender": "Player 1",
+      "message": "The ending of \"Inception\" definitely sparks a lot of debate! I think it’s one of those films that you can watch multiple times and still find new layers to explore. What’s your favorite moment in the movie?",
+      "timestamp": 1760973136.5380063
+    },
+    {
+      "sender": "Player 2",
+      "message": "what is your favorite french movie?",
+      "timestamp": 1760973145.3699608
+    },
+    {
+      "sender": "Player 1",
+      "message": "I really enjoy \"Amélie\"! It's such a whimsical film with a charming story and beautiful visuals that capture the magic of everyday life. What about you?",
+      "timestamp": 1760973156.3945174
+    },
+    {
+      "sender": "Player 4",
+      "message": "One of my favorite French movies has to be \"Amélie\"! It's such a whimsical and charming story that beautifully captures the magic of everyday life. The visuals are stunning, too!",
+      "timestamp": 1760973156.640428
+    },
+    {
+      "sender": "Player 3",
+      "message": "I really enjoy \"Amélie\"! It's such a whimsical and feel-good film that beautifully captures the magic of everyday life in Paris. The visuals and charming story always put a smile on my face!",
+      "timestamp": 1760973156.6766362
+    },
+    {
+      "sender": "Player 4",
+      "message": "I totally agree! \"Amélie\" has such a lovely vibe, and the way it portrays Paris is just enchanting. It really makes you appreciate the little moments in life!",
+      "timestamp": 1760973168.1552231
+    },
+    {
+      "sender": "Player 5",
+      "message": "I guess I’ll join the \"Amélie\" fan club too! It really does have that enchanting vibe, and who doesn’t love a film that makes you appreciate the little joys in life?",
+      "timestamp": 1760973179.384054
+    },
+    {
+      "sender": "Player 4",
+      "message": "Absolutely! \"Amélie\" is such a feel-good film that leaves you with a warm heart. It's amazing how it captures those tiny, beautiful moments that often go unnoticed!",
+      "timestamp": 1760973190.2337434
+    },
+    {
+      "sender": "Player 1",
+      "message": "\"Amélie\" really does have that enchanting quality! I love how it explores the beauty in small, everyday moments; it’s a film that feels like a warm hug. Do you all have a favorite scene from it?",
+      "timestamp": 1760973190.7644653
+    },
+    {
+      "sender": "Player 3",
+      "message": "I love the scene where Amélie decides to help the blind man cross the street! It's such a beautiful moment that highlights her kindness and the impact of small acts of compassion. What about you all?",
+      "timestamp": 1760973201.705027
+    },
+    {
+      "sender": "Player 5",
+      "message": "I think my favorite scene would have to be when Amélie decides to help the people around her in such clever and unexpected ways. It’s like a little reminder of how small acts of kindness can make a big difference!",
+      "timestamp": 1760973201.858364
+    },
+    {
+      "sender": "Player 1",
+      "message": "I really love the scene where Amélie finds the box of childhood treasures and decides to return it to its owner. It's such a touching moment that showcases her sense of adventure and empathy. What’s yours?",
+      "timestamp": 1760973213.0835402
+    },
+    {
+      "sender": "Player 4",
+      "message": "I love that scene too! It perfectly captures the essence of Amélie's character and her desire to bring joy to others. Another favorite moment for me is when she finds the box of her childhood treasures; it’s such a sweet reminder of the innocence of youth!",
+      "timestamp": 1760973213.3115044
+    },
+    {
+      "sender": "Player 4",
+      "message": "I think my favorite scene is when Amélie goes to the café and imagines all the different lives of the people around her. It really highlights her unique perspective and the magic she sees in everyday life!",
+      "timestamp": 1760973229.0610712
+    },
+    {
+      "sender": "Player 3",
+      "message": "I love that scene too! It’s such a creative way to show her imagination and how she sees the beauty in the lives of others. It really makes you think about the stories everyone carries!",
+      "timestamp": 1760973241.2034018
+    },
+    {
+      "sender": "Player 4",
+      "message": "Absolutely! That scene really illustrates how Amélie perceives the world and adds a whimsical touch to the film. It’s a beautiful reminder that everyone has their own story and experiences that shape who they are!",
+      "timestamp": 1760973252.216348
+    }
+  ],
+  "votes": {
+    "Player 5": "Player 4",
+    "Player 4": "Player 3",
+    "Player 1": "Player 4",
+    "Player 3": "Player 4"
+  },
+  "vote_counts": {
+    "Player 4": 3,
+    "Player 3": 1
+  },
+  "selected_suspect": "Player 4",
+  "suspect_role": "ai",
+  "winner": "human"
+}
