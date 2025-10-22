@@ -78,13 +78,14 @@ class GameState(TypedDict):
     broadcast_queue: Annotated[List[Dict], operator.add]
 
 
-def create_initial_state(room_code: str, num_ai_players: int) -> GameState:
+def create_initial_state(room_code: str, num_ai_players: int, ai_player_ids: list = None) -> GameState:
     """
     Create the initial game state.
     
     Args:
         room_code: Unique identifier for the game room
         num_ai_players: Number of AI players (4-8)
+        ai_player_ids: Optional list of AI player IDs (e.g., ["Player 3", "Player 7"])
     
     Returns:
         Initial GameState ready for graph execution
@@ -93,8 +94,12 @@ def create_initial_state(room_code: str, num_ai_players: int) -> GameState:
     import time
     from .config import GAME_TOPICS, AI_PERSONALITIES
     
-    # Create AI player names
-    ai_names = [f"Player {i}" for i in range(1, num_ai_players + 1)]
+    # Create AI player names - use provided IDs or default sequential
+    if ai_player_ids:
+        ai_names = ai_player_ids
+    else:
+        ai_names = [f"AI_{i}" for i in range(1, num_ai_players + 1)]
+    
     random.shuffle(ai_names)
     
     # Create player list with AIs only at initialization; humans join later via API

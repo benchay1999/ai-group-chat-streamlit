@@ -604,7 +604,16 @@ async def websocket_endpoint(websocket: WebSocket, room_code: str, player_id: st
     # Initialize room if needed
     if room_code not in rooms:
         print(f"🎮 Creating new game room: {room_code}")
-        state = create_game_for_room(room_code, NUM_AI_PLAYERS)
+        
+        # For legacy WebSocket rooms, use proper number assignment
+        total_players = NUM_AI_PLAYERS + 1  # 1 human via WebSocket
+        all_numbers = list(range(1, total_players + 1))
+        random.shuffle(all_numbers)
+        ai_numbers = all_numbers[:NUM_AI_PLAYERS]
+        available_numbers = all_numbers[NUM_AI_PLAYERS:]
+        ai_player_ids = [f"Player {num}" for num in ai_numbers]
+        
+        state = create_game_for_room(room_code, NUM_AI_PLAYERS, ai_player_ids)
         rooms[room_code] = {
             'state': state,
             'connections': {},
@@ -616,7 +625,8 @@ async def websocket_endpoint(websocket: WebSocket, room_code: str, player_id: st
             'room_status': 'in_progress',  # WebSocket rooms start immediately
             'created_at': time.time(),
             'creator_id': player_id,
-            'current_humans': []
+            'current_humans': [],
+            'available_numbers': available_numbers
         }
         # Initialize lock for this room to prevent race conditions
         if room_code not in room_locks:
@@ -842,20 +852,11 @@ async def create_room(room_data: dict):
     ai_numbers = available_numbers[:num_ai_players]
     available_numbers = available_numbers[num_ai_players:]  # Reserve rest for humans
     
-    # Create initial game state with numbered AI players
-    state = create_game_for_room(room_code, num_ai_players)
+    # Create AI player IDs with assigned numbers
+    ai_player_ids = [f"Player {num}" for num in ai_numbers]
     
-    # Rename AI players with their assigned numbers
-    for idx, player in enumerate(state['players']):
-        if player['role'] == 'ai' and idx < len(ai_numbers):
-            player['id'] = f"Player {ai_numbers[idx]}"
-    
-    # Update AI personalities dict with new names
-    new_personalities = {}
-    for idx, player in enumerate(state['players']):
-        if player['role'] == 'ai' and player['personality']:
-            new_personalities[player['id']] = player['personality']
-    state['ai_personalities'] = new_personalities
+    # Create initial game state with properly numbered AI players
+    state = create_game_for_room(room_code, num_ai_players, ai_player_ids)
     
     # Initialize room with metadata
     rooms[room_code] = {
@@ -1136,19 +1137,12 @@ async def join_room(room_code: str, player_data: dict):
         human_number = all_numbers[0]
         player_id = f"Player {human_number}"
         
-        state = create_game_for_room(room_code, NUM_AI_PLAYERS)
+        # Assign remaining numbers to AI players
+        ai_numbers = all_numbers[1:]
+        ai_player_ids = [f"Player {num}" for num in ai_numbers]
         
-        # Rename AI players with remaining numbers
-        for idx, player in enumerate(state['players']):
-            if player['role'] == 'ai' and idx + 1 < len(all_numbers):
-                player['id'] = f"Player {all_numbers[idx + 1]}"
-        
-        # Update AI personalities dict
-        new_personalities = {}
-        for player in state['players']:
-            if player['role'] == 'ai' and player['personality']:
-                new_personalities[player['id']] = player['personality']
-        state['ai_personalities'] = new_personalities
+        # Create game state with properly numbered AI players
+        state = create_game_for_room(room_code, NUM_AI_PLAYERS, ai_player_ids)
         
         rooms[room_code] = {
             'state': state,

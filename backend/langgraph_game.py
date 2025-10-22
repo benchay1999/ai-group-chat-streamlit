@@ -603,18 +603,19 @@ class GameGraph:
 game_graph = GameGraph()
 
 
-def create_game_for_room(room_code: str, num_ai_players: int = 4) -> GameState:
+def create_game_for_room(room_code: str, num_ai_players: int = 4, ai_player_ids: list = None) -> GameState:
     """
     Create initial game state for a room.
     
     Args:
         room_code: Unique room identifier
         num_ai_players: Number of AI players
+        ai_player_ids: Optional list of AI player IDs (e.g., ["Player 3", "Player 7"])
     
     Returns:
         Initial GameState
     """
-    return create_initial_state(room_code, num_ai_players)
+    return create_initial_state(room_code, num_ai_players, ai_player_ids)
 
 
 async def process_human_message(state: GameState, message: str, player_id: str) -> GameState:
