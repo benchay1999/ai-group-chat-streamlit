@@ -46,9 +46,9 @@ const LobbyPage = () => {
     loadRooms();
   }, [page]);
 
-  // Auto-refresh every 5 seconds
+  // Auto-refresh every 30 seconds (reduced to save bandwidth)
   useEffect(() => {
-    const interval = setInterval(loadRooms, 5000);
+    const interval = setInterval(loadRooms, 30000);
     return () => clearInterval(interval);
   }, [page]);
 
@@ -147,10 +147,10 @@ const LobbyPage = () => {
               </div>
             </div>
             <div className="flex-1">
-              <h2 className="text-3xl font-bold mb-3 drop-shadow-lg">Can You Spot the Human?</h2>
+              <h2 className="text-3xl font-bold mb-3 drop-shadow-lg">Can You Find the AI?</h2>
               <p className="text-lg leading-relaxed opacity-95 mb-4">
-                <strong>The Challenge:</strong> Join a group chat with AI players and humans. Can you identify who's real and who's artificial? 
-                Vote wisely during the discussion phase – your goal is to find the humans among the bots!
+                <strong>The Challenge:</strong> Join a group chat with AI bots and other humans. Chat, analyze behavior, and vote to eliminate 
+                who you think is AI. Humans win if they successfully identify an AI. AIs win if they trick you into voting out a human!
               </p>
               <div className="flex flex-wrap gap-4">
                 <div className="flex items-center gap-2 bg-white bg-opacity-20 rounded-full px-4 py-2 backdrop-blur-sm">

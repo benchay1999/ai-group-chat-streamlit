@@ -124,26 +124,24 @@ const WaitingPage = () => {
           </div>
         </div>
 
-        {/* Player List */}
+        {/* Players Joined Indicator (Anonymous to prevent spoilers) */}
         {roomInfo.current_humans && roomInfo.current_humans.length > 0 && (
           <div className="bg-gray-50 rounded-xl p-6 mb-6">
-            <h3 className="font-semibold text-gray-700 mb-3">Joined Players</h3>
-            <div className="space-y-2">
-              {roomInfo.current_humans.map((player, idx) => (
+            <h3 className="font-semibold text-gray-700 mb-3">Players Ready</h3>
+            <div className="flex items-center justify-center gap-2 py-4">
+              {[...Array(roomInfo.current_humans.length)].map((_, idx) => (
                 <div
                   key={idx}
-                  className="flex items-center gap-3 bg-white rounded-lg p-3 shadow-sm"
+                  className="w-12 h-12 bg-gradient-to-br from-purple-400 to-blue-400 rounded-full flex items-center justify-center shadow-lg animate-fade-in"
+                  style={{ animationDelay: `${idx * 0.1}s` }}
                 >
-                  <div className="w-2 h-2 bg-green-400 rounded-full"></div>
-                  <span className="font-semibold text-gray-800">{player}</span>
-                  {player === playerId && (
-                    <span className="ml-auto text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded-full font-semibold">
-                      You
-                    </span>
-                  )}
+                  <span className="text-xl">👤</span>
                 </div>
               ))}
             </div>
+            <p className="text-center text-sm text-gray-600 mt-4">
+              {roomInfo.current_humans.length} {roomInfo.current_humans.length === 1 ? 'player has' : 'players have'} joined
+            </p>
           </div>
         )}
 
