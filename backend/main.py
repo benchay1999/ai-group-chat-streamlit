@@ -188,6 +188,10 @@ async def run_discussion_phase(room_code: str):
     if state['phase'] == Phase.DISCUSSION:
         # Transition to voting
         state['phase'] = Phase.VOTING
+        
+        # IMPORTANT: Clear any pending AI messages to prevent late arrivals
+        state['pending_ai_messages'] = []
+        
         state['pending_ai_votes'] = [
             p['id'] for p in state['players']
             if p['role'] == 'ai' and not p['eliminated']
@@ -365,6 +369,13 @@ async def process_single_ai_message(room_code: str, ai_id: str):
         )
         
         if not result:
+            return
+        
+        # CRITICAL: Check if still in discussion phase before broadcasting
+        # AI generation can take seconds, phase might have changed
+        current_state = rooms[room_code]['state']
+        if current_state['phase'] != Phase.DISCUSSION:
+            print(f"⚠️ AI {ai_id} message discarded - phase changed to {current_state['phase'].value}")
             return
         
         # Update state (thread-safe for async)
@@ -686,6 +697,15 @@ async def websocket_endpoint(websocket: WebSocket, room_code: str, player_id: st
                 # Process human message
                 message = data["message"]
                 print(f"💬 Human message received: {message}")
+                
+                # Validate phase - only allow messages during discussion
+                if state['phase'] != Phase.DISCUSSION:
+                    print(f"⚠️ Message rejected - not in discussion phase (current: {state['phase'].value})")
+                    await websocket.send_json({
+                        "type": "error",
+                        "message": "Messages only allowed during discussion phase"
+                    })
+                    continue
                 
                 # Update state
                 state = await process_human_message(state, message, player_id)

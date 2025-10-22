@@ -138,6 +138,38 @@ const LobbyPage = () => {
 
       {/* Main Content */}
       <div className="max-w-7xl mx-auto px-6 py-8">
+        {/* Game Description Banner */}
+        <div className="mb-8 bg-gradient-to-r from-purple-500 via-pink-500 to-blue-500 rounded-2xl p-8 text-white shadow-2xl transform hover:scale-105 transition-all duration-300">
+          <div className="flex items-start gap-6">
+            <div className="flex-shrink-0">
+              <div className="w-16 h-16 bg-white bg-opacity-20 rounded-xl flex items-center justify-center backdrop-blur-sm">
+                <span className="text-4xl">🎭</span>
+              </div>
+            </div>
+            <div className="flex-1">
+              <h2 className="text-3xl font-bold mb-3 drop-shadow-lg">Can You Spot the Human?</h2>
+              <p className="text-lg leading-relaxed opacity-95 mb-4">
+                <strong>The Challenge:</strong> Join a group chat with AI players and humans. Can you identify who's real and who's artificial? 
+                Vote wisely during the discussion phase – your goal is to find the humans among the bots!
+              </p>
+              <div className="flex flex-wrap gap-4">
+                <div className="flex items-center gap-2 bg-white bg-opacity-20 rounded-full px-4 py-2 backdrop-blur-sm">
+                  <span className="text-2xl">💬</span>
+                  <span className="font-semibold">Chat & Discuss</span>
+                </div>
+                <div className="flex items-center gap-2 bg-white bg-opacity-20 rounded-full px-4 py-2 backdrop-blur-sm">
+                  <span className="text-2xl">🤔</span>
+                  <span className="font-semibold">Analyze Behavior</span>
+                </div>
+                <div className="flex items-center gap-2 bg-white bg-opacity-20 rounded-full px-4 py-2 backdrop-blur-sm">
+                  <span className="text-2xl">🗳️</span>
+                  <span className="font-semibold">Vote to Eliminate</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
         {/* Controls */}
         <div className="flex items-center justify-between mb-6">
           <h2 className="text-2xl font-bold text-white">

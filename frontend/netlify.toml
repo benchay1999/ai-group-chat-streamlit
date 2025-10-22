@@ -1,0 +1,15 @@
+[build]
+  command = "npm run build"
+  publish = "dist"
+
+[build.environment]
+  NODE_VERSION = "18"
+
+# Allow VITE_BACKEND_URL to be in build output (it's meant to be public)
+[build.processing]
+  skip_processing = false
+
+[build.processing.secrets]
+  # Exclude frontend env vars from secrets scanning
+  omit_keys = ["VITE_BACKEND_URL"]
+
