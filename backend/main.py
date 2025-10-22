@@ -189,8 +189,17 @@ async def run_discussion_phase(room_code: str):
         # Transition to voting
         state['phase'] = Phase.VOTING
         
-        # IMPORTANT: Clear any pending AI messages to prevent late arrivals
+        # CRITICAL: Clear ALL pending operations to prevent late messages
         state['pending_ai_messages'] = []
+        
+        # Stop all typing indicators for any AI that might be typing
+        ai_players = [p['id'] for p in state['players'] if p['role'] == 'ai']
+        for ai_id in ai_players:
+            await broadcast_to_room(room_code, {
+                "type": "typing",
+                "player": ai_id,
+                "status": "stop"
+            })
         
         state['pending_ai_votes'] = [
             p['id'] for p in state['players']
@@ -198,14 +207,19 @@ async def run_discussion_phase(room_code: str):
         ]
         state['votes'] = {}
         
+        # Save state BEFORE broadcasting to ensure checks see VOTING phase
+        rooms[room_code]['state'] = state
+        
+        # Broadcast phase change
         await broadcast_to_room(room_code, {
             "type": "phase",
             "phase": "Voting",
             "message": "Discussion ended. Time to vote."
         })
         
+        print(f"✅ Phase transition complete: DISCUSSION → VOTING in room {room_code}")
+        
         # Start voting phase
-        rooms[room_code]['state'] = state
         asyncio.create_task(run_voting_phase(room_code))
         asyncio.create_task(process_ai_votes(room_code))
 
@@ -371,51 +385,75 @@ async def process_single_ai_message(room_code: str, ai_id: str):
         if not result:
             return
         
-        # CRITICAL: Check if still in discussion phase before broadcasting
+        # DEFENSE LAYER 1: Check phase BEFORE doing anything
         # AI generation can take seconds, phase might have changed
         current_state = rooms[room_code]['state']
         if current_state['phase'] != Phase.DISCUSSION:
-            print(f"⚠️ AI {ai_id} message discarded - phase changed to {current_state['phase'].value}")
+            print(f"🚫 AI {ai_id} message blocked - phase is {current_state['phase'].value}, not DISCUSSION")
+            # Remove from pending without saving message
+            if 'pending_ai_messages' in current_state:
+                current_state['pending_ai_messages'] = [p for p in current_state['pending_ai_messages'] if p != ai_id]
+                rooms[room_code]['state'] = current_state
             return
         
-        # Update state (thread-safe for async)
-        if 'chat_history' in result:
-            state['chat_history'] = state['chat_history'] + result['chat_history']
-        if 'last_message_time' in result:
-            state['last_message_time'] = result['last_message_time']
-        if 'pending_ai_messages' in result:
-            # Remove this AI from pending
-            state['pending_ai_messages'] = result['pending_ai_messages']
+        # Extract message details before updating state
+        if 'ai_sender' not in result or 'ai_message' not in result:
+            return
+            
+        ai_sender = result['ai_sender']
+        ai_message = result['ai_message']
+        typing_delay = result.get('typing_delay', 1.5)
         
-        rooms[room_code]['state'] = state
+        # DEFENSE LAYER 2: Check phase before typing indicator
+        current_state = rooms[room_code]['state']
+        if current_state['phase'] != Phase.DISCUSSION:
+            print(f"🚫 AI {ai_id} typing blocked - phase changed to {current_state['phase'].value}")
+            return
+            
+        # Broadcast typing start
+        await broadcast_to_room(room_code, {
+            "type": "typing",
+            "player": ai_sender,
+            "status": "start"
+        })
         
-        # Handle typing indicators and message broadcasting with proper async delays
-        if 'ai_sender' in result and 'ai_message' in result:
-            ai_sender = result['ai_sender']
-            ai_message = result['ai_message']
-            typing_delay = result.get('typing_delay', 1.5)
-            
-            # Broadcast typing start
-            await broadcast_to_room(room_code, {
-                "type": "typing",
-                "player": ai_sender,
-                "status": "start"
-            })
-            
-            # Wait for typing delay
-            await asyncio.sleep(typing_delay)
-            
-            # Broadcast message and typing stop
-            await broadcast_to_room(room_code, {
-                "type": "message",
-                "sender": ai_sender,
-                "message": ai_message
-            })
+        # Wait for typing delay
+        await asyncio.sleep(typing_delay)
+        
+        # DEFENSE LAYER 3: Check phase AFTER typing delay, BEFORE saving/broadcasting
+        current_state = rooms[room_code]['state']
+        if current_state['phase'] != Phase.DISCUSSION:
+            print(f"🚫 AI {ai_id} message blocked after typing - phase changed to {current_state['phase'].value}")
+            # Cancel typing indicator
             await broadcast_to_room(room_code, {
                 "type": "typing",
                 "player": ai_sender,
                 "status": "stop"
             })
+            return
+        
+        # NOW it's safe to update state and broadcast message
+        # Update chat history ONLY if still in discussion
+        if 'chat_history' in result:
+            current_state['chat_history'] = current_state['chat_history'] + result['chat_history']
+        if 'last_message_time' in result:
+            current_state['last_message_time'] = result['last_message_time']
+        if 'pending_ai_messages' in result:
+            current_state['pending_ai_messages'] = result['pending_ai_messages']
+        
+        rooms[room_code]['state'] = current_state
+        
+        # Broadcast message and typing stop
+        await broadcast_to_room(room_code, {
+            "type": "message",
+            "sender": ai_sender,
+            "message": ai_message
+        })
+        await broadcast_to_room(room_code, {
+            "type": "typing",
+            "player": ai_sender,
+            "status": "stop"
+        })
         
         # Handle any other broadcasts from result
         if 'broadcast_queue' in result:
@@ -426,8 +464,13 @@ async def process_single_ai_message(room_code: str, ai_id: str):
         # Add small delay to allow message to be processed
         await asyncio.sleep(1.5)
         
-        # Trigger other agents to decide if they want to respond (exclude this agent)
-        asyncio.create_task(trigger_agent_decisions(room_code, exclude_agents=[ai_id]))
+        # DEFENSE LAYER 4: Check phase before triggering more AI responses
+        current_state = rooms[room_code]['state']
+        if current_state['phase'] == Phase.DISCUSSION:
+            # Only trigger new responses if still in discussion
+            asyncio.create_task(trigger_agent_decisions(room_code, exclude_agents=[ai_id]))
+        else:
+            print(f"🚫 Not triggering new AI responses - phase is {current_state['phase'].value}")
                 
     finally:
         # Remove this AI from processing set
@@ -529,6 +572,12 @@ async def process_ai_messages(room_code: str):
     # Use lock to prevent concurrent calls from creating duplicate tasks
     async with room_locks[room_code]:
         state = rooms[room_code]['state']
+        
+        # DEFENSE: Only process AI messages during discussion phase
+        if state['phase'] != Phase.DISCUSSION:
+            print(f"🚫 Not processing AI messages - phase is {state['phase'].value}, not DISCUSSION")
+            return
+        
         pending_ais = state.get('pending_ai_messages', []).copy()
         processing_agents = rooms[room_code].get('ai_processing_agents', set())
         
