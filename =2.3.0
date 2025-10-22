@@ -1,0 +1,32 @@
+Collecting discord.py
+  Downloading discord_py-2.6.4-py3-none-any.whl.metadata (7.5 kB)
+Collecting aiohttp<4,>=3.7.4 (from discord.py)
+  Downloading aiohttp-3.13.1-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl.metadata (8.1 kB)
+Collecting aiohappyeyeballs>=2.5.0 (from aiohttp<4,>=3.7.4->discord.py)
+  Downloading aiohappyeyeballs-2.6.1-py3-none-any.whl.metadata (5.9 kB)
+Collecting aiosignal>=1.4.0 (from aiohttp<4,>=3.7.4->discord.py)
+  Downloading aiosignal-1.4.0-py3-none-any.whl.metadata (3.7 kB)
+Requirement already satisfied: attrs>=17.3.0 in /nfs_edlab/wschay/anaconda3/envs/group-chat/lib/python3.11/site-packages (from aiohttp<4,>=3.7.4->discord.py) (25.4.0)
+Collecting frozenlist>=1.1.1 (from aiohttp<4,>=3.7.4->discord.py)
+  Downloading frozenlist-1.8.0-cp311-cp311-manylinux1_x86_64.manylinux_2_28_x86_64.manylinux_2_5_x86_64.whl.metadata (20 kB)
+Collecting multidict<7.0,>=4.5 (from aiohttp<4,>=3.7.4->discord.py)
+  Downloading multidict-6.7.0-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl.metadata (5.3 kB)
+Collecting propcache>=0.2.0 (from aiohttp<4,>=3.7.4->discord.py)
+  Downloading propcache-0.4.1-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl.metadata (13 kB)
+Collecting yarl<2.0,>=1.17.0 (from aiohttp<4,>=3.7.4->discord.py)
+  Downloading yarl-1.22.0-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl.metadata (75 kB)
+Requirement already satisfied: idna>=2.0 in /nfs_edlab/wschay/anaconda3/envs/group-chat/lib/python3.11/site-packages (from yarl<2.0,>=1.17.0->aiohttp<4,>=3.7.4->discord.py) (3.11)
+Requirement already satisfied: typing-extensions>=4.2 in /nfs_edlab/wschay/anaconda3/envs/group-chat/lib/python3.11/site-packages (from aiosignal>=1.4.0->aiohttp<4,>=3.7.4->discord.py) (4.15.0)
+Downloading discord_py-2.6.4-py3-none-any.whl (1.2 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 1.2/1.2 MB 41.9 MB/s  0:00:00
+Downloading aiohttp-3.13.1-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl (1.7 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 1.7/1.7 MB 43.1 MB/s  0:00:00
+Downloading multidict-6.7.0-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl (246 kB)
+Downloading yarl-1.22.0-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl (365 kB)
+Downloading aiohappyeyeballs-2.6.1-py3-none-any.whl (15 kB)
+Downloading aiosignal-1.4.0-py3-none-any.whl (7.5 kB)
+Downloading frozenlist-1.8.0-cp311-cp311-manylinux1_x86_64.manylinux_2_28_x86_64.manylinux_2_5_x86_64.whl (231 kB)
+Downloading propcache-0.4.1-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl (210 kB)
+Installing collected packages: propcache, multidict, frozenlist, aiohappyeyeballs, yarl, aiosignal, aiohttp, discord.py
+
+Successfully installed aiohappyeyeballs-2.6.1 aiohttp-3.13.1 aiosignal-1.4.0 discord.py-2.6.4 frozenlist-1.8.0 multidict-6.7.0 propcache-0.4.1 yarl-1.22.0

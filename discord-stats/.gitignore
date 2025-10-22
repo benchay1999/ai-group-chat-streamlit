@@ -1,0 +1,7 @@
+# Discord bot game statistics
+# All JSON files in this directory are game logs
+*.json
+
+# Keep the directory but ignore its contents
+!.gitignore
+

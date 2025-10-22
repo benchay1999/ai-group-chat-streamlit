@@ -10,7 +10,7 @@ from typing import Literal
 NUM_AI_PLAYERS = int(os.getenv("NUM_AI_PLAYERS", "4"))  # Configurable: 4-8 AI players
 DISCUSSION_TIME = int(os.getenv("DISCUSSION_TIME", "180"))  # 3 minutes in seconds
 VOTING_TIME = int(os.getenv("VOTING_TIME", "60"))  # 1 minute in seconds
-ROUNDS_TO_WIN = int(os.getenv("ROUNDS_TO_WIN", "3"))  # Human wins after 3 rounds
+ROUNDS_TO_WIN = int(os.getenv("ROUNDS_TO_WIN", "1"))  # Human wins after 1 round (default: single elimination game)
 
 # AI Model Configuration
 AI_MODEL_PROVIDER: Literal["openai", "anthropic", "groq"] = os.getenv("AI_MODEL_PROVIDER", "openai")
