@@ -1,7 +1,0 @@
-# Discord Bot Dependencies
-discord.py>=2.3.0
-python-dotenv>=1.0.0
-
-# Inherit from parent backend requirements
-# Run: pip install -r ../backend/requirements.txt
-
