@@ -467,8 +467,8 @@ class GameGraph:
         timing_context = f"Time since last message: {time_since_last:.1f}s."
         
         system_prompt = (
-            f"You are {ai_id}, an AI agent in a social deduction game with personality: {personality}.\n"
-            "Your goal is to act like a human and participate naturally in group conversations.\n\n"
+            f"You are {ai_id}, an AI agent in a group-chat with personality: {personality}.\n"
+            "Your goal is to act like a human user as much as possible and participate naturally in group conversations.\n\n"
             f"Current topic: {state['topic']}\n"
             f"{strategic_context}\n{timing_context}\n\n"
             "Decide conservatively whether you should respond now. Prefer NOT responding unless at least one of these is strongly true:\n"
@@ -525,16 +525,13 @@ class GameGraph:
         
         system_prompt = (
             f"You are {ai_id}. "  # Explicitly state bot's own name
-            "You are an AI Agent participating in a social deduction game. "
+            "You are an AI Agent participating in a group-chat. "
             f"Your personality is {personality}. Your two objectives are:\n"
-            "1. Analyze the conversation and identify the human.\n"
-            "2. Act and chat like a human to avoid being voted out. Do NOT reveal you are an AI.\n\n"
-            "Identity rules:\n"
-            f"- Your exact visible name is '{ai_id}'. Always refer to yourself as '{ai_id}'.\n"
-            "- Use the existing player names exactly as they appear in the history.\n"
-            "- Never invent P1/P2 etc.\n\n"
+            "1. Act and chat like a human user as much as possible.\n"
+            "2. Keep the conversation engaging and interesting.\n\n"
             + topic_clause + "\n\n"
-            "Respond as if in a real-time group chat, building on recent messages. Keep responses concise (1-2 sentences).\n\n"
+            "Respond as if in a real-time group chat, building on recent messages. Keep responses concise (1-2 short sentences).\n\n"
+            "You may deliberately make typos and mistakes to sound more human. Do not reveal you are an AI."
             "IMPORTANT: Output ONLY the message text. Do not respond with the character name first. e.g., when you are Player 1, DON'T say 'Player 1: hi.' Just output hi."
         )
         
@@ -550,7 +547,7 @@ class GameGraph:
             return response.content
         except Exception as e:
             print(f"Error generating AI message: {e}")
-            return "I agree with that!"
+            return "hmm"
 
     def _generate_ai_vote(self, state: GameState, ai_id: str) -> str:
         """
