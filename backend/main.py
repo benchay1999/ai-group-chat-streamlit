@@ -256,11 +256,13 @@ async def run_discussion_phase(room_code: str):
     """
     # Get room-specific discussion time (fallback to global config)
     discussion_time = rooms[room_code].get('discussion_duration', DISCUSSION_TIME)
+    print(f"⏱️ Starting discussion phase for room {room_code}: {discussion_time} seconds")
     
     # Start proactive engagement task
     engagement_task = asyncio.create_task(proactive_agent_engagement(room_code))
     
     await asyncio.sleep(discussion_time)
+    print(f"⏱️ Discussion time ({discussion_time}s) elapsed for room {room_code}, transitioning to voting")
     
     # Cancel proactive engagement when discussion ends
     engagement_task.cancel()
@@ -296,11 +298,13 @@ async def run_discussion_phase(room_code: str):
         # Save state BEFORE broadcasting to ensure checks see VOTING phase
         rooms[room_code]['state'] = state
         
-        # Broadcast phase change
+        # Broadcast phase change with voting duration
+        voting_duration = rooms[room_code].get('voting_duration', VOTING_TIME)
         await broadcast_to_room(room_code, {
             "type": "phase",
             "phase": "Voting",
-            "message": "Discussion ended. Time to vote."
+            "message": "Discussion ended. Time to vote.",
+            "voting_duration": voting_duration
         })
         
         print(f"✅ Phase transition complete: DISCUSSION → VOTING in room {room_code}")
@@ -320,8 +324,10 @@ async def run_voting_phase(room_code: str):
     """
     # Get room-specific voting time (fallback to global config)
     voting_time = rooms[room_code].get('voting_duration', VOTING_TIME)
+    print(f"🗳️ Starting voting phase for room {room_code}: {voting_time} seconds")
     
     await asyncio.sleep(voting_time)
+    print(f"🗳️ Voting time ({voting_time}s) elapsed for room {room_code}, completing game")
     
     if room_code not in rooms:
         return
@@ -1270,7 +1276,8 @@ async def websocket_endpoint(websocket: WebSocket, room_code: str, player_id: st
     
     # Initialize room if needed
     if room_code not in rooms:
-        print(f"🎮 Creating new game room: {room_code}")
+        print(f"⚠️ WebSocket connection to non-existent room: {room_code}")
+        print(f"🎮 Creating legacy WebSocket room: {room_code}")
         
         # For legacy WebSocket rooms, use proper number assignment
         total_players = NUM_AI_PLAYERS + 1  # 1 human via WebSocket
@@ -1295,13 +1302,19 @@ async def websocket_endpoint(websocket: WebSocket, room_code: str, player_id: st
             'creator_id': player_id,
             'player_user_map': {},  # Maps player_id -> user_id (for authenticated users)
             'current_humans': [],
-            'available_numbers': available_numbers
+            'available_numbers': available_numbers,
+            'discussion_duration': DISCUSSION_TIME,  # Use default config
+            'voting_duration': VOTING_TIME  # Use default config
         }
         # Initialize lock for this room to prevent race conditions
         if room_code not in room_locks:
             room_locks[room_code] = asyncio.Lock()
         
-        print(f"📝 Game state created - Topic: {state['topic']}")
+        print(f"📝 Legacy WebSocket room created - Topic: {state['topic']}")
+        print(f"📝 Using default durations - discussion: {DISCUSSION_TIME}s, voting: {VOTING_TIME}s")
+    else:
+        print(f"✅ WebSocket connecting to existing room: {room_code}")
+        print(f"✅ Existing room durations - discussion: {rooms[room_code].get('discussion_duration', 'NOT SET')}, voting: {rooms[room_code].get('voting_duration', 'NOT SET')}")
     
     # Add connection BEFORE broadcasting
     rooms[room_code]['connections'][player_id] = websocket
@@ -1402,9 +1415,21 @@ async def websocket_endpoint(websocket: WebSocket, room_code: str, player_id: st
     
     # Send current game state to the newly connected client
     state = rooms[room_code]['state']
+    room = rooms[room_code]
     await websocket.send_json({"type": "player_list", "players": [p["id"] for p in state["players"]]})
     await websocket.send_json({"type": "topic", "topic": state["topic"]})
-    await websocket.send_json({"type": "phase", "phase": state["phase"].value, "message": f"Currently in {state['phase'].value}"})
+    
+    # Send phase with durations
+    phase_msg = {
+        "type": "phase",
+        "phase": state["phase"].value,
+        "message": f"Currently in {state['phase'].value}"
+    }
+    if state["phase"].value == "Discussion":
+        phase_msg["discussion_duration"] = room.get('discussion_duration', DISCUSSION_TIME)
+    elif state["phase"].value == "Voting":
+        phase_msg["voting_duration"] = room.get('voting_duration', VOTING_TIME)
+    await websocket.send_json(phase_msg)
     
     # Send chat history
     for msg in state["chat_history"]:
@@ -2324,8 +2349,8 @@ async def create_room(room_data: dict):
             - max_humans: Maximum human players (1-4, default 1)
             - total_players: Total players including AI (default 5)
             - language: Room language - "english" or "korean" (default "english")
-            - discussion_duration: Discussion time in seconds (180 or 240, default 180)
-            - voting_duration: Voting time in seconds (60 or 120, default 60)
+            - discussion_duration: Discussion time in seconds (60, 180, or 240, default 180)
+            - voting_duration: Voting time in seconds (30, 60, or 120, default 60)
     
     Returns:
         Room creation response with room_code and room_name
@@ -2349,11 +2374,12 @@ async def create_room(room_data: dict):
     if language not in ["english", "korean"]:
         return {"success": False, "error": "language must be 'english' or 'korean'"}
     
-    if discussion_duration not in [180, 240]:
-        return {"success": False, "error": "discussion_duration must be 180 or 240 seconds"}
+    # Allow debug durations (60s discussion, 30s voting) in addition to normal durations
+    if discussion_duration not in [60, 180, 240]:
+        return {"success": False, "error": "discussion_duration must be 60, 180, or 240 seconds"}
     
-    if voting_duration not in [60, 120]:
-        return {"success": False, "error": "voting_duration must be 60 or 120 seconds"}
+    if voting_duration not in [30, 60, 120]:
+        return {"success": False, "error": "voting_duration must be 30, 60, or 120 seconds"}
     
     # Generate unique room code
     room_code = generate_room_code()
@@ -2404,6 +2430,7 @@ async def create_room(room_data: dict):
         room_locks[room_code] = asyncio.Lock()
     
     print(f"🎮 Created room {room_code} ({room_name}): {max_humans} humans, {total_players} total, language: {language}, discussion: {discussion_duration}s, voting: {voting_duration}s")
+    print(f"🔍 Verifying room dict after creation - discussion_duration: {rooms[room_code].get('discussion_duration')}, voting_duration: {rooms[room_code].get('voting_duration')}")
     
     # Assign a player number for the creator (they'll get it when they join)
     # Return the first available number so they know what to expect
@@ -2674,6 +2701,7 @@ async def join_room(
     
     # Check if room exists
     if room_code not in rooms:
+        print(f"⚠️ Room {room_code} does NOT exist, creating legacy room")
         # Legacy behavior: Create room if doesn't exist (for old room codes)
         # For legacy rooms, assign random player numbers too
         total_players = NUM_AI_PLAYERS + 1
@@ -2702,7 +2730,9 @@ async def join_room(
             'creator_id': player_id,
             'player_user_map': {},  # Maps player_id -> user_id (for authenticated users)
             'current_humans': [],
-            'available_numbers': []  # All assigned for legacy rooms
+            'available_numbers': [],  # All assigned for legacy rooms
+            'discussion_duration': DISCUSSION_TIME,  # Use default config for legacy rooms
+            'voting_duration': VOTING_TIME  # Use default config for legacy rooms
         }
         # Initialize lock for this room to prevent race conditions
         if room_code not in room_locks:
@@ -2720,6 +2750,7 @@ async def join_room(
         asyncio.create_task(trigger_agent_decisions(room_code))
     
     room = rooms[room_code]
+    print(f"🔍 Room {room_code} exists - discussion_duration: {room.get('discussion_duration', 'NOT SET')}, voting_duration: {room.get('voting_duration', 'NOT SET')}")
     
     # Check if room is in waiting status (for matching rooms)
     if room.get('room_status') == 'in_progress':
@@ -2797,6 +2828,7 @@ async def join_room(
                     await broadcast_to_room(room_code, msg)
             
             # Start phases
+            print(f"🚀 Starting game phases - discussion_duration: {room.get('discussion_duration', 'NOT SET')}, voting_duration: {room.get('voting_duration', 'NOT SET')}")
             asyncio.create_task(run_discussion_phase(room_code))
             # Trigger active decision-making for AI responses
             await asyncio.sleep(0.75)  # Small delay

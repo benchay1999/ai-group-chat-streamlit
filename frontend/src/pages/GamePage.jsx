@@ -69,8 +69,13 @@ const GamePage = () => {
           players: prev.players.map(p => ({ ...p, voted: false })),
         }));
         
-        // Update timer based on phase
-        if (data.phase === 'Discussion') {
+        // Update timer based on phase duration from server
+        if (data.phase === 'Discussion' && data.discussion_duration) {
+          setGameState(prev => ({ ...prev, timer: data.discussion_duration }));
+        } else if (data.phase === 'Voting' && data.voting_duration) {
+          setGameState(prev => ({ ...prev, timer: data.voting_duration }));
+        } else if (data.phase === 'Discussion') {
+          // Fallback to default if not provided
           setGameState(prev => ({ ...prev, timer: 180 }));
         } else if (data.phase === 'Voting') {
           setGameState(prev => ({ ...prev, timer: 60 }));
@@ -132,7 +137,7 @@ const GamePage = () => {
           round: data.round,
           topic: data.topic,
           phase: 'Discussion',
-          timer: 180,
+          timer: data.discussion_duration || 180,  // Use server duration or fallback
         }));
         toast.success(`Round ${data.round} started!`);
         break;

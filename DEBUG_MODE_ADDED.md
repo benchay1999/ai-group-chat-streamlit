@@ -83,8 +83,14 @@ This allows you to:
 120  // 2 minutes
 ```
 
-### Backend Compatibility
-✅ No backend changes needed - all duration values are already configurable via the API.
+### Backend Changes
+✅ **Backend validation updated** to accept debug durations:
+- Discussion: `60`, `180`, or `240` seconds (was: only `180` or `240`)
+- Voting: `30`, `60`, or `120` seconds (was: only `60` or `120`)
+
+✅ **Gamification adjusted** for debug mode:
+- Debug games (1 min discussion) award 5 time commitment points (vs. 10 for standard 3+ min games)
+- All other points (completion, win, participation, voting) remain the same
 
 ---
 
