@@ -11,6 +11,8 @@ const CreateRoomModal = ({ isOpen, onClose, onCreate }) => {
   const [maxHumans, setMaxHumans] = useState(1);
   const [totalPlayers, setTotalPlayers] = useState(5);
   const [roomLanguage, setRoomLanguage] = useState('english');
+  const [discussionDuration, setDiscussionDuration] = useState(180); // 3 minutes default
+  const [votingDuration, setVotingDuration] = useState(60); // 1 minute default
   const [creating, setCreating] = useState(false);
 
   if (!isOpen) return null;
@@ -23,7 +25,9 @@ const CreateRoomModal = ({ isOpen, onClose, onCreate }) => {
       await onCreate({ 
         max_humans: maxHumans, 
         total_players: totalPlayers,
-        language: roomLanguage
+        language: roomLanguage,
+        discussion_duration: discussionDuration,
+        voting_duration: votingDuration
       });
     } finally {
       setCreating(false);
@@ -125,6 +129,68 @@ const CreateRoomModal = ({ isOpen, onClose, onCreate }) => {
             </div>
           </div>
 
+          {/* Discussion Duration */}
+          <div>
+            <label className="block text-sm font-semibold text-gray-700 mb-2">
+              {t('modal.discussionDuration')}
+            </label>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setDiscussionDuration(180)}
+                className={`flex-1 py-2 px-4 rounded-lg font-semibold transition-all ${
+                  discussionDuration === 180
+                    ? 'bg-green-600 text-white'
+                    : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                }`}
+                disabled={creating}
+              >
+                ⏱️ 3 {t('modal.minutes')}
+              </button>
+              <button
+                onClick={() => setDiscussionDuration(240)}
+                className={`flex-1 py-2 px-4 rounded-lg font-semibold transition-all ${
+                  discussionDuration === 240
+                    ? 'bg-green-600 text-white'
+                    : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                }`}
+                disabled={creating}
+              >
+                ⏱️ 4 {t('modal.minutes')}
+              </button>
+            </div>
+          </div>
+
+          {/* Voting Duration */}
+          <div>
+            <label className="block text-sm font-semibold text-gray-700 mb-2">
+              {t('modal.votingDuration')}
+            </label>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setVotingDuration(60)}
+                className={`flex-1 py-2 px-4 rounded-lg font-semibold transition-all ${
+                  votingDuration === 60
+                    ? 'bg-orange-600 text-white'
+                    : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                }`}
+                disabled={creating}
+              >
+                🗳️ 1 {t('modal.minute')}
+              </button>
+              <button
+                onClick={() => setVotingDuration(120)}
+                className={`flex-1 py-2 px-4 rounded-lg font-semibold transition-all ${
+                  votingDuration === 120
+                    ? 'bg-orange-600 text-white'
+                    : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                }`}
+                disabled={creating}
+              >
+                🗳️ 2 {t('modal.minutes')}
+              </button>
+            </div>
+          </div>
+
           {/* Preview */}
           <div className="bg-gradient-to-r from-purple-50 to-blue-50 rounded-lg p-4 border border-purple-200">
             <h3 className="text-sm font-semibold text-gray-700 mb-2">{t('modal.preview')}</h3>
@@ -145,6 +211,18 @@ const CreateRoomModal = ({ isOpen, onClose, onCreate }) => {
                 <span className="text-gray-600">{t('modal.language')}:</span>
                 <span className="font-semibold text-green-600">
                   {roomLanguage === 'korean' ? '🇰🇷 ' + t('room.korean') : '🇺🇸 ' + t('room.english')}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-600">{t('modal.discussionDuration')}:</span>
+                <span className="font-semibold text-green-600">
+                  ⏱️ {discussionDuration / 60} {t('modal.minutes')}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-600">{t('modal.votingDuration')}:</span>
+                <span className="font-semibold text-orange-600">
+                  🗳️ {votingDuration / 60} {votingDuration === 60 ? t('modal.minute') : t('modal.minutes')}
                 </span>
               </div>
             </div>
