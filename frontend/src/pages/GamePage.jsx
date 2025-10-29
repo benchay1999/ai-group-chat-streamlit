@@ -238,6 +238,7 @@ const GamePage = () => {
         suspectRole={gameState.suspect_role}
         voteCountsDisplay={voteCountsDisplay}
         onLeave={handleLeave}
+        roomCode={roomCode}
       />
     );
   }

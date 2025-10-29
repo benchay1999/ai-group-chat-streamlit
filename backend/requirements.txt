@@ -11,7 +11,8 @@ streamlit>=1.28.0
 sqlalchemy>=2.0.0
 aiosqlite
 python-jose[cryptography]
-passlib[bcrypt]
+passlib[argon2]
+argon2-cffi
 alembic
 python-multipart
 # For PostgreSQL (future production use):

@@ -23,20 +23,34 @@ JWT_SECRET_KEY = os.getenv('JWT_SECRET_KEY', 'your-secret-key-change-this-in-pro
 JWT_ALGORITHM = 'HS256'
 ACCESS_TOKEN_EXPIRE_HOURS = 24
 
-# Password hashing configuration
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+# Password hashing configuration using Argon2
+# Argon2 is modern, secure, and has NO password length limits (unlike bcrypt's 72 bytes)
+pwd_context = CryptContext(
+    schemes=["argon2"],
+    deprecated="auto",
+    argon2__memory_cost=65536,  # 64 MB
+    argon2__time_cost=3,  # 3 iterations
+    argon2__parallelism=4  # 4 parallel threads
+)
 
 # HTTP Bearer token security
 security = HTTPBearer()
 
 
 def hash_password(password: str) -> str:
-    """Hash a password using bcrypt."""
+    """
+    Hash a password using Argon2.
+    
+    Argon2 has NO password length limits and is more secure than bcrypt.
+    Winner of the Password Hashing Competition 2015.
+    """
     return pwd_context.hash(password)
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
-    """Verify a password against its hash."""
+    """
+    Verify a password against its Argon2 hash.
+    """
     return pwd_context.verify(plain_password, hashed_password)
 
 

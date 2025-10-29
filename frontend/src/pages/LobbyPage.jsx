@@ -8,14 +8,17 @@ import { useNavigate } from 'react-router-dom';
 import { roomAPI } from '../services/api';
 import { useGame } from '../context/GameContext';
 import { useLanguage } from '../context/LanguageContext';
+import { useAuth } from '../contexts/AuthContext';
 import RoomCard from '../components/RoomCard';
 import CreateRoomModal from '../components/CreateRoomModal';
 import toast from 'react-hot-toast';
+import { User, LogIn } from 'lucide-react';
 
 const LobbyPage = () => {
   const navigate = useNavigate();
   const { selectRoom, joinRoom } = useGame();
   const { t, toggleLanguage, language } = useLanguage();
+  const { isAuthenticated, user } = useAuth();
   const [rooms, setRooms] = useState([]);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(0);
@@ -120,6 +123,30 @@ const LobbyPage = () => {
               <p className="text-blue-100">{t('lobby.subtitle')}</p>
             </div>
             <div className="flex items-center gap-4">
+              {/* Auth Status */}
+              {isAuthenticated ? (
+                <button
+                  onClick={() => navigate('/dashboard')}
+                  className="flex items-center gap-2 px-4 py-2 bg-white bg-opacity-20 rounded-full hover:bg-opacity-30 transition-all"
+                  title="Go to Dashboard"
+                >
+                  <User className="w-4 h-4 text-white" />
+                  <span className="text-sm font-semibold text-white">
+                    {user?.user_id}
+                  </span>
+                </button>
+              ) : (
+                <button
+                  onClick={() => navigate('/login')}
+                  className="flex items-center gap-2 px-4 py-2 bg-white bg-opacity-20 rounded-full hover:bg-opacity-30 transition-all"
+                  title="Login"
+                >
+                  <LogIn className="w-4 h-4 text-white" />
+                  <span className="text-sm font-semibold text-white">
+                    Login
+                  </span>
+                </button>
+              )}
               {/* Language Switcher */}
               <button
                 onClick={toggleLanguage}

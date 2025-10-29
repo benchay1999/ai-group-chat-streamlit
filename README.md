@@ -5,6 +5,22 @@ This is a web-based game where human players compete against multiple AI agents 
 
 **Architecture**: Built with LangGraph for advanced multi-agent orchestration, providing a graph-based state machine for game flow management.
 
+## 🎯 NEW: Mechanical Turk Data Collection System
+
+The system now includes a comprehensive data collection platform for MTurk studies:
+
+- **🔐 Authentication System**: User registration and login with JWT tokens
+- **🎫 Completion Keys**: Cryptographically-signed proof of participation
+- **💰 Payment Management**: Track and manage compensation for participants
+- **📊 Admin Dashboard**: View all sessions, update payment status, manage users
+- **📈 Visualizations**: Chat history timelines and voting result charts
+- **👥 Role-Based Access**: Separate views for participants and researchers
+
+### Quick Links
+- **Setup Guide**: See [MTURK_SETUP.md](MTURK_SETUP.md) for detailed installation
+- **Implementation Details**: See [IMPLEMENTATION_SUMMARY.md](IMPLEMENTATION_SUMMARY.md)
+- **Game Setup**: Continue reading below for general game setup
+
 ## Quick Start ⚡
 
 **Get running in 5 minutes!** See **[QUICKSTART.md](QUICKSTART.md)**
