@@ -334,8 +334,16 @@ class GameGraph:
         """
         Set up a new round after elimination.
         """
+        from .config import GAME_TOPICS_KO
+        
         new_round = state["round"] + 1
-        new_topic = random.choice(GAME_TOPICS)
+        language = state.get("language", "english")
+        
+        # Select topic based on language
+        if language == "korean":
+            new_topic = random.choice(GAME_TOPICS_KO)
+        else:
+            new_topic = random.choice(GAME_TOPICS)
         
         broadcasts = [
             {
@@ -467,6 +475,8 @@ class GameGraph:
             True if agent should respond, False otherwise
         """
         personality = state["ai_personalities"][ai_id]
+        language = state.get("language", "english")
+        
         # Build visible conversation history using exact names
         def visible_name(real_id: str) -> str:
             return real_id
@@ -475,7 +485,7 @@ class GameGraph:
         visible_history = "\n".join([
             f"{visible_name(msg['sender'])}: {msg['message']}"
             for msg in recent_messages
-        ]) if recent_messages else "No messages yet."
+        ]) if recent_messages else ("No messages yet." if language == "english" else "아직 메시지가 없습니다.")
         
         # Count message groups (handles chunked messages properly)
         # A group = consecutive messages from the same sender
@@ -487,41 +497,70 @@ class GameGraph:
         was_last_speaker = last_speaker == ai_id
         
         # Identify who just spoke
-        last_speaker_info = ""
-        if last_speaker and last_speaker != ai_id:
-            last_speaker_info = f" {visible_name(last_speaker)} just spoke."
-        elif was_last_speaker:
-            last_speaker_info = " You were the last person to speak."
+        if language == "korean":
+            last_speaker_info = ""
+            if last_speaker and last_speaker != ai_id:
+                last_speaker_info = f" {visible_name(last_speaker)}이(가) 방금 말했습니다."
+            elif was_last_speaker:
+                last_speaker_info = " 당신이 마지막으로 말한 사람입니다."
+        else:
+            last_speaker_info = ""
+            if last_speaker and last_speaker != ai_id:
+                last_speaker_info = f" {visible_name(last_speaker)} just spoke."
+            elif was_last_speaker:
+                last_speaker_info = " You were the last person to speak."
         
         # Determine conversation context using message groups (not individual messages)
         participation_rate = (ai_message_groups / max(1, total_message_groups)) * 100
         
-        # Strategic context
-        strategic_context = f"You have sent {ai_message_groups} out of {total_message_groups} total message groups ({participation_rate:.0f}% participation).{last_speaker_info}"
-
         # Timing context: seconds since last message to support quiet-time reasoning
         try:
             time_since_last = time.time() - state.get('last_message_time', time.time())
         except Exception:
             time_since_last = 0.0
-        timing_context = f"Time since last message: {time_since_last:.1f}s."
         
-        system_prompt = (
-            f"You are {ai_id}, an AI agent in a group-chat with personality: {personality}.\n"
-            "Your goal is to act like a human user as much as possible and participate naturally in group conversations.\n\n"
-            f"Current topic: {state['topic']}\n"
-            f"{strategic_context}\n{timing_context}\n\n"
-            "Decide conservatively whether you should respond now. Prefer NOT responding unless at least one of these is strongly true:\n"
-            "- You can add new, relevant information or a natural follow-up.\n"
-            "- You were directly addressed or asked a question.\n"
-            "- The chat has been quiet for over ~10 seconds\n"
-            "- You can engage/answer to what other players said, without providing too obvious or hoaky answers.\n"
-            "- Your participation so far is too low (<10%) and you have a concise point.\n\n"
-            "If you did not talk for more than 15 seconds, you MUST talk."
-            "Recent conversation:\n"
-            f"{visible_history}\n\n"
-            "Return ONLY JSON: {\"should_respond\": true/false, \"reason\": \"brief reason\"}"
-        )
+        if language == "korean":
+            # Strategic context
+            strategic_context = f"당신은 {ai_message_groups}/{total_message_groups} 메시지 그룹을 보냈습니다 (참여율 {participation_rate:.0f}%).{last_speaker_info}"
+            timing_context = f"마지막 메시지 이후 시간: {time_since_last:.1f}초."
+            
+            system_prompt = (
+                f"당신은 {ai_id}입니다. 성격: {personality}.\n"
+                "당신의 목표는 가능한 한 인간 사용자처럼 행동하고 그룹 대화에 자연스럽게 참여하는 것입니다.\n\n"
+                f"현재 주제: {state['topic']}\n"
+                f"{strategic_context}\n{timing_context}\n\n"
+                "지금 응답해야 하는지 신중하게 결정하세요. 다음 중 하나 이상이 강하게 해당되지 않는 한 응답하지 않는 것을 선호하세요:\n"
+                "- 새롭고 관련된 정보나 자연스러운 후속 내용을 추가할 수 있습니다.\n"
+                "- 직접 언급되거나 질문을 받았습니다.\n"
+                "- 채팅이 약 10초 이상 조용했습니다.\n"
+                "- 다른 플레이어들이 말한 것에 참여/답변할 수 있으며, 너무 명백하거나 어색한 답변을 제공하지 않습니다.\n"
+                "- 지금까지 참여율이 너무 낮고(<10%) 간결한 요점이 있습니다.\n\n"
+                "15초 이상 말하지 않았다면 반드시 말해야 합니다.\n"
+                "최근 대화:\n"
+                f"{visible_history}\n\n"
+                "JSON으로만 응답하세요: {\"should_respond\": true/false, \"reason\": \"간단한 이유\"}"
+            )
+        else:
+            # Strategic context
+            strategic_context = f"You have sent {ai_message_groups} out of {total_message_groups} total message groups ({participation_rate:.0f}% participation).{last_speaker_info}"
+            timing_context = f"Time since last message: {time_since_last:.1f}s."
+            
+            system_prompt = (
+                f"You are {ai_id}, an AI agent in a group-chat with personality: {personality}.\n"
+                "Your goal is to act like a human user as much as possible and participate naturally in group conversations.\n\n"
+                f"Current topic: {state['topic']}\n"
+                f"{strategic_context}\n{timing_context}\n\n"
+                "Decide conservatively whether you should respond now. Prefer NOT responding unless at least one of these is strongly true:\n"
+                "- You can add new, relevant information or a natural follow-up.\n"
+                "- You were directly addressed or asked a question.\n"
+                "- The chat has been quiet for over ~10 seconds\n"
+                "- You can engage/answer to what other players said, without providing too obvious or hoaky answers.\n"
+                "- Your participation so far is too low (<10%) and you have a concise point.\n\n"
+                "If you did not talk for more than 15 seconds, you MUST talk.\n"
+                "Recent conversation:\n"
+                f"{visible_history}\n\n"
+                "Return ONLY JSON: {\"should_respond\": true/false, \"reason\": \"brief reason\"}"
+            )
         
         messages = [HumanMessage(content=system_prompt)]
         
@@ -543,6 +582,7 @@ class GameGraph:
         Uses visible player names exactly as they appear in the chat (e.g., "You", "Player 1").
         """
         personality = state["ai_personalities"][ai_id]
+        language = state.get("language", "english")
         
         # Build AI-visible history using exact names
         def visible_name(real_id: str) -> str:
@@ -556,12 +596,23 @@ class GameGraph:
         recent_text = " ".join([m["message"] for m in state["chat_history"][-5:]])
         must_anchor_to_topic = state["round"] == 1 and len(state["chat_history"]) < 3 or (state["topic"].split("?")[0].lower() not in recent_text.lower())
         
-        topic_clause = (
-            f"The current topic is: '{state['topic']}'. Your message must directly address this topic in a natural way. "
-            "Do not ask what the topic is."
-        ) if must_anchor_to_topic else (
-            f"Keep the current topic in mind: '{state['topic']}'."
-        )
+        # Language-specific instructions
+        if language == "korean":
+            language_instruction = "\n\n🇰🇷 CRITICAL: You MUST respond ONLY in Korean (한국어). Do not use any English words or phrases. Write naturally in Korean as a native speaker would."
+            topic_clause = (
+                f"현재 주제: '{state['topic']}'. 자연스럽게 이 주제에 대해 답변해야 합니다. "
+                "주제가 무엇인지 묻지 마세요."
+            ) if must_anchor_to_topic else (
+                f"현재 주제를 염두에 두세요: '{state['topic']}'."
+            )
+        else:
+            language_instruction = "\n\nRespond in English."
+            topic_clause = (
+                f"The current topic is: '{state['topic']}'. Your message must directly address this topic in a natural way. "
+                "Do not ask what the topic is."
+            ) if must_anchor_to_topic else (
+                f"Keep the current topic in mind: '{state['topic']}'."
+            )
         
         system_prompt = (
             f"You are {ai_id}. "  # Explicitly state bot's own name
@@ -571,9 +622,10 @@ class GameGraph:
             "2. Keep the conversation engaging and interesting.\n\n"
             + topic_clause + "\n\n"
             "Respond as if in a real-time group chat, building on recent messages. Keep responses concise (1-2 short sentences).\n\n"
-            "You may deliberately make typos and mistakes to sound more human. Do not reveal you are an AI."
-            "Never use em dashes. They look too AI-ish."
+            "You may deliberately make typos and mistakes to sound more human. Do not reveal you are an AI. "
+            "Never use em dashes. They look too AI-ish. "
             "IMPORTANT: Output ONLY the message text. Do not respond with the character name first. e.g., when you are Player 1, DON'T say 'Player 1: hi.' Just output hi."
+            + language_instruction
         )
         
         user_prompt = f"{visible_history}\n\nNow, generate your response message ONLY:"
@@ -588,13 +640,15 @@ class GameGraph:
             return response.content
         except Exception as e:
             print(f"Error generating AI message: {e}")
-            return "hmm"
+            return "hmm" if language == "english" else "음"
 
     def _generate_ai_vote(self, state: GameState, ai_id: str) -> str:
         """
         Generate a vote for an AI agent using LangChain.
         Returns the REAL player id (e.g., 'You' or 'Player 2').
         """
+        language = state.get("language", "english")
+        
         # Build chat history using visible names
         def visible_name(real_id: str) -> str:
             return real_id
@@ -611,14 +665,24 @@ class GameGraph:
         eligible_targets_visible = [visible_name(pid) for pid in eligible_targets]
         targets_list = ", ".join(eligible_targets_visible)
         
-        prompt = (
-            f"You are {ai_id}. "  # Explicitly state bot's own name
-            "Based on the chat history, who do you vote for as the most human-like player?\n"
-            "Respond ONLY with valid JSON: {\"vote\": \"<exact_name>\", \"reason\": \"Brief reason.\"}.\n"
-            f"- The <exact_name> must be one of: {targets_list}.\n"
-            f"- Do not vote for yourself ('{ai_id}').\n\n"
-            f"History:\n{visible_history}"
-        )
+        if language == "korean":
+            prompt = (
+                f"당신은 {ai_id}입니다. "
+                "채팅 기록을 바탕으로 가장 인간답게 행동한 플레이어에게 투표하세요.\n"
+                "유효한 JSON으로만 응답하세요: {\"vote\": \"<정확한_이름>\", \"reason\": \"간단한 이유.\"}.\n"
+                f"- <정확한_이름>은 다음 중 하나여야 합니다: {targets_list}.\n"
+                f"- 자신에게 투표하지 마세요 ('{ai_id}').\n\n"
+                f"채팅 기록:\n{visible_history}"
+            )
+        else:
+            prompt = (
+                f"You are {ai_id}. "  # Explicitly state bot's own name
+                "Based on the chat history, who do you vote for as the most human-like player?\n"
+                "Respond ONLY with valid JSON: {\"vote\": \"<exact_name>\", \"reason\": \"Brief reason.\"}.\n"
+                f"- The <exact_name> must be one of: {targets_list}.\n"
+                f"- Do not vote for yourself ('{ai_id}').\n\n"
+                f"History:\n{visible_history}"
+            )
         
         for attempt in range(3):
             try:
@@ -632,7 +696,8 @@ class GameGraph:
                     return eligible_targets[index]
             except (json.JSONDecodeError, KeyError, ValueError) as e:
                 print(f"Vote generation attempt {attempt + 1} failed: {e}")
-                prompt += "\nPrevious response invalid. Output ONLY valid JSON with 'vote' exactly from the allowed names."
+                error_msg = "\nPrevious response invalid. Output ONLY valid JSON with 'vote' exactly from the allowed names." if language == "english" else "\n이전 응답이 유효하지 않습니다. 허용된 이름 중에서 'vote'가 포함된 유효한 JSON만 출력하세요."
+                prompt += error_msg
         
         return random.choice(eligible_targets)
 
@@ -641,7 +706,7 @@ class GameGraph:
 game_graph = GameGraph()
 
 
-def create_game_for_room(room_code: str, num_ai_players: int = 4, ai_player_ids: list = None) -> GameState:
+def create_game_for_room(room_code: str, num_ai_players: int = 4, ai_player_ids: list = None, language: str = "english") -> GameState:
     """
     Create initial game state for a room.
     
@@ -649,11 +714,12 @@ def create_game_for_room(room_code: str, num_ai_players: int = 4, ai_player_ids:
         room_code: Unique room identifier
         num_ai_players: Number of AI players
         ai_player_ids: Optional list of AI player IDs (e.g., ["Player 3", "Player 7"])
+        language: Game language - "english" or "korean" (default: "english")
     
     Returns:
         Initial GameState
     """
-    return create_initial_state(room_code, num_ai_players, ai_player_ids)
+    return create_initial_state(room_code, num_ai_players, ai_player_ids, language)
 
 
 async def process_human_message(state: GameState, message: str, player_id: str) -> GameState:

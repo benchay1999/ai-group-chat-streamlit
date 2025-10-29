@@ -3,7 +3,10 @@
  * Enhanced player sidebar with voting capabilities
  */
 
+import { useLanguage } from '../context/LanguageContext';
+
 const PlayerList = ({ players, phase, castVote, currentPlayerId, onLeave }) => {
+  const { t } = useLanguage();
   const currentPlayer = players.find(p => p.id === currentPlayerId);
   const hasVoted = currentPlayer?.voted || false;
 
@@ -11,9 +14,9 @@ const PlayerList = ({ players, phase, castVote, currentPlayerId, onLeave }) => {
     <div className="w-80 bg-gradient-to-b from-gray-50 to-gray-100 border-r border-gray-200 flex flex-col">
       {/* Header */}
       <div className="p-6 border-b border-gray-200">
-        <h2 className="text-2xl font-bold text-gray-800 mb-2">Players</h2>
+        <h2 className="text-2xl font-bold text-gray-800 mb-2">{t('player.players')}</h2>
         <p className="text-sm text-gray-600">
-          {players.filter(p => !p.eliminated).length} / {players.length} active
+          {players.filter(p => !p.eliminated).length} / {players.length} {t('player.active')}
         </p>
       </div>
 
@@ -46,7 +49,7 @@ const PlayerList = ({ players, phase, castVote, currentPlayerId, onLeave }) => {
                   </span>
                   {isCurrentPlayer && (
                     <span className="text-xs bg-blue-500 text-white px-2 py-0.5 rounded-full">
-                      You
+                      {t('player.you')}
                     </span>
                   )}
                 </div>
@@ -55,12 +58,12 @@ const PlayerList = ({ players, phase, castVote, currentPlayerId, onLeave }) => {
                 <div className="flex items-center gap-2">
                   {player.voted && (
                     <span className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded-full font-semibold">
-                      ✓ Voted
+                      ✓ {t('player.voted')}
                     </span>
                   )}
                   {player.eliminated && (
                     <span className="text-xs bg-red-100 text-red-700 px-2 py-1 rounded-full font-semibold">
-                      Eliminated
+                      {t('player.eliminated')}
                     </span>
                   )}
                 </div>
@@ -72,7 +75,7 @@ const PlayerList = ({ players, phase, castVote, currentPlayerId, onLeave }) => {
                   onClick={() => castVote(player.id)}
                   className="mt-3 w-full bg-gradient-to-r from-blue-500 to-indigo-600 text-white py-2 px-4 rounded-lg font-semibold hover:from-blue-600 hover:to-indigo-700 transition-all transform hover:scale-105"
                 >
-                  Vote as Most Human
+                  {t('player.voteButton')}
                 </button>
               )}
             </div>
@@ -87,7 +90,7 @@ const PlayerList = ({ players, phase, castVote, currentPlayerId, onLeave }) => {
             onClick={onLeave}
             className="w-full bg-red-500 text-white py-2 px-4 rounded-lg font-semibold hover:bg-red-600 transition-colors"
           >
-            Leave Room
+            {t('player.leaveRoom')}
           </button>
         </div>
       )}

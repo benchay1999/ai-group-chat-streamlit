@@ -44,6 +44,7 @@ class GameState(TypedDict):
     round: int
     phase: Phase
     num_ai_players: int
+    language: str  # "english" or "korean"
     
     # Players
     players: List[PlayerInfo]
@@ -78,7 +79,7 @@ class GameState(TypedDict):
     broadcast_queue: Annotated[List[Dict], operator.add]
 
 
-def create_initial_state(room_code: str, num_ai_players: int, ai_player_ids: list = None) -> GameState:
+def create_initial_state(room_code: str, num_ai_players: int, ai_player_ids: list = None, language: str = "english") -> GameState:
     """
     Create the initial game state.
     
@@ -86,13 +87,22 @@ def create_initial_state(room_code: str, num_ai_players: int, ai_player_ids: lis
         room_code: Unique identifier for the game room
         num_ai_players: Number of AI players (4-8)
         ai_player_ids: Optional list of AI player IDs (e.g., ["Player 3", "Player 7"])
+        language: Game language - "english" or "korean" (default: "english")
     
     Returns:
         Initial GameState ready for graph execution
     """
     import random
     import time
-    from .config import GAME_TOPICS, AI_PERSONALITIES
+    from .config import GAME_TOPICS, GAME_TOPICS_KO, AI_PERSONALITIES, AI_PERSONALITIES_KO
+    
+    # Select appropriate topics and personalities based on language
+    if language == "korean":
+        topics = GAME_TOPICS_KO
+        personalities = AI_PERSONALITIES_KO
+    else:
+        topics = GAME_TOPICS
+        personalities = AI_PERSONALITIES
     
     # Create AI player names - use provided IDs or default sequential
     if ai_player_ids:
@@ -109,7 +119,7 @@ def create_initial_state(room_code: str, num_ai_players: int, ai_player_ids: lis
             "id": name,
             "role": "ai",
             "eliminated": False,
-            "personality": random.choice(AI_PERSONALITIES)
+            "personality": random.choice(personalities)
         })
     
     # Assign personalities to AIs
@@ -133,9 +143,10 @@ def create_initial_state(room_code: str, num_ai_players: int, ai_player_ids: lis
         round=1,
         phase=Phase.DISCUSSION,
         num_ai_players=num_ai_players,
+        language=language,
         players=players,
         chat_history=[],
-        topic=random.choice(GAME_TOPICS),
+        topic=random.choice(topics),
         votes={},
         ai_personalities=ai_personalities,
         pseudonym_map=pseudonym_map,

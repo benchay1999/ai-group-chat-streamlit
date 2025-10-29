@@ -4,10 +4,13 @@
  */
 
 import { useState } from 'react';
+import { useLanguage } from '../context/LanguageContext';
 
 const CreateRoomModal = ({ isOpen, onClose, onCreate }) => {
+  const { t } = useLanguage();
   const [maxHumans, setMaxHumans] = useState(1);
   const [totalPlayers, setTotalPlayers] = useState(5);
+  const [roomLanguage, setRoomLanguage] = useState('english');
   const [creating, setCreating] = useState(false);
 
   if (!isOpen) return null;
@@ -17,7 +20,11 @@ const CreateRoomModal = ({ isOpen, onClose, onCreate }) => {
   const handleCreate = async () => {
     setCreating(true);
     try {
-      await onCreate({ max_humans: maxHumans, total_players: totalPlayers });
+      await onCreate({ 
+        max_humans: maxHumans, 
+        total_players: totalPlayers,
+        language: roomLanguage
+      });
     } finally {
       setCreating(false);
     }
@@ -27,7 +34,7 @@ const CreateRoomModal = ({ isOpen, onClose, onCreate }) => {
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-xl shadow-2xl max-w-md w-full p-6 animate-fade-in">
         <div className="flex justify-between items-center mb-6">
-          <h2 className="text-2xl font-bold text-gray-800">Create New Room</h2>
+          <h2 className="text-2xl font-bold text-gray-800">{t('modal.title')}</h2>
           <button
             onClick={onClose}
             className="text-gray-500 hover:text-gray-700 text-2xl leading-none"
@@ -41,7 +48,7 @@ const CreateRoomModal = ({ isOpen, onClose, onCreate }) => {
           {/* Max Humans Slider */}
           <div>
             <label className="block text-sm font-semibold text-gray-700 mb-2">
-              Maximum Human Players: {maxHumans}
+              {t('modal.maxHumans')}: {maxHumans}
             </label>
             <input
               type="range"
@@ -70,7 +77,7 @@ const CreateRoomModal = ({ isOpen, onClose, onCreate }) => {
           {/* Total Players Slider */}
           <div>
             <label className="block text-sm font-semibold text-gray-700 mb-2">
-              Total Players: {totalPlayers}
+              {t('modal.totalPlayers')}: {totalPlayers}
             </label>
             <input
               type="range"
@@ -87,21 +94,58 @@ const CreateRoomModal = ({ isOpen, onClose, onCreate }) => {
             </div>
           </div>
 
+          {/* Language Selector */}
+          <div>
+            <label className="block text-sm font-semibold text-gray-700 mb-2">
+              {t('modal.language')}
+            </label>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setRoomLanguage('english')}
+                className={`flex-1 py-2 px-4 rounded-lg font-semibold transition-all ${
+                  roomLanguage === 'english'
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                }`}
+                disabled={creating}
+              >
+                🇺🇸 {t('room.english')}
+              </button>
+              <button
+                onClick={() => setRoomLanguage('korean')}
+                className={`flex-1 py-2 px-4 rounded-lg font-semibold transition-all ${
+                  roomLanguage === 'korean'
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                }`}
+                disabled={creating}
+              >
+                🇰🇷 {t('room.korean')}
+              </button>
+            </div>
+          </div>
+
           {/* Preview */}
           <div className="bg-gradient-to-r from-purple-50 to-blue-50 rounded-lg p-4 border border-purple-200">
-            <h3 className="text-sm font-semibold text-gray-700 mb-2">Room Preview</h3>
+            <h3 className="text-sm font-semibold text-gray-700 mb-2">{t('modal.preview')}</h3>
             <div className="space-y-1 text-sm">
               <div className="flex justify-between">
-                <span className="text-gray-600">Human Players:</span>
+                <span className="text-gray-600">{t('modal.humanPlayers')}:</span>
                 <span className="font-semibold text-gray-800">{maxHumans}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-gray-600">AI Players:</span>
+                <span className="text-gray-600">{t('modal.aiPlayers')}:</span>
                 <span className="font-semibold text-purple-600">{aiCount}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-gray-600">Total:</span>
+                <span className="text-gray-600">{t('modal.total')}:</span>
                 <span className="font-semibold text-blue-600">{totalPlayers}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-600">{t('modal.language')}:</span>
+                <span className="font-semibold text-green-600">
+                  {roomLanguage === 'korean' ? '🇰🇷 ' + t('room.korean') : '🇺🇸 ' + t('room.english')}
+                </span>
               </div>
             </div>
           </div>
@@ -113,14 +157,14 @@ const CreateRoomModal = ({ isOpen, onClose, onCreate }) => {
               className="flex-1 bg-gray-200 text-gray-700 py-2 px-4 rounded-lg font-semibold hover:bg-gray-300 transition-colors"
               disabled={creating}
             >
-              Cancel
+              {t('modal.cancel')}
             </button>
             <button
               onClick={handleCreate}
               className="flex-1 bg-gradient-to-r from-purple-600 to-blue-600 text-white py-2 px-4 rounded-lg font-semibold hover:from-purple-700 hover:to-blue-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
               disabled={creating}
             >
-              {creating ? 'Creating...' : 'Create Room'}
+              {creating ? t('modal.creating') : t('modal.create')}
             </button>
           </div>
         </div>

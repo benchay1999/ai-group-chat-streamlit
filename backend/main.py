@@ -1069,12 +1069,14 @@ async def create_room(room_data: dict):
         room_data: Dict with:
             - max_humans: Maximum human players (1-4, default 1)
             - total_players: Total players including AI (default 5)
+            - language: Room language - "english" or "korean" (default "english")
     
     Returns:
         Room creation response with room_code and room_name
     """
     max_humans = room_data.get('max_humans', 1)
     total_players = room_data.get('total_players', 5)
+    language = room_data.get('language', 'english')
     
     # Validation
     if not (1 <= max_humans <= 4):
@@ -1085,6 +1087,9 @@ async def create_room(room_data: dict):
     
     if total_players > 12:
         return {"success": False, "error": "total_players cannot exceed 12"}
+    
+    if language not in ["english", "korean"]:
+        return {"success": False, "error": "language must be 'english' or 'korean'"}
     
     # Generate unique room code
     room_code = generate_room_code()
@@ -1107,8 +1112,8 @@ async def create_room(room_data: dict):
     # Create AI player IDs with assigned numbers
     ai_player_ids = [f"Player {num}" for num in ai_numbers]
     
-    # Create initial game state with properly numbered AI players
-    state = create_game_for_room(room_code, num_ai_players, ai_player_ids)
+    # Create initial game state with properly numbered AI players and language
+    state = create_game_for_room(room_code, num_ai_players, ai_player_ids, language)
     
     # Initialize room with metadata
     rooms[room_code] = {
@@ -1123,14 +1128,15 @@ async def create_room(room_data: dict):
         'created_at': time.time(),
         'creator_id': '',  # No longer used, auto-assigned on join
         'current_humans': [],
-        'available_numbers': available_numbers  # Numbers reserved for human players
+        'available_numbers': available_numbers,  # Numbers reserved for human players
+        'language': language  # Store room language
     }
     
     # Initialize lock for this room
     if room_code not in room_locks:
         room_locks[room_code] = asyncio.Lock()
     
-    print(f"🎮 Created room {room_code} ({room_name}): {max_humans} humans, {total_players} total")
+    print(f"🎮 Created room {room_code} ({room_name}): {max_humans} humans, {total_players} total, language: {language}")
     
     # Assign a player number for the creator (they'll get it when they join)
     # Return the first available number so they know what to expect
@@ -1142,7 +1148,8 @@ async def create_room(room_data: dict):
         "room_name": room_name,
         "max_humans": max_humans,
         "total_players": total_players,
-        "creator_number": creator_number
+        "creator_number": creator_number,
+        "language": language
     }
 
 
@@ -1167,7 +1174,8 @@ async def list_rooms(page: int = 0, per_page: int = 10):
             'max_humans': data['max_humans'],
             'total_players': data['total_players'],
             'room_status': data['room_status'],
-            'created_at': data['created_at']
+            'created_at': data['created_at'],
+            'language': data.get('language', 'english')
         }
         for code, data in rooms.items()
         if data.get('room_status') == 'waiting'
@@ -1215,7 +1223,8 @@ async def get_room_info(room_code: str):
         "max_humans": room['max_humans'],
         "total_players": room['total_players'],
         "room_status": room['room_status'],
-        "created_at": room['created_at']
+        "created_at": room['created_at'],
+        "language": room.get('language', 'english')
     }
 
 

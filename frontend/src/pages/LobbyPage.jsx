@@ -7,6 +7,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { roomAPI } from '../services/api';
 import { useGame } from '../context/GameContext';
+import { useLanguage } from '../context/LanguageContext';
 import RoomCard from '../components/RoomCard';
 import CreateRoomModal from '../components/CreateRoomModal';
 import toast from 'react-hot-toast';
@@ -14,6 +15,7 @@ import toast from 'react-hot-toast';
 const LobbyPage = () => {
   const navigate = useNavigate();
   const { selectRoom, joinRoom } = useGame();
+  const { t, toggleLanguage, language } = useLanguage();
   const [rooms, setRooms] = useState([]);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(0);
@@ -30,7 +32,7 @@ const LobbyPage = () => {
       setServerOnline(true);
     } catch (error) {
       console.error('Error loading rooms:', error);
-      toast.error('Failed to load rooms');
+      toast.error(t('message.failedToLoadRooms'));
       setServerOnline(false);
     } finally {
       setLoading(false);
@@ -62,7 +64,7 @@ const LobbyPage = () => {
       const result = await roomAPI.createRoom(config);
       
       if (result.success) {
-        toast.success(`Room created: ${result.room_code}`);
+        toast.success(`${t('message.roomCreated')}: ${result.room_code}`);
         
         // Store room info
         selectRoom({
@@ -79,7 +81,7 @@ const LobbyPage = () => {
           if (joinResult.success) {
             const playerId = joinResult.player_id;
             joinRoom(result.room_code, playerId);
-            toast.success(`Joined as ${playerId}`);
+            toast.success(`${t('message.joinedAs')} ${playerId}`);
             
             setIsCreateModalOpen(false);
             
@@ -90,20 +92,20 @@ const LobbyPage = () => {
               navigate('/waiting');
             }
           } else {
-            toast.error('Failed to join created room');
+            toast.error(t('message.failedToJoin'));
             setIsCreateModalOpen(false);
           }
         } catch (joinError) {
           console.error('Error joining created room:', joinError);
-          toast.error('Failed to join created room');
+          toast.error(t('message.failedToJoin'));
           setIsCreateModalOpen(false);
         }
       } else {
-        toast.error(result.error || 'Failed to create room');
+        toast.error(result.error || t('message.failedToCreateRoom'));
       }
     } catch (error) {
       console.error('Error creating room:', error);
-      toast.error('Failed to create room');
+      toast.error(t('message.failedToCreateRoom'));
     }
   };
 
@@ -114,22 +116,33 @@ const LobbyPage = () => {
         <div className="max-w-7xl mx-auto px-6 py-6">
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-4xl font-bold text-white mb-2">Group Chat</h1>
-              <p className="text-blue-100">Find a room or create your own</p>
+              <h1 className="text-4xl font-bold text-white mb-2">{t('lobby.title')}</h1>
+              <p className="text-blue-100">{t('lobby.subtitle')}</p>
             </div>
             <div className="flex items-center gap-4">
+              {/* Language Switcher */}
+              <button
+                onClick={toggleLanguage}
+                className="flex items-center gap-2 px-4 py-2 bg-white bg-opacity-20 rounded-full hover:bg-opacity-30 transition-all"
+                title="Toggle Language"
+              >
+                <span className="text-2xl">{language === 'korean' ? '🇰🇷' : '🇺🇸'}</span>
+                <span className="text-sm font-semibold text-white">
+                  {language === 'korean' ? 'KO' : 'EN'}
+                </span>
+              </button>
               {/* Server Status */}
               <div className="flex items-center gap-2 px-4 py-2 bg-white bg-opacity-20 rounded-full">
                 <span className={`w-3 h-3 rounded-full ${serverOnline ? 'bg-green-400' : 'bg-red-400'} animate-pulse`}></span>
                 <span className="text-sm font-semibold text-white">
-                  {serverOnline ? 'Server Online' : 'Server Offline'}
+                  {serverOnline ? t('lobby.serverOnline') : t('lobby.serverOffline')}
                 </span>
               </div>
               <button
                 onClick={() => setIsCreateModalOpen(true)}
                 className="bg-white text-purple-600 px-6 py-3 rounded-lg font-bold hover:bg-gray-100 transition-all transform hover:scale-105 shadow-lg"
               >
-                + Create Room
+                + {t('lobby.createRoom')}
               </button>
             </div>
           </div>
@@ -147,23 +160,22 @@ const LobbyPage = () => {
               </div>
             </div>
             <div className="flex-1">
-              <h2 className="text-3xl font-bold mb-3 drop-shadow-lg">Can You Find the AI?</h2>
+              <h2 className="text-3xl font-bold mb-3 drop-shadow-lg">{t('game.banner.title')}</h2>
               <p className="text-lg leading-relaxed opacity-95 mb-4">
-                <strong>The Challenge:</strong> Join a group chat with AI bots and other humans. Chat, analyze behavior, and vote for 
-                who you think is the most human-like player. Humans win if they successfully identify a human. AIs win if they trick you into voting for an AI!
+                <strong>{t('game.banner.challenge')}</strong> {t('game.banner.description')}
               </p>
               <div className="flex flex-wrap gap-4">
                 <div className="flex items-center gap-2 bg-white bg-opacity-20 rounded-full px-4 py-2 backdrop-blur-sm">
                   <span className="text-2xl">💬</span>
-                  <span className="font-semibold">Chat & Discuss</span>
+                  <span className="font-semibold">{t('game.banner.chat')}</span>
                 </div>
                 <div className="flex items-center gap-2 bg-white bg-opacity-20 rounded-full px-4 py-2 backdrop-blur-sm">
                   <span className="text-2xl">🤔</span>
-                  <span className="font-semibold">Analyze Behavior</span>
+                  <span className="font-semibold">{t('game.banner.analyze')}</span>
                 </div>
                 <div className="flex items-center gap-2 bg-white bg-opacity-20 rounded-full px-4 py-2 backdrop-blur-sm">
                   <span className="text-2xl">🗳️</span>
-                  <span className="font-semibold">Vote to Eliminate</span>
+                  <span className="font-semibold">{t('game.banner.vote')}</span>
                 </div>
               </div>
             </div>
@@ -173,14 +185,14 @@ const LobbyPage = () => {
         {/* Controls */}
         <div className="flex items-center justify-between mb-6">
           <h2 className="text-2xl font-bold text-white">
-            Available Rooms ({rooms.length})
+            {t('lobby.availableRooms')} ({rooms.length})
           </h2>
           <button
             onClick={loadRooms}
             disabled={loading}
             className="bg-white bg-opacity-20 text-white px-4 py-2 rounded-lg font-semibold hover:bg-opacity-30 transition-all disabled:opacity-50"
           >
-            {loading ? 'Refreshing...' : '🔄 Refresh'}
+            {loading ? t('lobby.refreshing') : '🔄 ' + t('lobby.refresh')}
           </button>
         </div>
 
@@ -188,20 +200,20 @@ const LobbyPage = () => {
         {loading && rooms.length === 0 && (
           <div className="text-center py-12">
             <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-white"></div>
-            <p className="text-white mt-4">Loading rooms...</p>
+            <p className="text-white mt-4">{t('lobby.loading')}</p>
           </div>
         )}
 
         {/* Empty State */}
         {!loading && rooms.length === 0 && (
           <div className="text-center py-12 bg-white bg-opacity-10 rounded-xl backdrop-blur-md">
-            <p className="text-white text-xl mb-4">No rooms available</p>
-            <p className="text-blue-100 mb-6">Be the first to create one!</p>
+            <p className="text-white text-xl mb-4">{t('lobby.noRooms')}</p>
+            <p className="text-blue-100 mb-6">{t('lobby.noRoomsSubtitle')}</p>
             <button
               onClick={() => setIsCreateModalOpen(true)}
               className="bg-white text-purple-600 px-6 py-3 rounded-lg font-bold hover:bg-gray-100 transition-all"
             >
-              Create Room
+              {t('lobby.createRoom')}
             </button>
           </div>
         )}
@@ -223,17 +235,17 @@ const LobbyPage = () => {
               disabled={page === 0}
               className="bg-white bg-opacity-20 text-white px-4 py-2 rounded-lg font-semibold hover:bg-opacity-30 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              ← Previous
+              ← {t('lobby.previous')}
             </button>
             <span className="text-white font-semibold">
-              Page {page + 1} of {totalPages}
+              {t('lobby.page')} {page + 1} {t('lobby.of')} {totalPages}
             </span>
             <button
               onClick={() => setPage(Math.min(totalPages - 1, page + 1))}
               disabled={page >= totalPages - 1}
               className="bg-white bg-opacity-20 text-white px-4 py-2 rounded-lg font-semibold hover:bg-opacity-30 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              Next →
+              {t('lobby.next')} →
             </button>
           </div>
         )}

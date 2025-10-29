@@ -3,34 +3,42 @@
  * Displays a room in the lobby with join button
  */
 
+import { useLanguage } from '../context/LanguageContext';
+
 const RoomCard = ({ room, onJoin }) => {
-  const { room_code, room_name, current_humans, max_humans, total_players } = room;
+  const { t } = useLanguage();
+  const { room_code, room_name, current_humans, max_humans, total_players, language } = room;
 
   return (
     <div className="bg-white rounded-lg shadow-lg hover:shadow-xl transition-shadow duration-300 p-6 border border-gray-200">
       <div className="flex justify-between items-start mb-4">
         <div>
           <h3 className="text-xl font-bold text-gray-800">{room_name}</h3>
-          <p className="text-sm text-gray-500 font-mono mt-1">Code: {room_code}</p>
+          <p className="text-sm text-gray-500 font-mono mt-1">{t('room.code')}: {room_code}</p>
         </div>
-        <span className="px-3 py-1 bg-green-100 text-green-700 text-xs font-semibold rounded-full">
-          Waiting
-        </span>
+        <div className="flex flex-col gap-1 items-end">
+          <span className="px-3 py-1 bg-green-100 text-green-700 text-xs font-semibold rounded-full">
+            {t('room.waiting')}
+          </span>
+          <span className="px-2 py-0.5 bg-blue-100 text-blue-700 text-xs font-semibold rounded-full">
+            {language === 'korean' ? '🇰🇷 ' + t('room.korean') : '🇺🇸 ' + t('room.english')}
+          </span>
+        </div>
       </div>
 
       <div className="space-y-2 mb-4">
         <div className="flex justify-between text-sm">
-          <span className="text-gray-600">Players:</span>
+          <span className="text-gray-600">{t('room.players')}:</span>
           <span className="font-semibold text-gray-800">
             {current_humans} / {max_humans}
           </span>
         </div>
         <div className="flex justify-between text-sm">
-          <span className="text-gray-600">Total Players:</span>
+          <span className="text-gray-600">{t('room.totalPlayers')}:</span>
           <span className="font-semibold text-gray-800">{total_players}</span>
         </div>
         <div className="flex justify-between text-sm">
-          <span className="text-gray-600">AI Players:</span>
+          <span className="text-gray-600">{t('room.aiPlayers')}:</span>
           <span className="font-semibold text-purple-600">{total_players - max_humans}</span>
         </div>
       </div>
@@ -47,7 +55,7 @@ const RoomCard = ({ room, onJoin }) => {
         onClick={() => onJoin(room)}
         className="w-full bg-gradient-to-r from-purple-600 to-blue-600 text-white py-2 px-4 rounded-lg font-semibold hover:from-purple-700 hover:to-blue-700 transition-all duration-200 transform hover:scale-105"
       >
-        Join Room
+        {t('room.joinRoom')}
       </button>
     </div>
   );
