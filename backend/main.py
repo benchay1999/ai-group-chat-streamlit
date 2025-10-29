@@ -5,8 +5,9 @@ Maintains WebSocket compatibility with frontend while using graph-based backend.
 
 import asyncio
 import random
+import re
 import time
-from typing import Dict
+from typing import Dict, List
 from concurrent.futures import ThreadPoolExecutor
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
@@ -353,10 +354,94 @@ async def complete_voting(room_code: str):
     await save_session_stats(room_code, state)
 
 
+def chunk_message(message: str, max_chunks: int = 4) -> List[str]:
+    """
+    Split a message into 2-4 chunks based on commas and sentence boundaries.
+    Simulates human-like incremental typing.
+    
+    Args:
+        message: Full message text to chunk
+        max_chunks: Maximum number of chunks (default 4)
+    
+    Returns:
+        List of message chunks with preserved punctuation
+    
+    Example:
+        "yes, I think so. That makes sense!" → ["yes,", "I think so.", "That makes sense!"]
+    """
+    # Handle empty or whitespace-only messages
+    if not message or not message.strip():
+        return [message]
+    
+    # If message is very short, don't chunk it
+    if len(message) < 20:
+        return [message]
+    
+    # Split on sentence boundaries (. ! ?) and commas, preserving punctuation
+    # Pattern: split after punctuation followed by optional space
+    pattern = r'([.!?,]\s*)'
+    parts = re.split(pattern, message)
+    
+    # Recombine parts with their punctuation
+    chunks = []
+    current_chunk = ""
+    for i, part in enumerate(parts):
+        if i % 2 == 0:  # Text part
+            current_chunk += part
+        else:  # Punctuation part
+            current_chunk += part.rstrip()  # Remove trailing space
+            chunks.append(current_chunk.strip())
+            current_chunk = ""
+    
+    # Add any remaining text
+    if current_chunk.strip():
+        chunks.append(current_chunk.strip())
+    
+    # If we have no chunks or empty chunks, return original
+    if not chunks or all(not c.strip() for c in chunks):
+        return [message]
+    
+    # Limit to max_chunks by combining adjacent chunks if needed
+    if len(chunks) > max_chunks:
+        # Calculate how many chunks to combine
+        combined = []
+        chunk_size = len(chunks) / max_chunks
+        current = ""
+        count = 0
+        
+        for i, chunk in enumerate(chunks):
+            current += (" " if current else "") + chunk
+            count += 1
+            
+            # If we've accumulated enough for one combined chunk, or it's the last chunk
+            if count >= chunk_size or i == len(chunks) - 1:
+                combined.append(current)
+                current = ""
+                count = 0
+        
+        chunks = combined
+    
+    # Ensure we have at least 2 chunks for longer messages (if original had potential)
+    if len(chunks) == 1 and len(message) > 40:
+        # Try to split roughly in half at a word boundary
+        mid = len(message) // 2
+        # Find nearest space
+        space_pos = message.find(' ', mid)
+        if space_pos > 0:
+            chunks = [message[:space_pos], message[space_pos+1:]]
+    
+    # Final filter: ensure minimum of 2 chunks, maximum of max_chunks
+    if len(chunks) < 2:
+        return [message]  # Too short to chunk meaningfully
+    
+    return chunks[:max_chunks]
+
+
 async def process_single_ai_message(room_code: str, ai_id: str):
     """
     Process a single AI agent's message asynchronously.
     Allows multiple AI agents to respond simultaneously.
+    Implements chunk-based message sending for human-like typing behavior.
     Note: Should only be called from process_ai_messages() which handles locking.
     
     Args:
@@ -402,58 +487,99 @@ async def process_single_ai_message(room_code: str, ai_id: str):
             
         ai_sender = result['ai_sender']
         ai_message = result['ai_message']
-        typing_delay = result.get('typing_delay', 1.5)
         
-        # DEFENSE LAYER 2: Check phase before typing indicator
+        # Split message into chunks for human-like typing
+        chunks = chunk_message(ai_message, max_chunks=4)
+        print(f"📝 AI {ai_id} message split into {len(chunks)} chunks: {chunks}")
+        
+        # Update pending_ai_messages to remove this AI
         current_state = rooms[room_code]['state']
-        if current_state['phase'] != Phase.DISCUSSION:
-            print(f"🚫 AI {ai_id} typing blocked - phase changed to {current_state['phase'].value}")
-            return
+        if 'pending_ai_messages' in result:
+            current_state['pending_ai_messages'] = result['pending_ai_messages']
+        # CRITICAL: Persist state update immediately to prevent duplicate processing
+        rooms[room_code]['state'] = current_state
+        
+        # Process each chunk with realistic typing delays
+        for chunk_idx, chunk in enumerate(chunks):
+            # DEFENSE: Check phase before each chunk
+            current_state = rooms[room_code]['state']
+            if current_state['phase'] != Phase.DISCUSSION:
+                print(f"🚫 AI {ai_id} chunk {chunk_idx+1}/{len(chunks)} blocked - phase changed to {current_state['phase'].value}")
+                # Stop typing indicator if it was started
+                await broadcast_to_room(room_code, {
+                    "type": "typing",
+                    "player": ai_sender,
+                    "status": "stop"
+                })
+                return
             
-        # Broadcast typing start
-        await broadcast_to_room(room_code, {
-            "type": "typing",
-            "player": ai_sender,
-            "status": "start"
-        })
-        
-        # Wait for typing delay
-        await asyncio.sleep(typing_delay)
-        
-        # DEFENSE LAYER 3: Check phase AFTER typing delay, BEFORE saving/broadcasting
-        current_state = rooms[room_code]['state']
-        if current_state['phase'] != Phase.DISCUSSION:
-            print(f"🚫 AI {ai_id} message blocked after typing - phase changed to {current_state['phase'].value}")
-            # Cancel typing indicator
+            # Show typing indicator for this chunk
+            await broadcast_to_room(room_code, {
+                "type": "typing",
+                "player": ai_sender,
+                "status": "start"
+            })
+            
+            # Calculate realistic typing delay based on chunk length
+            # Human typing speed: 50-80 characters per second
+            typing_speed = random.uniform(50, 80)
+            typing_delay = len(chunk) / typing_speed
+            # Add some variance for realism
+            typing_delay = typing_delay * random.uniform(0.8, 1.2)
+            
+            await asyncio.sleep(typing_delay)
+            
+            # DEFENSE: Check room still exists after sleep
+            if room_code not in rooms:
+                print(f"🚫 AI {ai_id} chunk {chunk_idx+1}/{len(chunks)} blocked - room deleted")
+                return
+            
+            # DEFENSE: Check phase after typing delay, before broadcasting
+            current_state = rooms[room_code]['state']
+            if current_state['phase'] != Phase.DISCUSSION:
+                print(f"🚫 AI {ai_id} chunk {chunk_idx+1}/{len(chunks)} blocked after typing - phase changed to {current_state['phase'].value}")
+                # Cancel typing indicator
+                await broadcast_to_room(room_code, {
+                    "type": "typing",
+                    "player": ai_sender,
+                    "status": "stop"
+                })
+                return
+            
+            # Create chat message for this chunk
+            chat_msg = {
+                "sender": ai_sender,
+                "message": chunk,
+                "timestamp": time.time()
+            }
+            
+            # Add to chat history
+            current_state['chat_history'].append(chat_msg)
+            current_state['last_message_time'] = time.time()
+            rooms[room_code]['state'] = current_state
+            
+            # Broadcast chunk
+            await broadcast_to_room(room_code, {
+                "type": "message",
+                "sender": ai_sender,
+                "message": chunk
+            })
+            
+            # Stop typing indicator
             await broadcast_to_room(room_code, {
                 "type": "typing",
                 "player": ai_sender,
                 "status": "stop"
             })
-            return
-        
-        # NOW it's safe to update state and broadcast message
-        # Update chat history ONLY if still in discussion
-        if 'chat_history' in result:
-            current_state['chat_history'] = current_state['chat_history'] + result['chat_history']
-        if 'last_message_time' in result:
-            current_state['last_message_time'] = result['last_message_time']
-        if 'pending_ai_messages' in result:
-            current_state['pending_ai_messages'] = result['pending_ai_messages']
-        
-        rooms[room_code]['state'] = current_state
-        
-        # Broadcast message and typing stop
-        await broadcast_to_room(room_code, {
-            "type": "message",
-            "sender": ai_sender,
-            "message": ai_message
-        })
-        await broadcast_to_room(room_code, {
-            "type": "typing",
-            "player": ai_sender,
-            "status": "stop"
-        })
+            
+            # Small pause between chunks (0.3-0.5s) if not the last chunk
+            if chunk_idx < len(chunks) - 1:
+                await asyncio.sleep(random.uniform(0.3, 0.5))
+                
+                # DEFENSE: Check room still exists after inter-chunk sleep
+                if room_code not in rooms:
+                    print(f"🚫 AI {ai_id} blocked after inter-chunk pause - room deleted")
+                    return
         
         # Handle any other broadcasts from result
         if 'broadcast_queue' in result:
@@ -463,6 +589,11 @@ async def process_single_ai_message(room_code: str, ai_id: str):
         # After AI speaks, give other agents a chance to respond
         # Add small delay to allow message to be processed
         await asyncio.sleep(1.5)
+        
+        # DEFENSE: Check room still exists after final sleep
+        if room_code not in rooms:
+            print(f"🚫 AI {ai_id} blocked after final delay - room deleted")
+            return
         
         # DEFENSE LAYER 4: Check phase before triggering more AI responses
         current_state = rooms[room_code]['state']
