@@ -446,6 +446,7 @@ def chunk_message(message: str, max_chunks: int = 4) -> List[str]:
     """
     Split a message into 2-4 chunks based on commas and sentence boundaries.
     Simulates human-like incremental typing by removing commas and keeping sentence endings.
+    Respects quoted text - doesn't split inside quotes.
     
     Args:
         message: Full message text to chunk
@@ -456,6 +457,7 @@ def chunk_message(message: str, max_chunks: int = 4) -> List[str]:
     
     Example:
         "yes, I think so. That makes sense!" → ["yes", "I think so.", "That makes sense!"]
+        'He said "stop." Then left.' → ['He said "stop."', 'Then left.']
     """
     # Handle empty or whitespace-only messages
     if not message or not message.strip():
@@ -465,39 +467,64 @@ def chunk_message(message: str, max_chunks: int = 4) -> List[str]:
     if len(message) < 20:
         return [message]
     
-    # Split on sentence boundaries (. ! ?) and commas, preserving punctuation
-    # Pattern: split after punctuation followed by optional space
-    pattern = r'([.!?,])\s*'
-    parts = re.split(pattern, message)
+    # Find split points that are NOT inside quotes
+    def find_split_points(text):
+        """Find positions where we can split (sentence endings and commas outside quotes)"""
+        split_points = []
+        in_double_quote = False
+        in_single_quote = False
+        
+        for i, char in enumerate(text):
+            # Track quote state
+            if char == '"' and (i == 0 or text[i-1] != '\\'):
+                in_double_quote = not in_double_quote
+            elif char == "'" and (i == 0 or text[i-1] != '\\'):
+                in_single_quote = not in_single_quote
+            
+            # Only split at punctuation outside quotes
+            if not in_double_quote and not in_single_quote:
+                if char in '.!?,':
+                    # Record split point with punctuation type
+                    split_points.append((i, char))
+        
+        return split_points
     
-    # Recombine parts with their punctuation, removing commas
+    split_points = find_split_points(message)
+    
+    # If no split points found, return original
+    if not split_points:
+        return [message]
+    
+    # Create chunks from split points
     chunks = []
-    i = 0
-    while i < len(parts):
-        if i + 1 < len(parts) and parts[i + 1] in '.!?,':
-            punctuation = parts[i + 1]
-            text = parts[i]
-            
-            # Remove trailing commas to make chunks more natural
-            # Keep sentence-ending punctuation (. ! ?)
-            if punctuation == ',':
-                chunk = text  # Don't include the comma
-            else:
-                chunk = text + punctuation  # Keep sentence endings
-            
-            chunks.append(chunk.strip())
-            i += 2
-        elif parts[i].strip():  # Remaining text without punctuation
-            chunks.append(parts[i].strip())
-            i += 1
-        else:
-            i += 1
+    start = 0
     
-    # If we have no chunks or empty chunks, return original
+    for pos, punct in split_points:
+        # Extract text up to and including the punctuation
+        chunk_text = message[start:pos+1].strip()
+        
+        if chunk_text:
+            # Remove commas to make chunks more natural
+            # Keep sentence-ending punctuation (. ! ?)
+            if punct == ',':
+                chunk_text = chunk_text[:-1].strip()  # Remove trailing comma
+            
+            if chunk_text:  # Only add non-empty chunks
+                chunks.append(chunk_text)
+        
+        start = pos + 1
+    
+    # Add any remaining text after the last split point
+    if start < len(message):
+        remaining = message[start:].strip()
+        if remaining:
+            chunks.append(remaining)
+    
+    # If we have no chunks, return original
     if not chunks:
         return [message]
     
-    # Limit to max_chunks by combining adjacent chunks if needed - PRESERVE ALL TEXT
+    # Limit to max_chunks by combining adjacent chunks if needed
     if len(chunks) > max_chunks:
         combined = []
         items_per_chunk = len(chunks) / max_chunks
@@ -1265,6 +1292,54 @@ async def websocket_endpoint(websocket: WebSocket, room_code: str, player_id: st
         rooms[room_code]['player_user_map'][player_id] = user_id
         print(f"👤 Stored mapping: {player_id} -> user {user_id}")
     
+    # Add human player to game state if not already there
+    state = rooms[room_code]['state']
+    # Check if this player (by connection ID or numbered ID) is already in the state
+    existing_player = None
+    for p in state.get('players', []):
+        if p['id'] == player_id or p.get('role') == 'human':
+            existing_player = p
+            break
+    
+    if not existing_player:
+        # Assign a numbered player ID from available numbers
+        available_nums = rooms[room_code].get('available_numbers', [])
+        if available_nums:
+            assigned_number = available_nums.pop(0)
+            numbered_player_id = f"Player {assigned_number}"
+        else:
+            # Fallback if no numbers available
+            numbered_player_id = player_id
+        
+        # Add human player to state
+        state['players'].append({
+            "id": numbered_player_id,
+            "role": "human",
+            "eliminated": False,
+            "personality": None
+        })
+        
+        # Store mapping from connection player_id to state player_id
+        rooms[room_code]['player_id_map'] = rooms[room_code].get('player_id_map', {})
+        rooms[room_code]['player_id_map'][player_id] = numbered_player_id
+        
+        # Update user mapping to use numbered player ID
+        if user_id:
+            rooms[room_code]['player_user_map'][numbered_player_id] = user_id
+            print(f"👤 Mapped {numbered_player_id} (human) -> user {user_id}")
+        
+        rooms[room_code]['state'] = state
+        print(f"✅ Added human player {numbered_player_id} to game state")
+    else:
+        # Player already exists, just update the mapping
+        numbered_player_id = existing_player['id']
+        rooms[room_code]['player_id_map'] = rooms[room_code].get('player_id_map', {})
+        rooms[room_code]['player_id_map'][player_id] = numbered_player_id
+        
+        if user_id and numbered_player_id not in rooms[room_code]['player_user_map']:
+            rooms[room_code]['player_user_map'][numbered_player_id] = user_id
+            print(f"👤 Mapped {numbered_player_id} (existing human) -> user {user_id}")
+    
     # If this was a new room, initialize and broadcast
     state = rooms[room_code]['state']
     if 'initialized' not in rooms[room_code]:
@@ -1323,8 +1398,12 @@ async def websocket_endpoint(websocket: WebSocket, room_code: str, player_id: st
                     })
                     continue
                 
+                # Get the numbered player ID for this connection
+                player_id_map = rooms[room_code].get('player_id_map', {})
+                actual_player_id = player_id_map.get(player_id, player_id)
+                
                 # Update state
-                state = await process_human_message(state, message, player_id)
+                state = await process_human_message(state, message, actual_player_id)
                 rooms[room_code]['state'] = state
                 
                 # Broadcast message (exclude sender since frontend shows it optimistically)
@@ -1350,14 +1429,18 @@ async def websocket_endpoint(websocket: WebSocket, room_code: str, player_id: st
                 # Process human vote
                 voted_for = data["voted"]
                 
+                # Get the numbered player ID for this connection
+                player_id_map = rooms[room_code].get('player_id_map', {})
+                actual_player_id = player_id_map.get(player_id, player_id)
+                
                 # Update state
-                state = await process_human_vote(state, player_id, voted_for)
+                state = await process_human_vote(state, actual_player_id, voted_for)
                 rooms[room_code]['state'] = state
                 
                 # Broadcast vote
                 await broadcast_to_room(room_code, {
                     "type": "voted",
-                    "player": player_id
+                    "player": actual_player_id
                 })
                 
                 # Check if all votes are in
