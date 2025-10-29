@@ -8,6 +8,7 @@ import random
 import re
 import time
 from typing import Dict, List, Optional
+from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Depends, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
@@ -947,9 +948,26 @@ async def save_session_stats(room_code: str, state: dict, current_user: Optional
         completed_at=completed_at
     )
     
+    # Calculate token usage and costs
+    from .pricing import calculate_cost
+    from .langgraph_game import game_graph
+    from .database import AIAgentUsage
+    
+    total_input_tokens = state.get('total_input_tokens', 0)
+    total_output_tokens = state.get('total_output_tokens', 0)
+    model_name = game_graph.model_name
+    total_cost = calculate_cost(total_input_tokens, total_output_tokens, model_name)
+    agent_token_usage = state.get('agent_token_usage', {})
+    
+    print(f"📊 Total token usage: {total_input_tokens} input, {total_output_tokens} output")
+    print(f"💰 Total cost: ${total_cost:.6f} (model: {model_name})")
+    
+    # Get player-user mappings from room
+    player_user_map = room_data.get('player_user_map', {})
+    
     # Save to PostgreSQL
     try:
-        from .database import async_session_maker
+        from .database import async_session_maker, SessionPlayer
         async with async_session_maker() as db:
             db_session = DBSession(
                 id=session_id,
@@ -963,18 +981,191 @@ async def save_session_stats(room_code: str, state: dict, current_user: Optional
                 voting_duration=voting_duration,
                 payment_status=PaymentStatus.PENDING,
                 stats_file_path=path,
-                claimed_at=_time.time() if current_user else None
+                claimed_at=_time.time() if current_user else None,
+                total_input_tokens=total_input_tokens,
+                total_output_tokens=total_output_tokens,
+                total_cost=total_cost,
+                model_name=model_name
             )
             db.add(db_session)
+            
+            # Save player-user mappings
+            for player in state.get('players', []):
+                player_id = player['id']
+                role = player['role']
+                mapped_user_id = player_user_map.get(player_id)
+                
+                # Convert user_id string to UUID if present
+                user_uuid = None
+                if mapped_user_id:
+                    try:
+                        user_uuid = uuid_lib.UUID(mapped_user_id)
+                    except (ValueError, AttributeError):
+                        print(f"⚠️ Invalid user_id format for player {player_id}: {mapped_user_id}")
+                
+                session_player = SessionPlayer(
+                    session_id=session_id,
+                    user_id=user_uuid,
+                    player_id=player_id,
+                    role=role
+                )
+                db.add(session_player)
+            
+            # Save per-agent token usage
+            for agent_id, usage in agent_token_usage.items():
+                agent_cost = calculate_cost(
+                    usage.get('input', 0),
+                    usage.get('output', 0),
+                    model_name
+                )
+                agent_usage_record = AIAgentUsage(
+                    session_id=session_id,
+                    agent_id=agent_id,
+                    input_tokens=usage.get('input', 0),
+                    output_tokens=usage.get('output', 0),
+                    cost=agent_cost,
+                    message_count=usage.get('calls', 0)
+                )
+                db.add(agent_usage_record)
+            
             await db.commit()
             print(f"✅ Session saved to database with ID: {session_id}")
     except Exception as e:
         print(f"⚠️  Error saving session to database: {e}")
+        import traceback
+        traceback.print_exc()
         # Don't fail the game completion if database save fails
     
     # Add completion key to payload
     payload['completion_key'] = completion_key
     payload['session_id'] = str(session_id)
+    
+    # =========================================================================
+    # Gamification: Award points and check achievements
+    # =========================================================================
+    if current_user:
+        try:
+            from .gamification import (
+                calculate_game_points, check_achievements, update_streak,
+                calculate_level, ACHIEVEMENTS
+            )
+            from .database import async_session_maker
+            
+            # Determine if user won (correctly identified AI)
+            user_won = False
+            suspect_role = state.get('suspect_role')
+            if suspect_role == 'ai':
+                user_won = True
+            
+            # Count user messages
+            user_messages = [
+                msg for msg in state.get('chat_history', [])
+                if any(p['id'] == msg.get('sender') and p['role'] == 'human' 
+                       for p in state.get('players', []))
+            ]
+            num_user_messages = len(user_messages)
+            
+            # Check if user voted
+            user_voted = any(
+                p['id'] in state.get('votes', {}) and p['role'] == 'human'
+                for p in state.get('players', [])
+            )
+            
+            # Calculate points earned
+            points_earned, points_breakdown = calculate_game_points(
+                game_completed=True,
+                won_game=user_won,
+                discussion_duration=discussion_duration,
+                num_messages=num_user_messages,
+                voted=user_voted
+            )
+            
+            print(f"🎮 User earned {points_earned} points! Breakdown: {points_breakdown}")
+            
+            # Update user stats in database
+            async with async_session_maker() as db:
+                # Refresh user from database
+                result = await db.execute(
+                    select(User).where(User.id == current_user.id)
+                )
+                user = result.scalar_one_or_none()
+                
+                if user:
+                    # Get unlocked achievements before update (for checking new ones)
+                    old_achievements = []
+                    for achievement in ACHIEVEMENTS:
+                        if achievement.requirement_type == "games_played" and user.total_games >= achievement.requirement_value:
+                            old_achievements.append(achievement.id)
+                        elif achievement.requirement_type == "wins" and user.total_wins >= achievement.requirement_value:
+                            old_achievements.append(achievement.id)
+                        elif achievement.requirement_type == "streak" and user.current_streak >= achievement.requirement_value:
+                            old_achievements.append(achievement.id)
+                    
+                    # Update streak
+                    new_current_streak, new_longest_streak = update_streak(
+                        user.last_played_at,
+                        user.current_streak,
+                        user.longest_streak
+                    )
+                    
+                    # Update user stats
+                    user.total_games += 1
+                    if user_won:
+                        user.total_wins += 1
+                    user.total_points += points_earned
+                    user.current_streak = new_current_streak
+                    user.longest_streak = new_longest_streak
+                    user.last_played_at = datetime.utcnow()
+                    
+                    # Recalculate level
+                    user.level = calculate_level(user.total_points)
+                    
+                    await db.commit()
+                    
+                    # Check for new achievements
+                    new_achievements = check_achievements(
+                        user.total_games,
+                        user.total_wins,
+                        user.current_streak,
+                        user.total_points,
+                        old_achievements
+                    )
+                    
+                    # Add gamification data to payload for frontend
+                    payload['gamification'] = {
+                        'points_earned': points_earned,
+                        'points_breakdown': points_breakdown,
+                        'new_achievements': [
+                            {
+                                'id': ach.id,
+                                'name': ach.name,
+                                'description': ach.description,
+                                'icon': ach.icon,
+                                'points': ach.points
+                            }
+                            for ach in new_achievements
+                        ],
+                        'user_stats': {
+                            'level': user.level,
+                            'total_points': user.total_points,
+                            'total_games': user.total_games,
+                            'total_wins': user.total_wins,
+                            'current_streak': user.current_streak,
+                            'longest_streak': user.longest_streak
+                        },
+                        'won_game': user_won
+                    }
+                    
+                    if new_achievements:
+                        print(f"🏆 User unlocked {len(new_achievements)} new achievements!")
+                        for ach in new_achievements:
+                            print(f"   - {ach.icon} {ach.name}: {ach.description}")
+                
+        except Exception as e:
+            print(f"⚠️  Error updating gamification stats: {e}")
+            import traceback
+            traceback.print_exc()
+            # Don't fail the game completion if gamification fails
     
     return payload
 
@@ -996,9 +1187,34 @@ async def websocket_endpoint(websocket: WebSocket, room_code: str, player_id: st
         websocket: WebSocket connection
         room_code: Unique room identifier
         player_id: Player identifier (should be "You" for human)
+    
+    Query params:
+        token: Optional JWT token for authenticated users
     """
     await websocket.accept()
     print(f"🔌 WebSocket accepted for player {player_id} in room {room_code}")
+    
+    # Try to get authenticated user from token query param
+    user_id = None
+    try:
+        token = websocket.query_params.get('token')
+        if token:
+            from .auth import get_user_by_uuid
+            from .database import async_session_maker
+            from jose import jwt, JWTError
+            from .auth import JWT_SECRET_KEY, JWT_ALGORITHM
+            
+            payload = jwt.decode(token, JWT_SECRET_KEY, algorithms=[JWT_ALGORITHM])
+            user_uuid = payload.get("sub")
+            if user_uuid:
+                async with async_session_maker() as db:
+                    user = await get_user_by_uuid(db, user_uuid)
+                    if user:
+                        user_id = str(user.id)
+                        print(f"👤 Authenticated user {user.user_id} as {player_id}")
+    except Exception as e:
+        print(f"⚠️ Could not authenticate WebSocket user: {e}")
+        # Continue without authentication - game works for non-logged-in users too
     
     # Initialize room if needed
     if room_code not in rooms:
@@ -1025,6 +1241,7 @@ async def websocket_endpoint(websocket: WebSocket, room_code: str, player_id: st
             'room_status': 'in_progress',  # WebSocket rooms start immediately
             'created_at': time.time(),
             'creator_id': player_id,
+            'player_user_map': {},  # Maps player_id -> user_id (for authenticated users)
             'current_humans': [],
             'available_numbers': available_numbers
         }
@@ -1037,6 +1254,11 @@ async def websocket_endpoint(websocket: WebSocket, room_code: str, player_id: st
     # Add connection BEFORE broadcasting
     rooms[room_code]['connections'][player_id] = websocket
     print(f"✅ Connection added. Total connections: {len(rooms[room_code]['connections'])}")
+    
+    # Store player-user mapping if user is authenticated
+    if user_id:
+        rooms[room_code]['player_user_map'][player_id] = user_id
+        print(f"👤 Stored mapping: {player_id} -> user {user_id}")
     
     # If this was a new room, initialize and broadcast
     state = rooms[room_code]['state']
@@ -1315,6 +1537,111 @@ async def get_current_user_info(
     )
 
 
+@app.get("/api/users/stats")
+async def get_user_stats(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_async_session)
+):
+    """
+    Get detailed user statistics and gamification data.
+    
+    Args:
+        current_user: Current authenticated user
+        db: Database session
+    
+    Returns:
+        User statistics including points, level, achievements, etc.
+    """
+    from .gamification import (
+        calculate_level, points_for_next_level, 
+        get_next_close_achievements, get_motivational_message,
+        ACHIEVEMENTS
+    )
+    
+    # Get user's sessions for win calculation
+    result = await db.execute(
+        select(DBSession).where(DBSession.user_id == current_user.id)
+    )
+    sessions = result.scalars().all()
+    
+    # Calculate win rate
+    win_rate = (current_user.total_wins / current_user.total_games * 100) if current_user.total_games > 0 else 0
+    
+    # Calculate level and progress
+    current_level = current_user.level
+    points_for_level_up = points_for_next_level(current_level)
+    current_level_start = int(100 * (current_level ** 1.5)) if current_level > 1 else 0
+    progress_in_level = current_user.total_points - current_level_start
+    progress_needed = points_for_level_up - current_level_start
+    level_progress_percentage = (progress_in_level / progress_needed * 100) if progress_needed > 0 else 0
+    
+    # Get next close achievements (assuming we track unlocked achievements separately - for now, calculate based on current stats)
+    # In a full implementation, you'd store unlocked achievements in a separate table
+    unlocked_ids = []
+    for achievement in ACHIEVEMENTS:
+        if achievement.requirement_type == "games_played" and current_user.total_games >= achievement.requirement_value:
+            unlocked_ids.append(achievement.id)
+        elif achievement.requirement_type == "wins" and current_user.total_wins >= achievement.requirement_value:
+            unlocked_ids.append(achievement.id)
+        elif achievement.requirement_type == "streak" and current_user.current_streak >= achievement.requirement_value:
+            unlocked_ids.append(achievement.id)
+    
+    next_achievements = get_next_close_achievements(
+        current_user.total_games,
+        current_user.total_wins,
+        current_user.current_streak,
+        unlocked_ids,
+        limit=3
+    )
+    
+    motivational_msg = get_motivational_message(
+        current_user.total_games,
+        current_user.total_wins,
+        current_user.current_streak,
+        [ach for ach, _ in next_achievements]
+    )
+    
+    return {
+        "user_id": current_user.user_id,
+        "level": current_level,
+        "total_points": current_user.total_points,
+        "points_for_next_level": points_for_level_up,
+        "level_progress": {
+            "current": progress_in_level,
+            "needed": progress_needed,
+            "percentage": round(level_progress_percentage, 1)
+        },
+        "games": {
+            "total": current_user.total_games,
+            "wins": current_user.total_wins,
+            "losses": current_user.total_games - current_user.total_wins,
+            "win_rate": round(win_rate, 1)
+        },
+        "streak": {
+            "current": current_user.current_streak,
+            "longest": current_user.longest_streak
+        },
+        "achievements": {
+            "unlocked_count": len(unlocked_ids),
+            "total_count": len(ACHIEVEMENTS),
+            "unlocked_ids": unlocked_ids
+        },
+        "next_achievements": [
+            {
+                "id": ach.id,
+                "name": ach.name,
+                "description": ach.description,
+                "icon": ach.icon,
+                "points": ach.points,
+                "progress_needed": progress
+            }
+            for ach, progress in next_achievements
+        ],
+        "motivational_message": motivational_msg,
+        "last_played_at": current_user.last_played_at.isoformat() if current_user.last_played_at else None
+    }
+
+
 # ============================================================================
 # Session Management API Endpoints
 # ============================================================================
@@ -1424,6 +1751,41 @@ async def get_session_detail(
         print(f"Error loading stats file: {e}")
         stats_data = {}
     
+    # Get player-user mappings
+    from .database import SessionPlayer
+    players_result = await db.execute(
+        select(SessionPlayer).where(SessionPlayer.session_id == session_uuid)
+    )
+    session_players = players_result.scalars().all()
+    
+    # Build player mappings with user info
+    player_mappings = []
+    current_user_player_id = None
+    
+    for sp in session_players:
+        mapping = {
+            "player_id": sp.player_id,
+            "role": sp.role,
+            "user_id": None,
+            "user_name": None
+        }
+        
+        if sp.user_id:
+            # Get user info
+            user_result = await db.execute(
+                select(User).where(User.id == sp.user_id)
+            )
+            player_user = user_result.scalar_one_or_none()
+            if player_user:
+                mapping["user_id"] = str(player_user.id)
+                mapping["user_name"] = player_user.user_id
+                
+                # Track which player the current user was
+                if player_user.id == current_user.id:
+                    current_user_player_id = sp.player_id
+        
+        player_mappings.append(mapping)
+    
     return {
         "id": str(session.id),
         "room_code": session.room_code,
@@ -1437,7 +1799,9 @@ async def get_session_detail(
         "payment_status": session.payment_status.value,
         "payment_amount": float(session.payment_amount) if session.payment_amount else None,
         "claimed_at": session.claimed_at.isoformat() if session.claimed_at else None,
-        "stats": stats_data
+        "stats": stats_data,
+        "player_mappings": player_mappings,
+        "current_user_player_id": current_user_player_id  # Which player was the current user
     }
 
 
@@ -1630,6 +1994,158 @@ async def update_payment_status(
     }
 
 
+@app.get("/api/admin/analytics")
+async def admin_analytics(
+    time_range: str = "all",  # "24h", "7d", "30d", "all"
+    admin_user: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_async_session)
+):
+    """
+    Get analytics and token usage statistics for admin dashboard.
+    
+    Args:
+        time_range: Time range filter ("24h", "7d", "30d", "all")
+        admin_user: Current admin user
+        db: Database session
+    
+    Returns:
+        Analytics data with token usage, costs, and session statistics
+    """
+    from sqlalchemy import func
+    from datetime import datetime, timedelta
+    from .database import AIAgentUsage
+    from .pricing import format_cost, format_tokens
+    from decimal import Decimal
+    
+    # Calculate time filter
+    now = datetime.utcnow()
+    if time_range == "24h":
+        time_filter = now - timedelta(hours=24)
+    elif time_range == "7d":
+        time_filter = now - timedelta(days=7)
+    elif time_range == "30d":
+        time_filter = now - timedelta(days=30)
+    else:
+        time_filter = None
+    
+    # Build base query with time filter
+    base_query = select(DBSession)
+    if time_filter:
+        base_query = base_query.where(DBSession.completed_at >= time_filter)
+    
+    # Get all sessions for the time range
+    result = await db.execute(base_query)
+    sessions = result.scalars().all()
+    
+    # Calculate aggregate statistics
+    total_sessions = len(sessions)
+    total_input_tokens = sum(s.total_input_tokens for s in sessions)
+    total_output_tokens = sum(s.total_output_tokens for s in sessions)
+    total_cost = sum(s.total_cost for s in sessions)
+    
+    # Cost per session statistics
+    session_costs = [float(s.total_cost) for s in sessions if s.total_cost > 0]
+    avg_cost_per_session = sum(session_costs) / len(session_costs) if session_costs else 0
+    median_cost_per_session = sorted(session_costs)[len(session_costs) // 2] if session_costs else 0
+    min_cost = min(session_costs) if session_costs else 0
+    max_cost = max(session_costs) if session_costs else 0
+    
+    # Token usage by model
+    model_stats = {}
+    for session in sessions:
+        model = session.model_name or "unknown"
+        if model not in model_stats:
+            model_stats[model] = {
+                "sessions": 0,
+                "input_tokens": 0,
+                "output_tokens": 0,
+                "cost": Decimal(0)
+            }
+        model_stats[model]["sessions"] += 1
+        model_stats[model]["input_tokens"] += session.total_input_tokens
+        model_stats[model]["output_tokens"] += session.total_output_tokens
+        model_stats[model]["cost"] += session.total_cost
+    
+    # Cost over time (hourly for 24h, daily for longer periods)
+    if time_range == "24h":
+        # Hourly breakdown
+        time_series = {}
+        for session in sessions:
+            hour_key = session.completed_at.strftime("%Y-%m-%d %H:00")
+            if hour_key not in time_series:
+                time_series[hour_key] = {"cost": Decimal(0), "sessions": 0, "tokens": 0}
+            time_series[hour_key]["cost"] += session.total_cost
+            time_series[hour_key]["sessions"] += 1
+            time_series[hour_key]["tokens"] += session.total_input_tokens + session.total_output_tokens
+    else:
+        # Daily breakdown
+        time_series = {}
+        for session in sessions:
+            day_key = session.completed_at.strftime("%Y-%m-%d")
+            if day_key not in time_series:
+                time_series[day_key] = {"cost": Decimal(0), "sessions": 0, "tokens": 0}
+            time_series[day_key]["cost"] += session.total_cost
+            time_series[day_key]["sessions"] += 1
+            time_series[day_key]["tokens"] += session.total_input_tokens + session.total_output_tokens
+    
+    # Convert time series to list format
+    time_series_list = [
+        {
+            "timestamp": key,
+            "cost": float(value["cost"]),
+            "sessions": value["sessions"],
+            "tokens": value["tokens"]
+        }
+        for key, value in sorted(time_series.items())
+    ]
+    
+    # Recent high-cost sessions
+    high_cost_sessions = sorted(sessions, key=lambda s: s.total_cost, reverse=True)[:10]
+    high_cost_list = [
+        {
+            "session_id": str(s.id),
+            "room_code": s.room_code,
+            "cost": float(s.total_cost),
+            "input_tokens": s.total_input_tokens,
+            "output_tokens": s.total_output_tokens,
+            "model": s.model_name,
+            "completed_at": s.completed_at.isoformat()
+        }
+        for s in high_cost_sessions
+    ]
+    
+    return {
+        "time_range": time_range,
+        "summary": {
+            "total_sessions": total_sessions,
+            "total_input_tokens": total_input_tokens,
+            "total_output_tokens": total_output_tokens,
+            "total_tokens": total_input_tokens + total_output_tokens,
+            "total_cost": float(total_cost),
+            "avg_cost_per_session": avg_cost_per_session,
+            "median_cost_per_session": median_cost_per_session,
+            "min_cost": min_cost,
+            "max_cost": max_cost,
+            # Formatted strings for display
+            "total_cost_formatted": format_cost(total_cost),
+            "total_tokens_formatted": format_tokens(total_input_tokens + total_output_tokens)
+        },
+        "by_model": {
+            model: {
+                "sessions": stats["sessions"],
+                "input_tokens": stats["input_tokens"],
+                "output_tokens": stats["output_tokens"],
+                "total_tokens": stats["input_tokens"] + stats["output_tokens"],
+                "cost": float(stats["cost"]),
+                "cost_formatted": format_cost(stats["cost"])
+            }
+            for model, stats in model_stats.items()
+        },
+        "time_series": time_series_list,
+        "high_cost_sessions": high_cost_list
+    }
+
+
 # ============================================================================
 # Matching Room System API Endpoints
 # ============================================================================
@@ -1711,6 +2227,7 @@ async def create_room(room_data: dict):
         'room_status': 'waiting',
         'created_at': time.time(),
         'creator_id': '',  # No longer used, auto-assigned on join
+        'player_user_map': {},  # Maps player_id -> user_id (for authenticated users)
         'current_humans': [],
         'available_numbers': available_numbers,  # Numbers reserved for human players
         'language': language,  # Store room language
@@ -2008,6 +2525,7 @@ async def join_room(room_code: str, player_data: dict):
             'room_status': 'waiting',
             'created_at': time.time(),
             'creator_id': player_id,
+            'player_user_map': {},  # Maps player_id -> user_id (for authenticated users)
             'current_humans': [],
             'available_numbers': []  # All assigned for legacy rooms
         }

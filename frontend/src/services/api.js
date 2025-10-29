@@ -166,7 +166,12 @@ export const roomAPI = {
 export const getWebSocketURL = (roomCode, playerId) => {
   const wsProtocol = BACKEND_URL.startsWith('https') ? 'wss' : 'ws';
   const baseURL = BACKEND_URL.replace(/^https?:\/\//, '');
-  return `${wsProtocol}://${baseURL}/ws/${roomCode}/${playerId}`;
+  
+  // Include auth token if user is logged in
+  const token = localStorage.getItem('token');
+  const queryParam = token ? `?token=${token}` : '';
+  
+  return `${wsProtocol}://${baseURL}/ws/${roomCode}/${playerId}${queryParam}`;
 };
 
 export default api;

@@ -146,6 +146,53 @@ const SessionDetailPage = () => {
           </div>
         </div>
 
+        {/* Player Identification Card */}
+        {session.current_user_player_id && (
+          <div className="bg-blue-50 border-2 border-blue-200 rounded-lg p-6 mb-8">
+            <div className="flex items-center gap-3">
+              <div className="bg-blue-600 text-white rounded-full w-12 h-12 flex items-center justify-center font-bold text-lg">
+                👤
+              </div>
+              <div>
+                <h2 className="text-xl font-bold text-blue-900">You were {session.current_user_player_id}</h2>
+                <p className="text-sm text-blue-700">This was your player identity in this session</p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Player Mappings Card (Admin only) */}
+        {session.player_mappings && session.player_mappings.some(p => p.user_name) && (
+          <div className="bg-white rounded-lg shadow p-6 mb-8">
+            <h2 className="text-lg font-semibold text-gray-900 mb-4">Player Identities</h2>
+            <div className="space-y-2">
+              {session.player_mappings.map((mapping) => (
+                <div key={mapping.player_id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                  <div className="flex items-center gap-3">
+                    <span className={`px-3 py-1 rounded-full text-sm font-medium ${
+                      mapping.role === 'human' 
+                        ? 'bg-green-100 text-green-800'
+                        : 'bg-purple-100 text-purple-800'
+                    }`}>
+                      {mapping.role === 'human' ? '👤 Human' : '🤖 AI'}
+                    </span>
+                    <span className="font-semibold text-gray-900">{mapping.player_id}</span>
+                  </div>
+                  <div>
+                    {mapping.user_name ? (
+                      <span className="text-sm text-gray-700">
+                        User: <span className="font-mono font-medium">{mapping.user_name}</span>
+                      </span>
+                    ) : (
+                      <span className="text-sm text-gray-500 italic">Not logged in</span>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* Completion Key Card */}
         <div className="bg-white rounded-lg shadow p-6 mb-8">
           <h2 className="text-lg font-semibold text-gray-900 mb-3">Completion Key</h2>

@@ -17,6 +17,7 @@ import LoginPage from './pages/LoginPage';
 import DashboardPage from './pages/DashboardPage';
 import SessionDetailPage from './pages/SessionDetailPage';
 import AdminPage from './pages/AdminPage';
+import AdminAnalyticsPage from './pages/AdminAnalyticsPage';
 
 function App() {
   return (
@@ -57,6 +58,14 @@ function App() {
                 element={
                   <ProtectedRoute requireAdmin={true}>
                     <AdminPage />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/admin/analytics"
+                element={
+                  <ProtectedRoute requireAdmin={true}>
+                    <AdminAnalyticsPage />
                   </ProtectedRoute>
                 }
               />

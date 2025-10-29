@@ -77,6 +77,11 @@ class GameState(TypedDict):
     
     # WebSocket broadcast queue (messages to send to frontend)
     broadcast_queue: Annotated[List[Dict], operator.add]
+    
+    # Token usage tracking
+    total_input_tokens: int  # Total input tokens across all AI interactions
+    total_output_tokens: int  # Total output tokens across all AI interactions
+    agent_token_usage: Dict[str, Dict[str, int]]  # {agent_id: {input: int, output: int, calls: int}}
 
 
 def create_initial_state(room_code: str, num_ai_players: int, ai_player_ids: list = None, language: str = "english") -> GameState:
@@ -157,6 +162,9 @@ def create_initial_state(room_code: str, num_ai_players: int, ai_player_ids: lis
         eliminated_player=None,
         pending_ai_messages=[],  # Start empty; active decision-making will populate this
         pending_ai_votes=[],
-        broadcast_queue=[]
+        broadcast_queue=[],
+        total_input_tokens=0,
+        total_output_tokens=0,
+        agent_token_usage={}
     )
 

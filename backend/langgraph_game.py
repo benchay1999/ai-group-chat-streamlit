@@ -36,7 +36,50 @@ class GameGraph:
             model=AI_MODEL_NAME,
             temperature=AI_TEMPERATURE
         )
+        self.model_name = AI_MODEL_NAME  # Store for token tracking
         self.graph = self._build_graph()
+    
+    def _track_tokens(self, state: GameState, ai_id: str, response) -> GameState:
+        """
+        Track token usage from an LLM response and update state.
+        
+        Args:
+            state: Current game state
+            ai_id: AI agent ID
+            response: LLM response object with usage_metadata
+            
+        Returns:
+            Updated state with token tracking
+        """
+        try:
+            # Extract token usage from response
+            # LangChain ChatOpenAI returns usage_metadata
+            usage = getattr(response, 'usage_metadata', None) or getattr(response, 'response_metadata', {}).get('token_usage', {})
+            
+            if usage:
+                input_tokens = usage.get('input_tokens', 0) or usage.get('prompt_tokens', 0)
+                output_tokens = usage.get('output_tokens', 0) or usage.get('completion_tokens', 0)
+                
+                # Update totals
+                state['total_input_tokens'] = state.get('total_input_tokens', 0) + input_tokens
+                state['total_output_tokens'] = state.get('total_output_tokens', 0) + output_tokens
+                
+                # Update per-agent tracking
+                if 'agent_token_usage' not in state:
+                    state['agent_token_usage'] = {}
+                
+                if ai_id not in state['agent_token_usage']:
+                    state['agent_token_usage'][ai_id] = {'input': 0, 'output': 0, 'calls': 0}
+                
+                state['agent_token_usage'][ai_id]['input'] += input_tokens
+                state['agent_token_usage'][ai_id]['output'] += output_tokens
+                state['agent_token_usage'][ai_id]['calls'] += 1
+                
+                print(f"📊 Token usage for {ai_id}: +{input_tokens} input, +{output_tokens} output")
+        except Exception as e:
+            print(f"⚠️ Error tracking tokens for {ai_id}: {e}")
+        
+        return state
     
     def _build_graph(self) -> StateGraph:
         """
@@ -178,7 +221,7 @@ class GameGraph:
             time.sleep(MESSAGE_COOLDOWN - (time.time() - state["last_message_time"]))
         
         # Generate AI message
-        message = self._generate_ai_message(state, ai_id)
+        message, state = self._generate_ai_message(state, ai_id)
         
         # Create chat message
         chat_msg: ChatMessage = {
@@ -194,7 +237,10 @@ class GameGraph:
             "last_message_time": time.time(),
             "ai_message": message,
             "ai_sender": ai_id,
-            "typing_delay": random.uniform(1, 2)  # Pass delay to async handler
+            "typing_delay": random.uniform(1, 2),  # Pass delay to async handler
+            "total_input_tokens": state.get("total_input_tokens", 0),
+            "total_output_tokens": state.get("total_output_tokens", 0),
+            "agent_token_usage": state.get("agent_token_usage", {})
         }
     
     def voting_phase_node(self, state: GameState) -> GameState:
@@ -241,7 +287,7 @@ class GameGraph:
         time.sleep(random.uniform(0.5, 1.2))
         
         # Generate AI vote
-        voted_for = self._generate_ai_vote(state, ai_id)
+        voted_for, state = self._generate_ai_vote(state, ai_id)
         
         # Update votes
         new_votes = state["votes"].copy()
@@ -254,7 +300,10 @@ class GameGraph:
         return {
             "votes": new_votes,
             "pending_ai_votes": remaining_voters,
-            "broadcast_queue": broadcasts
+            "broadcast_queue": broadcasts,
+            "total_input_tokens": state.get("total_input_tokens", 0),
+            "total_output_tokens": state.get("total_output_tokens", 0),
+            "agent_token_usage": state.get("agent_token_usage", {})
         }
     
     def elimination_node(self, state: GameState) -> GameState:
@@ -566,6 +615,9 @@ class GameGraph:
         
         try:
             response = self.llm.invoke(messages)
+            # Track token usage
+            state = self._track_tokens(state, ai_id, response)
+            
             decision_data = json.loads(response.content)
             should_respond = decision_data.get("should_respond", False)
             reason = decision_data.get("reason", "No reason provided")
@@ -576,10 +628,13 @@ class GameGraph:
             # Fallback: respond with 30% probability
             return random.random() < 0.6
     
-    def _generate_ai_message(self, state: GameState, ai_id: str) -> str:
+    def _generate_ai_message(self, state: GameState, ai_id: str) -> tuple[str, GameState]:
         """
         Generate a chat message for an AI agent using LangChain.
         Uses visible player names exactly as they appear in the chat (e.g., "You", "Player 1").
+        
+        Returns:
+            Tuple of (message_text, updated_state_with_tokens)
         """
         personality = state["ai_personalities"][ai_id]
         language = state.get("language", "english")
@@ -637,15 +692,20 @@ class GameGraph:
         
         try:
             response = self.llm.invoke(messages)
-            return response.content
+            # Track token usage
+            state = self._track_tokens(state, ai_id, response)
+            return response.content, state
         except Exception as e:
             print(f"Error generating AI message: {e}")
-            return "hmm" if language == "english" else "음"
+            return ("hmm" if language == "english" else "음"), state
 
-    def _generate_ai_vote(self, state: GameState, ai_id: str) -> str:
+    def _generate_ai_vote(self, state: GameState, ai_id: str) -> tuple[str, GameState]:
         """
         Generate a vote for an AI agent using LangChain.
         Returns the REAL player id (e.g., 'You' or 'Player 2').
+        
+        Returns:
+            Tuple of (voted_player_id, updated_state_with_tokens)
         """
         language = state.get("language", "english")
         
@@ -688,18 +748,21 @@ class GameGraph:
             try:
                 messages = [HumanMessage(content=prompt)]
                 response = self.llm.invoke(messages)
+                # Track token usage
+                state = self._track_tokens(state, ai_id, response)
+                
                 vote_data = json.loads(response.content)
                 voted_visible = vote_data.get("vote")
                 # Map back to real id
                 if voted_visible in eligible_targets_visible:
                     index = eligible_targets_visible.index(voted_visible)
-                    return eligible_targets[index]
+                    return eligible_targets[index], state
             except (json.JSONDecodeError, KeyError, ValueError) as e:
                 print(f"Vote generation attempt {attempt + 1} failed: {e}")
                 error_msg = "\nPrevious response invalid. Output ONLY valid JSON with 'vote' exactly from the allowed names." if language == "english" else "\n이전 응답이 유효하지 않습니다. 허용된 이름 중에서 'vote'가 포함된 유효한 JSON만 출력하세요."
                 prompt += error_msg
         
-        return random.choice(eligible_targets)
+        return random.choice(eligible_targets), state
 
 
 # Global graph instance
