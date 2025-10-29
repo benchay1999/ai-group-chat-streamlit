@@ -74,3 +74,15 @@ MESSAGE_COOLDOWN = 10
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+
+# Database Configuration
+DATABASE_URL = os.getenv(
+    'DATABASE_URL',
+    'postgresql+asyncpg://postgres:postgres@localhost:5432/group_chat_db'
+)
+
+# JWT Configuration
+JWT_SECRET_KEY = os.getenv('JWT_SECRET_KEY', 'your-secret-key-change-this-in-production')
+JWT_COMPLETION_SECRET = os.getenv('JWT_COMPLETION_SECRET', 'completion-secret-key-change-this')
+JWT_ALGORITHM = 'HS256'
+ACCESS_TOKEN_EXPIRE_HOURS = 24

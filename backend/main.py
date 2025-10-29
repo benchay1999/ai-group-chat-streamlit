@@ -7,12 +7,16 @@ import asyncio
 import random
 import re
 import time
-from typing import Dict, List
+from typing import Dict, List, Optional
 from concurrent.futures import ThreadPoolExecutor
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Depends, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
 import os
 from dotenv import load_dotenv
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select, update, desc
+import uuid as uuid_lib
 
 from .langgraph_game import (
     game_graph, 
@@ -22,13 +26,24 @@ from .langgraph_game import (
 )
 from .langgraph_state import GameState, Phase
 from .config import NUM_AI_PLAYERS, DISCUSSION_TIME, VOTING_TIME
+from .database import (
+    init_db, close_db, get_async_session, 
+    User, Session as DBSession, UserRole, PaymentStatus
+)
+from .auth import (
+    hash_password, authenticate_user, create_access_token,
+    get_current_user, get_current_user_optional, require_admin
+)
+from .completion_keys import (
+    generate_completion_key, decode_completion_key, extract_session_info
+)
 import json
 import os
 import time as _time
 
 load_dotenv()
 
-app = FastAPI()
+app = FastAPI(title="AI Group Chat API", version="2.0.0")
 
 app.add_middleware(
     CORSMiddleware,
@@ -37,6 +52,72 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+# ============================================================================
+# Application Lifecycle Events
+# ============================================================================
+
+@app.on_event("startup")
+async def startup_event():
+    """Initialize database on application startup."""
+    await init_db()
+    print("🚀 Application started successfully")
+
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    """Close database connections on application shutdown."""
+    await close_db()
+    print("👋 Application shut down gracefully")
+
+
+# ============================================================================
+# Pydantic Models for API Requests/Responses
+# ============================================================================
+
+class RegisterRequest(BaseModel):
+    user_id: str
+    password: str
+    
+class LoginRequest(BaseModel):
+    user_id: str
+    password: str
+
+class LoginResponse(BaseModel):
+    access_token: str
+    token_type: str
+    user_id: str
+    role: str
+
+class UserResponse(BaseModel):
+    id: str
+    user_id: str
+    role: str
+    created_at: str
+
+class ClaimKeyRequest(BaseModel):
+    completion_key: str
+
+class SessionResponse(BaseModel):
+    id: str
+    room_code: str
+    completion_key: str
+    language: str
+    total_players: int
+    num_human_players: int
+    discussion_duration: int
+    voting_duration: int
+    completed_at: str
+    payment_status: str
+    payment_amount: Optional[float]
+    claimed_at: Optional[str]
+    stats_file_path: str
+
+class UpdatePaymentRequest(BaseModel):
+    payment_status: str
+    payment_amount: Optional[float] = None
+
 
 # Thread pool for running blocking AI operations without blocking the event loop
 executor = ThreadPoolExecutor(max_workers=10)
@@ -798,16 +879,29 @@ async def process_ai_messages(room_code: str):
         await asyncio.gather(*tasks, return_exceptions=True)
 
 
-async def save_session_stats(room_code: str, state: dict) -> dict:
+async def save_session_stats(room_code: str, state: dict, current_user: Optional[User] = None) -> dict:
     """
-    Save session statistics to group-chat-stats directory.
+    Save session statistics to both group-chat-stats directory and PostgreSQL database.
+    Generates a completion key for Mechanical Turk compensation tracking.
+    
+    Args:
+        room_code: Room identifier
+        state: Game state dictionary
+        current_user: Optional authenticated user (automatically associated with session)
+    
+    Returns:
+        Dictionary with session stats including completion_key
     """
     root = os.path.dirname(os.path.dirname(__file__))
     out_dir = os.path.join(root, 'group-chat-stats')
     os.makedirs(out_dir, exist_ok=True)
+    
+    # Calculate vote counts
     vote_counts: Dict[str, int] = {}
     for _, target in state.get('votes', {}).items():
         vote_counts[target] = vote_counts.get(target, 0) + 1
+    
+    # Prepare stats payload for JSON file
     payload = {
         'room_code': room_code,
         'topic': state.get('topic'),
@@ -821,11 +915,67 @@ async def save_session_stats(room_code: str, state: dict) -> dict:
         'suspect_role': state.get('suspect_role'),
         'winner': state.get('winner')
     }
+    
+    # Save to JSON file
     fname = f"{room_code}-{int(_time.time())}.json"
     path = os.path.join(out_dir, fname)
     with open(path, 'w') as f:
         json.dump(payload, f, ensure_ascii=False, indent=2)
     rooms[room_code]['last_stats_path'] = path
+    
+    # Extract session metadata
+    room_data = rooms.get(room_code, {})
+    language = state.get('language', 'english')
+    total_players = room_data.get('total_players', len(state.get('players', [])))
+    num_humans = len([p for p in state.get('players', []) if p.get('role') == 'human'])
+    discussion_duration = room_data.get('discussion_duration', DISCUSSION_TIME)
+    voting_duration = room_data.get('voting_duration', VOTING_TIME)
+    completed_at = payload['ended_at']
+    
+    # Generate session UUID
+    session_id = uuid_lib.uuid4()
+    
+    # Generate completion key
+    completion_key = generate_completion_key(
+        session_id=str(session_id),
+        room_code=room_code,
+        language=language,
+        total_players=total_players,
+        num_humans=num_humans,
+        discussion_duration=discussion_duration,
+        voting_duration=voting_duration,
+        completed_at=completed_at
+    )
+    
+    # Save to PostgreSQL
+    try:
+        from .database import async_session_maker
+        async with async_session_maker() as db:
+            db_session = DBSession(
+                id=session_id,
+                room_code=room_code,
+                completion_key=completion_key,
+                user_id=current_user.id if current_user else None,
+                language=language,
+                total_players=total_players,
+                num_human_players=num_humans,
+                discussion_duration=discussion_duration,
+                voting_duration=voting_duration,
+                payment_status=PaymentStatus.PENDING,
+                stats_file_path=path,
+                claimed_at=_time.time() if current_user else None
+            )
+            db.add(db_session)
+            await db.commit()
+            print(f"✅ Session saved to database with ID: {session_id}")
+    except Exception as e:
+        print(f"⚠️  Error saving session to database: {e}")
+        # Don't fail the game completion if database save fails
+    
+    # Add completion key to payload
+    payload['completion_key'] = completion_key
+    payload['session_id'] = str(session_id)
+    
     return payload
 
 
@@ -1061,6 +1211,394 @@ async def get_config():
 async def health_check():
     """Health check endpoint."""
     return {"status": "healthy"}
+
+
+# ============================================================================
+# Authentication API Endpoints
+# ============================================================================
+
+@app.post("/api/auth/register")
+async def register(
+    request: RegisterRequest,
+    db: AsyncSession = Depends(get_async_session)
+):
+    """
+    Register a new user.
+    
+    Args:
+        request: User registration data (user_id, password)
+        db: Database session
+    
+    Returns:
+        Success message
+    """
+    # Check if user already exists
+    existing_user = await db.execute(
+        select(User).where(User.user_id == request.user_id)
+    )
+    if existing_user.scalar_one_or_none():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="User ID already exists"
+        )
+    
+    # Create new user
+    hashed_password = hash_password(request.password)
+    new_user = User(
+        user_id=request.user_id,
+        password_hash=hashed_password,
+        role=UserRole.USER
+    )
+    db.add(new_user)
+    await db.commit()
+    await db.refresh(new_user)
+    
+    return {
+        "success": True,
+        "message": "User registered successfully",
+        "user_id": new_user.user_id
+    }
+
+
+@app.post("/api/auth/login", response_model=LoginResponse)
+async def login(
+    request: LoginRequest,
+    db: AsyncSession = Depends(get_async_session)
+):
+    """
+    Authenticate user and return JWT token.
+    
+    Args:
+        request: Login credentials (user_id, password)
+        db: Database session
+    
+    Returns:
+        JWT access token and user info
+    """
+    user = await authenticate_user(db, request.user_id, request.password)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect user ID or password",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    
+    # Create access token
+    access_token = create_access_token(data={"sub": str(user.id)})
+    
+    return LoginResponse(
+        access_token=access_token,
+        token_type="bearer",
+        user_id=user.user_id,
+        role=user.role.value
+    )
+
+
+@app.get("/api/auth/me", response_model=UserResponse)
+async def get_current_user_info(
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Get current authenticated user information.
+    
+    Args:
+        current_user: Current authenticated user
+    
+    Returns:
+        User information
+    """
+    return UserResponse(
+        id=str(current_user.id),
+        user_id=current_user.user_id,
+        role=current_user.role.value,
+        created_at=current_user.created_at.isoformat()
+    )
+
+
+# ============================================================================
+# Session Management API Endpoints
+# ============================================================================
+
+@app.get("/api/sessions")
+async def list_sessions(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_async_session)
+):
+    """
+    List sessions for current user. Admins see all sessions.
+    
+    Args:
+        current_user: Current authenticated user
+        db: Database session
+    
+    Returns:
+        List of sessions
+    """
+    if current_user.role == UserRole.ADMIN:
+        # Admins see all sessions
+        result = await db.execute(
+            select(DBSession).order_by(desc(DBSession.completed_at))
+        )
+    else:
+        # Regular users see only their sessions
+        result = await db.execute(
+            select(DBSession)
+            .where(DBSession.user_id == current_user.id)
+            .order_by(desc(DBSession.completed_at))
+        )
+    
+    sessions = result.scalars().all()
+    
+    return {
+        "sessions": [
+            {
+                "id": str(s.id),
+                "room_code": s.room_code,
+                "completion_key": s.completion_key,
+                "language": s.language,
+                "total_players": s.total_players,
+                "num_human_players": s.num_human_players,
+                "discussion_duration": s.discussion_duration,
+                "voting_duration": s.voting_duration,
+                "completed_at": s.completed_at.isoformat(),
+                "payment_status": s.payment_status.value,
+                "payment_amount": float(s.payment_amount) if s.payment_amount else None,
+                "claimed_at": s.claimed_at.isoformat() if s.claimed_at else None
+            }
+            for s in sessions
+        ]
+    }
+
+
+@app.get("/api/sessions/{session_id}")
+async def get_session_detail(
+    session_id: str,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_async_session)
+):
+    """
+    Get detailed session information including chat history.
+    
+    Args:
+        session_id: Session UUID
+        current_user: Current authenticated user
+        db: Database session
+    
+    Returns:
+        Detailed session information
+    """
+    # Get session from database
+    result = await db.execute(
+        select(DBSession).where(DBSession.id == session_id)
+    )
+    session = result.scalar_one_or_none()
+    
+    if not session:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Session not found"
+        )
+    
+    # Check authorization
+    if current_user.role != UserRole.ADMIN and session.user_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not authorized to view this session"
+        )
+    
+    # Load chat history from JSON file
+    try:
+        with open(session.stats_file_path, 'r') as f:
+            stats_data = json.load(f)
+    except Exception as e:
+        print(f"Error loading stats file: {e}")
+        stats_data = {}
+    
+    return {
+        "id": str(session.id),
+        "room_code": session.room_code,
+        "completion_key": session.completion_key,
+        "language": session.language,
+        "total_players": session.total_players,
+        "num_human_players": session.num_human_players,
+        "discussion_duration": session.discussion_duration,
+        "voting_duration": session.voting_duration,
+        "completed_at": session.completed_at.isoformat(),
+        "payment_status": session.payment_status.value,
+        "payment_amount": float(session.payment_amount) if session.payment_amount else None,
+        "claimed_at": session.claimed_at.isoformat() if session.claimed_at else None,
+        "stats": stats_data
+    }
+
+
+@app.post("/api/sessions/claim")
+async def claim_completion_key(
+    request: ClaimKeyRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_async_session)
+):
+    """
+    Manually claim a completion key by entering it.
+    Prevents duplicate claims.
+    
+    Args:
+        request: Completion key to claim
+        current_user: Current authenticated user
+        db: Database session
+    
+    Returns:
+        Success message and session info
+    """
+    # Verify completion key
+    try:
+        key_data = decode_completion_key(request.completion_key)
+        session_id = key_data['session_id']
+    except HTTPException as e:
+        raise e
+    
+    # Find session in database
+    result = await db.execute(
+        select(DBSession).where(DBSession.id == session_id)
+    )
+    session = result.scalar_one_or_none()
+    
+    if not session:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Session not found"
+        )
+    
+    # Check if already claimed
+    if session.user_id is not None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="This completion key has already been claimed"
+        )
+    
+    # Claim the session
+    session.user_id = current_user.id
+    session.claimed_at = _time.time()
+    await db.commit()
+    await db.refresh(session)
+    
+    return {
+        "success": True,
+        "message": "Completion key claimed successfully",
+        "session": {
+            "id": str(session.id),
+            "room_code": session.room_code,
+            "language": session.language,
+            "completed_at": session.completed_at.isoformat(),
+            "payment_status": session.payment_status.value
+        }
+    }
+
+
+# ============================================================================
+# Admin API Endpoints
+# ============================================================================
+
+@app.get("/api/admin/dashboard")
+async def admin_dashboard(
+    admin_user: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_async_session)
+):
+    """
+    Get admin dashboard statistics.
+    
+    Args:
+        admin_user: Current admin user
+        db: Database session
+    
+    Returns:
+        Dashboard statistics
+    """
+    # Total sessions
+    total_sessions = await db.execute(select(DBSession))
+    total_count = len(total_sessions.scalars().all())
+    
+    # Pending payment sessions
+    pending_sessions = await db.execute(
+        select(DBSession).where(DBSession.payment_status == PaymentStatus.PENDING)
+    )
+    pending_count = len(pending_sessions.scalars().all())
+    
+    # Paid sessions
+    paid_sessions = await db.execute(
+        select(DBSession).where(DBSession.payment_status == PaymentStatus.PAID)
+    )
+    paid_count = len(paid_sessions.scalars().all())
+    
+    # Unclaimed sessions
+    unclaimed_sessions = await db.execute(
+        select(DBSession).where(DBSession.user_id == None)
+    )
+    unclaimed_count = len(unclaimed_sessions.scalars().all())
+    
+    return {
+        "total_sessions": total_count,
+        "pending_payments": pending_count,
+        "paid_sessions": paid_count,
+        "unclaimed_sessions": unclaimed_count
+    }
+
+
+@app.patch("/api/admin/sessions/{session_id}/payment")
+async def update_payment_status(
+    session_id: str,
+    request: UpdatePaymentRequest,
+    admin_user: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_async_session)
+):
+    """
+    Update payment status for a session.
+    
+    Args:
+        session_id: Session UUID
+        request: Payment update data
+        admin_user: Current admin user
+        db: Database session
+    
+    Returns:
+        Updated session info
+    """
+    # Get session
+    result = await db.execute(
+        select(DBSession).where(DBSession.id == session_id)
+    )
+    session = result.scalar_one_or_none()
+    
+    if not session:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Session not found"
+        )
+    
+    # Validate payment status
+    if request.payment_status not in ['pending', 'paid']:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid payment status. Must be 'pending' or 'paid'"
+        )
+    
+    # Update session
+    session.payment_status = PaymentStatus(request.payment_status)
+    if request.payment_amount is not None:
+        session.payment_amount = request.payment_amount
+    
+    await db.commit()
+    await db.refresh(session)
+    
+    return {
+        "success": True,
+        "message": "Payment status updated successfully",
+        "session": {
+            "id": str(session.id),
+            "room_code": session.room_code,
+            "payment_status": session.payment_status.value,
+            "payment_amount": float(session.payment_amount) if session.payment_amount else None
+        }
+    }
 
 
 # ============================================================================

@@ -8,3 +8,12 @@ langchain
 langchain-openai
 langchain-core
 streamlit>=1.28.0
+sqlalchemy>=2.0.0
+aiosqlite
+python-jose[cryptography]
+passlib[bcrypt]
+alembic
+python-multipart
+# For PostgreSQL (future production use):
+# asyncpg
+# psycopg2-binary
