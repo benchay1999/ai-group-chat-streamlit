@@ -1387,9 +1387,19 @@ async def get_session_detail(
     Returns:
         Detailed session information
     """
+    # Convert session_id to UUID
+    import uuid as uuid_lib
+    try:
+        session_uuid = uuid_lib.UUID(session_id)
+    except (ValueError, AttributeError):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid session ID format"
+        )
+    
     # Get session from database
     result = await db.execute(
-        select(DBSession).where(DBSession.id == session_id)
+        select(DBSession).where(DBSession.id == session_uuid)
     )
     session = result.scalar_one_or_none()
     
@@ -1456,9 +1466,18 @@ async def claim_completion_key(
     except HTTPException as e:
         raise e
     
-    # Find session in database
+    # Find session in database (convert string to UUID)
+    import uuid as uuid_lib
+    try:
+        session_uuid = uuid_lib.UUID(session_id)
+    except (ValueError, AttributeError):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid session ID format"
+        )
+    
     result = await db.execute(
-        select(DBSession).where(DBSession.id == session_id)
+        select(DBSession).where(DBSession.id == session_uuid)
     )
     session = result.scalar_one_or_none()
     
@@ -1562,9 +1581,19 @@ async def update_payment_status(
     Returns:
         Updated session info
     """
+    # Convert session_id to UUID
+    import uuid as uuid_lib
+    try:
+        session_uuid = uuid_lib.UUID(session_id)
+    except (ValueError, AttributeError):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid session ID format"
+        )
+    
     # Get session
     result = await db.execute(
-        select(DBSession).where(DBSession.id == session_id)
+        select(DBSession).where(DBSession.id == session_uuid)
     )
     session = result.scalar_one_or_none()
     

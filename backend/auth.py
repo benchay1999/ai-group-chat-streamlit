@@ -108,7 +108,13 @@ async def get_user_by_user_id(db: AsyncSession, user_id: str) -> Optional[User]:
 
 async def get_user_by_uuid(db: AsyncSession, user_uuid: str) -> Optional[User]:
     """Get user by their UUID."""
-    result = await db.execute(select(User).where(User.id == user_uuid))
+    import uuid
+    # Convert string UUID to UUID object for SQLAlchemy
+    try:
+        uuid_obj = uuid.UUID(user_uuid)
+    except (ValueError, AttributeError):
+        return None
+    result = await db.execute(select(User).where(User.id == uuid_obj))
     return result.scalar_one_or_none()
 
 
