@@ -327,10 +327,10 @@ async def complete_voting(room_code: str):
         if p['id'] == suspect:
             suspect_role = p['role']
             break
-    # Humans win if suspect is actually an AI; otherwise AIs win
+    # Humans win if suspect is actually a human (most human-like); otherwise AIs win
     state['selected_suspect'] = suspect
     state['suspect_role'] = suspect_role
-    state['winner'] = 'human' if suspect_role == 'ai' else 'ai'
+    state['winner'] = 'human' if suspect_role == 'human' else 'ai'
     state['phase'] = Phase.GAME_OVER
     rooms[room_code]['state'] = state
     
@@ -357,17 +357,17 @@ async def complete_voting(room_code: str):
 def chunk_message(message: str, max_chunks: int = 4) -> List[str]:
     """
     Split a message into 2-4 chunks based on commas and sentence boundaries.
-    Simulates human-like incremental typing.
+    Simulates human-like incremental typing by removing commas and keeping sentence endings.
     
     Args:
         message: Full message text to chunk
         max_chunks: Maximum number of chunks (default 4)
     
     Returns:
-        List of message chunks with preserved punctuation
+        List of message chunks (commas removed, sentence punctuation preserved)
     
     Example:
-        "yes, I think so. That makes sense!" → ["yes,", "I think so.", "That makes sense!"]
+        "yes, I think so. That makes sense!" → ["yes", "I think so.", "That makes sense!"]
     """
     # Handle empty or whitespace-only messages
     if not message or not message.strip():
@@ -382,13 +382,21 @@ def chunk_message(message: str, max_chunks: int = 4) -> List[str]:
     pattern = r'([.!?,])\s*'
     parts = re.split(pattern, message)
     
-    # Recombine parts with their punctuation, preserving spaces
+    # Recombine parts with their punctuation, removing commas
     chunks = []
     i = 0
     while i < len(parts):
         if i + 1 < len(parts) and parts[i + 1] in '.!?,':
-            # Combine text with its following punctuation
-            chunk = parts[i] + parts[i + 1]
+            punctuation = parts[i + 1]
+            text = parts[i]
+            
+            # Remove trailing commas to make chunks more natural
+            # Keep sentence-ending punctuation (. ! ?)
+            if punctuation == ',':
+                chunk = text  # Don't include the comma
+            else:
+                chunk = text + punctuation  # Keep sentence endings
+            
             chunks.append(chunk.strip())
             i += 2
         elif parts[i].strip():  # Remaining text without punctuation
@@ -484,9 +492,17 @@ async def process_single_ai_message(room_code: str, ai_id: str):
         ai_sender = result['ai_sender']
         ai_message = result['ai_message']
         
-        # Split message into chunks for human-like typing
-        chunks = chunk_message(ai_message, max_chunks=4)
-        print(f"📝 AI {ai_id} message split into {len(chunks)} chunks: {chunks}")
+        # Randomly decide whether to chunk message (30% probability)
+        should_chunk = random.random() < 0.3
+        
+        if should_chunk:
+            # Split message into chunks for human-like typing
+            chunks = chunk_message(ai_message, max_chunks=4)
+            print(f"📝 AI {ai_id} message split into {len(chunks)} chunks: {chunks}")
+        else:
+            # Send as single complete message (70% of the time)
+            chunks = [ai_message]
+            print(f"📝 AI {ai_id} sending complete message (no chunking)")
         
         # Update pending_ai_messages to remove this AI
         current_state = rooms[room_code]['state']
@@ -495,13 +511,29 @@ async def process_single_ai_message(room_code: str, ai_id: str):
         # CRITICAL: Persist state update immediately to prevent duplicate processing
         rooms[room_code]['state'] = current_state
         
-        # Process each chunk with realistic typing delays
+        # Define typing speed (300 chars/minute = 5 chars/sec)
+        typing_speed_chars_per_sec = 250 / 60  # 5 characters per second
+        
+        # DEFENSE: Check phase before starting
+        current_state = rooms[room_code]['state']
+        if current_state['phase'] != Phase.DISCUSSION:
+            print(f"🚫 AI {ai_id} blocked - phase is {current_state['phase'].value}")
+            return
+        
+        # Show typing indicator before sending chunks
+        await broadcast_to_room(room_code, {
+            "type": "typing",
+            "player": ai_sender,
+            "status": "start"
+        })
+        
+        # Send each chunk with individual typing delays
         for chunk_idx, chunk in enumerate(chunks):
             # DEFENSE: Check phase before each chunk
             current_state = rooms[room_code]['state']
             if current_state['phase'] != Phase.DISCUSSION:
                 print(f"🚫 AI {ai_id} chunk {chunk_idx+1}/{len(chunks)} blocked - phase changed to {current_state['phase'].value}")
-                # Stop typing indicator if it was started
+                # Stop typing indicator
                 await broadcast_to_room(room_code, {
                     "type": "typing",
                     "player": ai_sender,
@@ -509,32 +541,49 @@ async def process_single_ai_message(room_code: str, ai_id: str):
                 })
                 return
             
-            # Show typing indicator for this chunk
-            await broadcast_to_room(room_code, {
-                "type": "typing",
-                "player": ai_sender,
-                "status": "start"
-            })
+            # Add thinking/reaction delay before each utterance
+            # Short utterances (<=3 words) get 0.2s delay, longer ones get 1s
+            word_count = len(chunk.split())
+            thinking_delay = 0.2 if word_count <= 3 else 1.0
+            print(f"💭 AI {ai_id} thinking before chunk {chunk_idx+1}/{len(chunks)} ({word_count} words, {thinking_delay}s delay)")
+            await asyncio.sleep(thinking_delay)
             
-            # Calculate realistic typing delay based on chunk length
-            # Human typing speed: 50-80 characters per second
-            typing_speed = random.uniform(50, 80)
-            typing_delay = len(chunk) / typing_speed
-            # Add some variance for realism
-            typing_delay = typing_delay * random.uniform(0.8, 1.2)
-            
-            await asyncio.sleep(typing_delay)
-            
-            # DEFENSE: Check room still exists after sleep
+            # DEFENSE: Check room and phase after thinking delay
             if room_code not in rooms:
-                print(f"🚫 AI {ai_id} chunk {chunk_idx+1}/{len(chunks)} blocked - room deleted")
+                print(f"🚫 AI {ai_id} chunk {chunk_idx+1}/{len(chunks)} blocked - room deleted during thinking")
                 return
             
-            # DEFENSE: Check phase after typing delay, before broadcasting
+            current_state = rooms[room_code]['state']
+            if current_state['phase'] != Phase.DISCUSSION:
+                print(f"🚫 AI {ai_id} chunk {chunk_idx+1}/{len(chunks)} blocked after thinking - phase changed to {current_state['phase'].value}")
+                # Stop typing indicator
+                await broadcast_to_room(room_code, {
+                    "type": "typing",
+                    "player": ai_sender,
+                    "status": "stop"
+                })
+                return
+            
+            # Calculate typing delay for this chunk (250 chars/min = ~4.17 chars/sec)
+            chunk_typing_delay = len(chunk) / typing_speed_chars_per_sec
+            # Add variance for realism
+            chunk_typing_delay = chunk_typing_delay * random.uniform(0.8, 1.2)
+            
+            print(f"⌨️  AI {ai_id} typing chunk {chunk_idx+1}/{len(chunks)} ({len(chunk)} chars, {chunk_typing_delay:.1f}s delay)")
+            
+            # Wait for typing delay (typing indicator already shown)
+            await asyncio.sleep(chunk_typing_delay)
+            
+            # DEFENSE: Check room still exists after typing delay
+            if room_code not in rooms:
+                print(f"🚫 AI {ai_id} chunk {chunk_idx+1}/{len(chunks)} blocked - room deleted during typing")
+                return
+            
+            # DEFENSE: Check phase after typing delay
             current_state = rooms[room_code]['state']
             if current_state['phase'] != Phase.DISCUSSION:
                 print(f"🚫 AI {ai_id} chunk {chunk_idx+1}/{len(chunks)} blocked after typing - phase changed to {current_state['phase'].value}")
-                # Cancel typing indicator
+                # Stop typing indicator
                 await broadcast_to_room(room_code, {
                     "type": "typing",
                     "player": ai_sender,
@@ -561,21 +610,28 @@ async def process_single_ai_message(room_code: str, ai_id: str):
                 "message": chunk
             })
             
-            # Stop typing indicator
-            await broadcast_to_room(room_code, {
-                "type": "typing",
-                "player": ai_sender,
-                "status": "stop"
-            })
-            
             # Small pause between chunks (0.3-0.5s) if not the last chunk
+            # Simulates time to press "enter" and start next message
             if chunk_idx < len(chunks) - 1:
                 await asyncio.sleep(random.uniform(0.3, 0.5))
                 
                 # DEFENSE: Check room still exists after inter-chunk sleep
                 if room_code not in rooms:
                     print(f"🚫 AI {ai_id} blocked after inter-chunk pause - room deleted")
+                    # Stop typing indicator
+                    await broadcast_to_room(room_code, {
+                        "type": "typing",
+                        "player": ai_sender,
+                        "status": "stop"
+                    })
                     return
+        
+        # Stop typing indicator after all chunks sent
+        await broadcast_to_room(room_code, {
+            "type": "typing",
+            "player": ai_sender,
+            "status": "stop"
+        })
         
         # Handle any other broadcasts from result
         if 'broadcast_queue' in result:

@@ -20,8 +20,8 @@ const GameOver = ({ winner, suspect, suspectRole, voteCountsDisplay, onLeave }) 
           </h2>
           <p className="text-white text-lg opacity-90">
             {isHumanWin 
-              ? 'The humans successfully identified an AI!' 
-              : 'The AIs caught the human!'}
+              ? 'The humans successfully identified the most human-like player!' 
+              : 'The AIs tricked humans into voting for an AI!'}
           </p>
         </div>
 

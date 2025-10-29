@@ -70,9 +70,9 @@ const PlayerList = ({ players, phase, castVote, currentPlayerId, onLeave }) => {
               {canVote && (
                 <button
                   onClick={() => castVote(player.id)}
-                  className="mt-3 w-full bg-gradient-to-r from-red-500 to-rose-600 text-white py-2 px-4 rounded-lg font-semibold hover:from-red-600 hover:to-rose-700 transition-all transform hover:scale-105"
+                  className="mt-3 w-full bg-gradient-to-r from-blue-500 to-indigo-600 text-white py-2 px-4 rounded-lg font-semibold hover:from-blue-600 hover:to-indigo-700 transition-all transform hover:scale-105"
                 >
-                  Vote to Eliminate
+                  Vote as Most Human
                 </button>
               )}
             </div>

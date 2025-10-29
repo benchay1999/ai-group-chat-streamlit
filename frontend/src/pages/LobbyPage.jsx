@@ -149,8 +149,8 @@ const LobbyPage = () => {
             <div className="flex-1">
               <h2 className="text-3xl font-bold mb-3 drop-shadow-lg">Can You Find the AI?</h2>
               <p className="text-lg leading-relaxed opacity-95 mb-4">
-                <strong>The Challenge:</strong> Join a group chat with AI bots and other humans. Chat, analyze behavior, and vote to eliminate 
-                who you think is AI. Humans win if they successfully identify an AI. AIs win if they trick you into voting out a human!
+                <strong>The Challenge:</strong> Join a group chat with AI bots and other humans. Chat, analyze behavior, and vote for 
+                who you think is the most human-like player. Humans win if they successfully identify a human. AIs win if they trick you into voting for an AI!
               </p>
               <div className="flex flex-wrap gap-4">
                 <div className="flex items-center gap-2 bg-white bg-opacity-20 rounded-full px-4 py-2 backdrop-blur-sm">

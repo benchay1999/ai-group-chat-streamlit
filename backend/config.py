@@ -8,13 +8,13 @@ from typing import Literal
 
 # Game Configuration
 NUM_AI_PLAYERS = int(os.getenv("NUM_AI_PLAYERS", "4"))  # Configurable: 4-8 AI players
-DISCUSSION_TIME = int(os.getenv("DISCUSSION_TIME", "180"))  # 3 minutes in seconds
-VOTING_TIME = int(os.getenv("VOTING_TIME", "60"))  # 1 minute in seconds
+DISCUSSION_TIME = int(os.getenv("DISCUSSION_TIME", "240"))  # 3 minutes in seconds
+VOTING_TIME = int(os.getenv("VOTING_TIME", "120"))  # 1 minute in seconds
 ROUNDS_TO_WIN = int(os.getenv("ROUNDS_TO_WIN", "1"))  # Human wins after 1 round (default: single elimination game)
 
 # AI Model Configuration
 AI_MODEL_PROVIDER: Literal["openai", "anthropic", "groq"] = os.getenv("AI_MODEL_PROVIDER", "openai")
-AI_MODEL_NAME = os.getenv("AI_MODEL_NAME", "gpt-4o-mini")
+AI_MODEL_NAME = os.getenv("AI_MODEL_NAME", "gpt-4.1-nano")
 AI_TEMPERATURE = float(os.getenv("AI_TEMPERATURE", "0.8"))
 
 # AI Personalities (can be extended)

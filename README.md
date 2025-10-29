@@ -1,7 +1,7 @@
 # Human Hunter - A Turing Test-inspired Social Deduction Game
 
 ## Overview
-This is a web-based game where one human player competes against multiple AI agents (configurable, default 4) in a social deduction setting. The human tries to blend in while the AIs try to identify and vote out the human.
+This is a web-based game where human players compete against multiple AI agents (configurable, default 4) in a social deduction setting. Players (humans and AIs) vote for who seems most human-like. Humans win if they correctly identify a human; AIs win if they mislead votes toward an AI.
 
 **Architecture**: Built with LangGraph for advanced multi-agent orchestration, providing a graph-based state machine for game flow management.
 

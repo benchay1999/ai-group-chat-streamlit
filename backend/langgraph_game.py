@@ -535,7 +535,7 @@ class GameGraph:
         except (json.JSONDecodeError, KeyError, Exception) as e:
             print(f"⚠️ Error in decision-making for {ai_id}: {e}")
             # Fallback: respond with 30% probability
-            return random.random() < 0.3
+            return random.random() < 0.6
     
     def _generate_ai_message(self, state: GameState, ai_id: str) -> str:
         """
@@ -572,6 +572,7 @@ class GameGraph:
             + topic_clause + "\n\n"
             "Respond as if in a real-time group chat, building on recent messages. Keep responses concise (1-2 short sentences).\n\n"
             "You may deliberately make typos and mistakes to sound more human. Do not reveal you are an AI."
+            "Never use em dashes. They look too AI-ish."
             "IMPORTANT: Output ONLY the message text. Do not respond with the character name first. e.g., when you are Player 1, DON'T say 'Player 1: hi.' Just output hi."
         )
         
@@ -612,7 +613,7 @@ class GameGraph:
         
         prompt = (
             f"You are {ai_id}. "  # Explicitly state bot's own name
-            "Based on the chat history, who do you vote for as the AI?\n"
+            "Based on the chat history, who do you vote for as the most human-like player?\n"
             "Respond ONLY with valid JSON: {\"vote\": \"<exact_name>\", \"reason\": \"Brief reason.\"}.\n"
             f"- The <exact_name> must be one of: {targets_list}.\n"
             f"- Do not vote for yourself ('{ai_id}').\n\n"
