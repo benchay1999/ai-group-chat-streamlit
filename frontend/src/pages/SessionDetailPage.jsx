@@ -227,23 +227,39 @@ const SessionDetailPage = () => {
           <div className="bg-white rounded-lg shadow p-6">
             <h2 className="text-lg font-semibold text-gray-900 mb-4">Players</h2>
             <div className="space-y-2">
-              {players.map((player) => (
-                <div
-                  key={player.id}
-                  className="flex items-center justify-between p-3 bg-gray-50 rounded-lg"
-                >
-                  <span className="font-medium text-gray-900">{player.id}</span>
-                  <span
-                    className={`px-3 py-1 rounded-full text-xs font-medium ${
-                      player.role === 'human'
-                        ? 'bg-blue-100 text-blue-800'
-                        : 'bg-purple-100 text-purple-800'
+              {players.map((player) => {
+                const isCurrentUser = session.current_user_player_id === player.id;
+                return (
+                  <div
+                    key={player.id}
+                    className={`flex items-center justify-between p-3 rounded-lg transition-all ${
+                      isCurrentUser
+                        ? 'bg-blue-100 border-2 border-blue-400 shadow-md'
+                        : 'bg-gray-50'
                     }`}
                   >
-                    {player.role === 'human' ? 'Human' : 'AI'}
-                  </span>
-                </div>
-              ))}
+                    <div className="flex items-center gap-2">
+                      <span className={`font-medium ${isCurrentUser ? 'text-blue-900' : 'text-gray-900'}`}>
+                        {player.id}
+                      </span>
+                      {isCurrentUser && (
+                        <span className="px-2 py-1 bg-blue-600 text-white text-xs font-bold rounded-full">
+                          YOU
+                        </span>
+                      )}
+                    </div>
+                    <span
+                      className={`px-3 py-1 rounded-full text-xs font-medium ${
+                        player.role === 'human'
+                          ? 'bg-blue-100 text-blue-800'
+                          : 'bg-purple-100 text-purple-800'
+                      }`}
+                    >
+                      {player.role === 'human' ? 'Human' : 'AI'}
+                    </span>
+                  </div>
+                );
+              })}
             </div>
           </div>
 

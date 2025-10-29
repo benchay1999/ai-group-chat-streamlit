@@ -18,9 +18,14 @@ load_dotenv()
 # Database URL from environment
 # Default to SQLite for development (no sudo/installation required)
 # For production, use PostgreSQL: postgresql+asyncpg://user:pass@host:port/db
+
+# Get the directory where this file is located (backend/)
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+DB_PATH = os.path.join(BASE_DIR, 'group_chat.db')
+
 DATABASE_URL = os.getenv(
     'DATABASE_URL',
-    'sqlite+aiosqlite:///./group_chat.db'
+    f'sqlite+aiosqlite:///{DB_PATH}'
 )
 
 # Create async engine
@@ -181,12 +186,21 @@ async def get_async_session():
 
 async def init_db():
     """
-    Initialize database tables.
-    Should be called on application startup.
+    Initialize database connection.
+    Note: Database tables should be created via Alembic migrations:
+      cd backend && python -m alembic upgrade head
+    
+    This function only verifies the database connection.
     """
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-    print("✅ Database tables created successfully")
+    try:
+        async with engine.begin() as conn:
+            # Just verify connection, don't create tables
+            # Tables are managed by Alembic migrations
+            pass
+        print("✅ Database connection established")
+    except Exception as e:
+        print(f"⚠️  Database connection failed: {e}")
+        print("💡 Run migrations first: python -m alembic upgrade head")
 
 
 async def close_db():

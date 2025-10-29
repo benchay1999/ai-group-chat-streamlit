@@ -14,7 +14,7 @@ from sqlalchemy import select
 import os
 from dotenv import load_dotenv
 
-from .database import User, UserRole, get_async_session
+from backend.database import User, UserRole, get_async_session
 
 load_dotenv()
 

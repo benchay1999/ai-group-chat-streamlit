@@ -13,11 +13,11 @@ import asyncio
 import sys
 import getpass
 
-# Add backend to path
+# Add backend to path so we can import modules
 sys.path.insert(0, 'backend')
 
-from backend.database import async_session_maker
-from backend.auth import create_admin_user
+from database import async_session_maker
+from auth import create_admin_user
 
 async def main():
     print("=" * 60)

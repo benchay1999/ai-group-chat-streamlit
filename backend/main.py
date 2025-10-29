@@ -600,7 +600,7 @@ async def process_single_ai_message(room_code: str, ai_id: str):
         rooms[room_code]['state'] = current_state
         
         # Define typing speed (300 chars/minute = 5 chars/sec)
-        typing_speed_chars_per_sec = 250 / 60  # 5 characters per second
+        typing_speed_chars_per_sec = 255 / 60  # 5 characters per second
         
         # DEFENSE: Check phase before starting
         current_state = rooms[room_code]['state']
@@ -728,7 +728,7 @@ async def process_single_ai_message(room_code: str, ai_id: str):
         
         # After AI speaks, give other agents a chance to respond
         # Add small delay to allow message to be processed
-        await asyncio.sleep(1.5)
+        await asyncio.sleep(1.25)
         
         # DEFENSE: Check room still exists after final sleep
         if room_code not in rooms:
@@ -962,12 +962,9 @@ async def save_session_stats(room_code: str, state: dict, current_user: Optional
     print(f"📊 Total token usage: {total_input_tokens} input, {total_output_tokens} output")
     print(f"💰 Total cost: ${total_cost:.6f} (model: {model_name})")
     
-    # Get player-user mappings from room
-    player_user_map = room_data.get('player_user_map', {})
-    
     # Save to PostgreSQL
     try:
-        from .database import async_session_maker, SessionPlayer
+        from .database import async_session_maker
         async with async_session_maker() as db:
             db_session = DBSession(
                 id=session_id,
@@ -989,28 +986,6 @@ async def save_session_stats(room_code: str, state: dict, current_user: Optional
             )
             db.add(db_session)
             
-            # Save player-user mappings
-            for player in state.get('players', []):
-                player_id = player['id']
-                role = player['role']
-                mapped_user_id = player_user_map.get(player_id)
-                
-                # Convert user_id string to UUID if present
-                user_uuid = None
-                if mapped_user_id:
-                    try:
-                        user_uuid = uuid_lib.UUID(mapped_user_id)
-                    except (ValueError, AttributeError):
-                        print(f"⚠️ Invalid user_id format for player {player_id}: {mapped_user_id}")
-                
-                session_player = SessionPlayer(
-                    session_id=session_id,
-                    user_id=user_uuid,
-                    player_id=player_id,
-                    role=role
-                )
-                db.add(session_player)
-            
             # Save per-agent token usage
             for agent_id, usage in agent_token_usage.items():
                 agent_cost = calculate_cost(
@@ -1027,6 +1002,36 @@ async def save_session_stats(room_code: str, state: dict, current_user: Optional
                     message_count=usage.get('calls', 0)
                 )
                 db.add(agent_usage_record)
+            
+            # Save player-user mappings
+            from .database import SessionPlayer
+            player_user_map = room_data.get('player_user_map', {})
+            
+            print(f"👥 Saving player-user mappings: {player_user_map}")
+            
+            for player in state.get('players', []):
+                player_id = player['id']
+                role = player['role']
+                mapped_user_id = player_user_map.get(player_id)
+                
+                # Convert user_id string to UUID if present
+                user_uuid = None
+                if mapped_user_id:
+                    try:
+                        user_uuid = uuid_lib.UUID(mapped_user_id)
+                        print(f"✅ Mapped {player_id} ({role}) -> user {user_uuid}")
+                    except (ValueError, AttributeError):
+                        print(f"⚠️ Invalid user_id format for player {player_id}: {mapped_user_id}")
+                else:
+                    print(f"ℹ️  {player_id} ({role}) -> No user mapping (anonymous)")
+                
+                session_player = SessionPlayer(
+                    session_id=session_id,
+                    user_id=user_uuid,
+                    player_id=player_id,
+                    role=role
+                )
+                db.add(session_player)
             
             await db.commit()
             print(f"✅ Session saved to database with ID: {session_id}")
@@ -1280,7 +1285,7 @@ async def websocket_endpoint(websocket: WebSocket, room_code: str, player_id: st
         
         # Trigger active decision-making for initial AI responses
         # AIs will individually decide if they should start the conversation
-        await asyncio.sleep(2)  # Small delay for realism
+        await asyncio.sleep(1.75)  # Small delay for realism
         asyncio.create_task(trigger_agent_decisions(room_code))
     
     # Send current game state to the newly connected client
@@ -1667,11 +1672,19 @@ async def list_sessions(
             select(DBSession).order_by(desc(DBSession.completed_at))
         )
     else:
-        # Regular users see only their sessions
+        # Regular users see sessions where they're the owner OR where they played
+        from .database import SessionPlayer
+        
+        # Get sessions where user is owner OR participated as a player
         result = await db.execute(
             select(DBSession)
-            .where(DBSession.user_id == current_user.id)
+            .outerjoin(SessionPlayer, SessionPlayer.session_id == DBSession.id)
+            .where(
+                (DBSession.user_id == current_user.id) | 
+                (SessionPlayer.user_id == current_user.id)
+            )
             .order_by(desc(DBSession.completed_at))
+            .distinct()
         )
     
     sessions = result.scalars().all()
@@ -1751,40 +1764,51 @@ async def get_session_detail(
         print(f"Error loading stats file: {e}")
         stats_data = {}
     
-    # Get player-user mappings
+    # Get player identification - which player was the current user?
     from .database import SessionPlayer
-    players_result = await db.execute(
-        select(SessionPlayer).where(SessionPlayer.session_id == session_uuid)
-    )
-    session_players = players_result.scalars().all()
-    
-    # Build player mappings with user info
-    player_mappings = []
     current_user_player_id = None
-    
-    for sp in session_players:
-        mapping = {
-            "player_id": sp.player_id,
-            "role": sp.role,
-            "user_id": None,
-            "user_name": None
-        }
-        
-        if sp.user_id:
-            # Get user info
-            user_result = await db.execute(
-                select(User).where(User.id == sp.user_id)
+    try:
+        player_result = await db.execute(
+            select(SessionPlayer).where(
+                SessionPlayer.session_id == session_uuid,
+                SessionPlayer.user_id == current_user.id
             )
-            player_user = user_result.scalar_one_or_none()
-            if player_user:
-                mapping["user_id"] = str(player_user.id)
-                mapping["user_name"] = player_user.user_id
+        )
+        user_player = player_result.scalar_one_or_none()
+        if user_player:
+            current_user_player_id = user_player.player_id
+    except Exception as e:
+        print(f"Error getting player identification: {e}")
+    
+    # Get player-user mappings (for admins)
+    player_mappings = []
+    if current_user.role == UserRole.ADMIN:
+        try:
+            players_result = await db.execute(
+                select(SessionPlayer).where(SessionPlayer.session_id == session_uuid)
+            )
+            session_players = players_result.scalars().all()
+            
+            for sp in session_players:
+                mapping = {
+                    "player_id": sp.player_id,
+                    "role": sp.role,
+                    "user_id": None,
+                    "user_name": None
+                }
                 
-                # Track which player the current user was
-                if player_user.id == current_user.id:
-                    current_user_player_id = sp.player_id
-        
-        player_mappings.append(mapping)
+                if sp.user_id:
+                    user_result = await db.execute(
+                        select(User).where(User.id == sp.user_id)
+                    )
+                    player_user = user_result.scalar_one_or_none()
+                    if player_user:
+                        mapping["user_id"] = str(player_user.id)
+                        mapping["user_name"] = player_user.user_id
+                
+                player_mappings.append(mapping)
+        except Exception as e:
+            print(f"Error getting player mappings: {e}")
     
     return {
         "id": str(session.id),
@@ -1800,8 +1824,8 @@ async def get_session_detail(
         "payment_amount": float(session.payment_amount) if session.payment_amount else None,
         "claimed_at": session.claimed_at.isoformat() if session.claimed_at else None,
         "stats": stats_data,
-        "player_mappings": player_mappings,
-        "current_user_player_id": current_user_player_id  # Which player was the current user
+        "current_user_player_id": current_user_player_id,
+        "player_mappings": player_mappings
     }
 
 
@@ -2541,7 +2565,7 @@ async def join_room(room_code: str, player_data: dict):
         # Start phases
         asyncio.create_task(run_discussion_phase(room_code))
         # Trigger active decision-making for AI responses
-        await asyncio.sleep(1)  # Small delay
+        await asyncio.sleep(0.75)  # Small delay
         asyncio.create_task(trigger_agent_decisions(room_code))
     
     room = rooms[room_code]
@@ -2617,7 +2641,7 @@ async def join_room(room_code: str, player_data: dict):
             # Start phases
             asyncio.create_task(run_discussion_phase(room_code))
             # Trigger active decision-making for AI responses
-            await asyncio.sleep(1)  # Small delay
+            await asyncio.sleep(0.75)  # Small delay
             asyncio.create_task(trigger_agent_decisions(room_code))
     
     return {
