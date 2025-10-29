@@ -379,62 +379,58 @@ def chunk_message(message: str, max_chunks: int = 4) -> List[str]:
     
     # Split on sentence boundaries (. ! ?) and commas, preserving punctuation
     # Pattern: split after punctuation followed by optional space
-    pattern = r'([.!?,]\s*)'
+    pattern = r'([.!?,])\s*'
     parts = re.split(pattern, message)
     
-    # Recombine parts with their punctuation
+    # Recombine parts with their punctuation, preserving spaces
     chunks = []
-    current_chunk = ""
-    for i, part in enumerate(parts):
-        if i % 2 == 0:  # Text part
-            current_chunk += part
-        else:  # Punctuation part
-            current_chunk += part.rstrip()  # Remove trailing space
-            chunks.append(current_chunk.strip())
-            current_chunk = ""
-    
-    # Add any remaining text
-    if current_chunk.strip():
-        chunks.append(current_chunk.strip())
+    i = 0
+    while i < len(parts):
+        if i + 1 < len(parts) and parts[i + 1] in '.!?,':
+            # Combine text with its following punctuation
+            chunk = parts[i] + parts[i + 1]
+            chunks.append(chunk.strip())
+            i += 2
+        elif parts[i].strip():  # Remaining text without punctuation
+            chunks.append(parts[i].strip())
+            i += 1
+        else:
+            i += 1
     
     # If we have no chunks or empty chunks, return original
-    if not chunks or all(not c.strip() for c in chunks):
+    if not chunks:
         return [message]
     
-    # Limit to max_chunks by combining adjacent chunks if needed
+    # Limit to max_chunks by combining adjacent chunks if needed - PRESERVE ALL TEXT
     if len(chunks) > max_chunks:
-        # Calculate how many chunks to combine
         combined = []
-        chunk_size = len(chunks) / max_chunks
-        current = ""
-        count = 0
+        items_per_chunk = len(chunks) / max_chunks
         
-        for i, chunk in enumerate(chunks):
-            current += (" " if current else "") + chunk
-            count += 1
-            
-            # If we've accumulated enough for one combined chunk, or it's the last chunk
-            if count >= chunk_size or i == len(chunks) - 1:
-                combined.append(current)
-                current = ""
-                count = 0
+        for chunk_idx in range(max_chunks):
+            start_idx = int(chunk_idx * items_per_chunk)
+            end_idx = int((chunk_idx + 1) * items_per_chunk) if chunk_idx < max_chunks - 1 else len(chunks)
+            combined_text = ' '.join(chunks[start_idx:end_idx])
+            if combined_text:
+                combined.append(combined_text)
         
         chunks = combined
     
-    # Ensure we have at least 2 chunks for longer messages (if original had potential)
+    # Ensure we have at least 2 chunks for longer messages
     if len(chunks) == 1 and len(message) > 40:
         # Try to split roughly in half at a word boundary
         mid = len(message) // 2
-        # Find nearest space
+        # Find nearest space after midpoint
         space_pos = message.find(' ', mid)
+        if space_pos == -1:  # No space after mid, try before
+            space_pos = message.rfind(' ', 0, mid)
         if space_pos > 0:
-            chunks = [message[:space_pos], message[space_pos+1:]]
+            chunks = [message[:space_pos].strip(), message[space_pos+1:].strip()]
     
-    # Final filter: ensure minimum of 2 chunks, maximum of max_chunks
+    # Final filter: ensure minimum of 2 chunks for meaningful chunking
     if len(chunks) < 2:
-        return [message]  # Too short to chunk meaningfully
+        return [message]
     
-    return chunks[:max_chunks]
+    return chunks
 
 
 async def process_single_ai_message(room_code: str, ai_id: str):
