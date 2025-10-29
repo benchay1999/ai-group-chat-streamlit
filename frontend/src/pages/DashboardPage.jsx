@@ -33,7 +33,7 @@ const DashboardPage = () => {
   }, []);
 
   const loadSessions = async () => {
-    try:
+    try {
       setLoading(true);
       const data = await sessionsAPI.listSessions();
       setSessions(data.sessions);
@@ -161,7 +161,7 @@ const DashboardPage = () => {
                   </span>
                   {earnings.tier.next_threshold && (
                     <span className="text-xs text-gray-400">
-                      (${earnings.tier.next_threshold - earnings.total_lifetime_earnings:.2f} to next)
+                      (${(earnings.tier.next_threshold - earnings.total_lifetime_earnings).toFixed(2)} to next)
                     </span>
                   )}
                 </div>
