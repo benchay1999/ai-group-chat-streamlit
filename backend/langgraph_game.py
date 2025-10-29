@@ -415,6 +415,45 @@ class GameGraph:
     # Helper Methods for AI Generation
     # ============================================================
     
+    def _count_message_groups(self, chat_history: List[ChatMessage], sender_id: str = None) -> int:
+        """
+        Count message groups in chat history.
+        A message group is a sequence of consecutive messages from the same sender.
+        This handles chunked messages properly by treating consecutive chunks as one logical message.
+        
+        Args:
+            chat_history: List of chat messages
+            sender_id: If provided, count only groups from this sender. If None, count total groups.
+        
+        Returns:
+            Number of message groups
+        
+        Example:
+            [P1, P1, P1, P2, P2, P3] -> 3 total groups (P1 group, P2 group, P3 group)
+            For P1 specifically: 1 group
+        """
+        if not chat_history:
+            return 0
+        
+        groups = 0
+        last_sender = None
+        
+        for msg in chat_history:
+            current_sender = msg['sender']
+            
+            if sender_id is None:
+                # Count all groups
+                if current_sender != last_sender:
+                    groups += 1
+                last_sender = current_sender
+            else:
+                # Count groups for specific sender
+                if current_sender == sender_id and last_sender != sender_id:
+                    groups += 1
+                last_sender = current_sender
+        
+        return groups
+    
     def _should_agent_respond(self, state: GameState, ai_id: str) -> bool:
         """
         Determine if an AI agent should respond to the current conversation state.
@@ -438,9 +477,10 @@ class GameGraph:
             for msg in recent_messages
         ]) if recent_messages else "No messages yet."
         
-        # Count how many times this AI has spoken
-        ai_message_count = sum(1 for msg in state["chat_history"] if msg["sender"] == ai_id)
-        total_messages = len(state["chat_history"])
+        # Count message groups (handles chunked messages properly)
+        # A group = consecutive messages from the same sender
+        ai_message_groups = self._count_message_groups(state["chat_history"], ai_id)
+        total_message_groups = self._count_message_groups(state["chat_history"], None)
         
         # Check if this AI was the last speaker
         last_speaker = state["chat_history"][-1]["sender"] if state["chat_history"] else None
@@ -453,11 +493,11 @@ class GameGraph:
         elif was_last_speaker:
             last_speaker_info = " You were the last person to speak."
         
-        # Determine conversation context
-        participation_rate = (ai_message_count / max(1, total_messages)) * 100
+        # Determine conversation context using message groups (not individual messages)
+        participation_rate = (ai_message_groups / max(1, total_message_groups)) * 100
         
         # Strategic context
-        strategic_context = f"You have sent {ai_message_count} out of {total_messages} total messages ({participation_rate:.0f}% participation).{last_speaker_info}"
+        strategic_context = f"You have sent {ai_message_groups} out of {total_message_groups} total message groups ({participation_rate:.0f}% participation).{last_speaker_info}"
 
         # Timing context: seconds since last message to support quiet-time reasoning
         try:
