@@ -136,6 +136,18 @@ const CreateRoomModal = ({ isOpen, onClose, onCreate }) => {
             </label>
             <div className="flex gap-2">
               <button
+                onClick={() => setDiscussionDuration(60)}
+                className={`flex-1 py-2 px-4 rounded-lg font-semibold transition-all text-xs ${
+                  discussionDuration === 60
+                    ? 'bg-yellow-600 text-white'
+                    : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                }`}
+                disabled={creating}
+                title="Quick debug mode"
+              >
+                ⚡ 1m<br/><span className="text-[10px] opacity-80">(Debug)</span>
+              </button>
+              <button
                 onClick={() => setDiscussionDuration(180)}
                 className={`flex-1 py-2 px-4 rounded-lg font-semibold transition-all ${
                   discussionDuration === 180
@@ -166,6 +178,18 @@ const CreateRoomModal = ({ isOpen, onClose, onCreate }) => {
               {t('modal.votingDuration')}
             </label>
             <div className="flex gap-2">
+              <button
+                onClick={() => setVotingDuration(30)}
+                className={`flex-1 py-2 px-4 rounded-lg font-semibold transition-all text-xs ${
+                  votingDuration === 30
+                    ? 'bg-yellow-600 text-white'
+                    : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                }`}
+                disabled={creating}
+                title="Quick debug mode"
+              >
+                ⚡ 30s<br/><span className="text-[10px] opacity-80">(Debug)</span>
+              </button>
               <button
                 onClick={() => setVotingDuration(60)}
                 className={`flex-1 py-2 px-4 rounded-lg font-semibold transition-all ${
@@ -215,14 +239,16 @@ const CreateRoomModal = ({ isOpen, onClose, onCreate }) => {
               </div>
               <div className="flex justify-between">
                 <span className="text-gray-600">{t('modal.discussionDuration')}:</span>
-                <span className="font-semibold text-green-600">
-                  ⏱️ {discussionDuration / 60} {t('modal.minutes')}
+                <span className={`font-semibold ${discussionDuration === 60 ? 'text-yellow-600' : 'text-green-600'}`}>
+                  {discussionDuration === 60 ? '⚡' : '⏱️'} {discussionDuration / 60} {discussionDuration === 60 ? t('modal.minute') : t('modal.minutes')}
+                  {discussionDuration === 60 && <span className="text-[10px] ml-1">(Debug)</span>}
                 </span>
               </div>
               <div className="flex justify-between">
                 <span className="text-gray-600">{t('modal.votingDuration')}:</span>
-                <span className="font-semibold text-orange-600">
-                  🗳️ {votingDuration / 60} {votingDuration === 60 ? t('modal.minute') : t('modal.minutes')}
+                <span className={`font-semibold ${votingDuration === 30 ? 'text-yellow-600' : 'text-orange-600'}`}>
+                  {votingDuration === 30 ? '⚡' : '🗳️'} {votingDuration < 60 ? votingDuration + 's' : (votingDuration / 60) + (votingDuration === 60 ? ' ' + t('modal.minute') : ' ' + t('modal.minutes'))}
+                  {votingDuration === 30 && <span className="text-[10px] ml-1">(Debug)</span>}
                 </span>
               </div>
             </div>

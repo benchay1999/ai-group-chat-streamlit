@@ -1034,12 +1034,16 @@ async def save_session_stats(room_code: str, state: dict, current_user: Optional
             from .database import SessionPlayer
             player_user_map = room_data.get('player_user_map', {})
             
-            print(f"👥 Saving player-user mappings: {player_user_map}")
+            print(f"👥 Saving player-user mappings...")
+            print(f"📋 player_user_map from room_data: {player_user_map}")
+            print(f"👥 state['players']: {[p['id'] + ' (' + p['role'] + ')' for p in state.get('players', [])]}")
             
             for player in state.get('players', []):
                 player_id = player['id']
                 role = player['role']
                 mapped_user_id = player_user_map.get(player_id)
+                
+                print(f"🔍 Processing player {player_id} ({role}): mapped_user_id = {mapped_user_id}")
                 
                 # Convert user_id string to UUID if present
                 user_uuid = None
@@ -1047,8 +1051,8 @@ async def save_session_stats(room_code: str, state: dict, current_user: Optional
                     try:
                         user_uuid = uuid_lib.UUID(mapped_user_id)
                         print(f"✅ Mapped {player_id} ({role}) -> user {user_uuid}")
-                    except (ValueError, AttributeError):
-                        print(f"⚠️ Invalid user_id format for player {player_id}: {mapped_user_id}")
+                    except (ValueError, AttributeError) as e:
+                        print(f"⚠️ Invalid user_id format for player {player_id}: {mapped_user_id}, error: {e}")
                 else:
                     print(f"ℹ️  {player_id} ({role}) -> No user mapping (anonymous)")
                 
@@ -1059,6 +1063,7 @@ async def save_session_stats(room_code: str, state: dict, current_user: Optional
                     role=role
                 )
                 db.add(session_player)
+                print(f"💾 SessionPlayer added to DB: {player_id}, user_id={user_uuid}")
             
             await db.commit()
             print(f"✅ Session saved to database with ID: {session_id}")
@@ -1228,24 +1233,39 @@ async def websocket_endpoint(websocket: WebSocket, room_code: str, player_id: st
     
     # Try to get authenticated user from token query param
     user_id = None
+    authenticated_user = None
     try:
         token = websocket.query_params.get('token')
+        print(f"🔑 Token received: {'Yes' if token else 'No'}")
+        
         if token:
             from .auth import get_user_by_uuid
             from .database import async_session_maker
             from jose import jwt, JWTError
             from .auth import JWT_SECRET_KEY, JWT_ALGORITHM
             
+            print(f"🔓 Decoding JWT token...")
             payload = jwt.decode(token, JWT_SECRET_KEY, algorithms=[JWT_ALGORITHM])
             user_uuid = payload.get("sub")
+            print(f"🆔 User UUID from token: {user_uuid}")
+            
             if user_uuid:
                 async with async_session_maker() as db:
                     user = await get_user_by_uuid(db, user_uuid)
                     if user:
                         user_id = str(user.id)
-                        print(f"👤 Authenticated user {user.user_id} as {player_id}")
+                        authenticated_user = user
+                        print(f"👤 ✅ Authenticated user '{user.user_id}' (ID: {user_id[:8]}...) as {player_id}")
+                    else:
+                        print(f"⚠️ User not found in database for UUID: {user_uuid}")
+            else:
+                print(f"⚠️ No 'sub' field in JWT payload")
+        else:
+            print(f"ℹ️ No token provided - user playing anonymously")
     except Exception as e:
         print(f"⚠️ Could not authenticate WebSocket user: {e}")
+        import traceback
+        traceback.print_exc()
         # Continue without authentication - game works for non-logged-in users too
     
     # Initialize room if needed
@@ -1290,7 +1310,9 @@ async def websocket_endpoint(websocket: WebSocket, room_code: str, player_id: st
     # Store player-user mapping if user is authenticated
     if user_id:
         rooms[room_code]['player_user_map'][player_id] = user_id
-        print(f"👤 Stored mapping: {player_id} -> user {user_id}")
+        print(f"👤 ✅ Stored initial mapping: {player_id} -> user {user_id[:8]}...")
+    else:
+        print(f"⚠️ No user_id to store for player {player_id}")
     
     # Add human player to game state if not already there
     state = rooms[room_code]['state']
@@ -1326,19 +1348,34 @@ async def websocket_endpoint(websocket: WebSocket, room_code: str, player_id: st
         # Update user mapping to use numbered player ID
         if user_id:
             rooms[room_code]['player_user_map'][numbered_player_id] = user_id
-            print(f"👤 Mapped {numbered_player_id} (human) -> user {user_id}")
+            print(f"👤 ✅ Mapped {numbered_player_id} (human) -> user {user_id[:8]}...")
+            print(f"📋 Current player_user_map: {rooms[room_code]['player_user_map']}")
+        else:
+            print(f"⚠️ No user_id to map for {numbered_player_id}")
         
         rooms[room_code]['state'] = state
         print(f"✅ Added human player {numbered_player_id} to game state")
     else:
-        # Player already exists, just update the mapping
+        # Player already exists (joined via API), just store the connection mapping
         numbered_player_id = existing_player['id']
         rooms[room_code]['player_id_map'] = rooms[room_code].get('player_id_map', {})
         rooms[room_code]['player_id_map'][player_id] = numbered_player_id
         
-        if user_id and numbered_player_id not in rooms[room_code]['player_user_map']:
+        # Check if mapping already exists (set via API join)
+        existing_mapping = rooms[room_code]['player_user_map'].get(numbered_player_id)
+        
+        if existing_mapping:
+            print(f"ℹ️ Player {numbered_player_id} already mapped via API -> user {existing_mapping[:8]}...")
+            # If WebSocket has different/additional user info, keep the existing one from API
+            if user_id and user_id != existing_mapping:
+                print(f"⚠️ WebSocket user {user_id[:8]}... differs from API user {existing_mapping[:8]}... - keeping API mapping")
+        elif user_id:
+            # No existing mapping, add it now from WebSocket auth
             rooms[room_code]['player_user_map'][numbered_player_id] = user_id
-            print(f"👤 Mapped {numbered_player_id} (existing human) -> user {user_id}")
+            print(f"👤 ✅ Mapped {numbered_player_id} (existing player from API) -> user {user_id[:8]}... via WebSocket")
+            print(f"📋 Current player_user_map: {rooms[room_code]['player_user_map']}")
+        else:
+            print(f"⚠️ No user_id to map for existing player {numbered_player_id}")
     
     # If this was a new room, initialize and broadcast
     state = rooms[room_code]['state']
@@ -1757,14 +1794,17 @@ async def list_sessions(
     else:
         # Regular users see sessions where they're the owner OR where they played
         from .database import SessionPlayer
+        from sqlalchemy import or_
         
         # Get sessions where user is owner OR participated as a player
         result = await db.execute(
             select(DBSession)
             .outerjoin(SessionPlayer, SessionPlayer.session_id == DBSession.id)
             .where(
-                (DBSession.user_id == current_user.id) | 
-                (SessionPlayer.user_id == current_user.id)
+                or_(
+                    DBSession.user_id == current_user.id,
+                    SessionPlayer.user_id == current_user.id
+                )
             )
             .order_by(desc(DBSession.completed_at))
             .distinct()
@@ -1833,11 +1873,28 @@ async def get_session_detail(
         )
     
     # Check authorization
-    if current_user.role != UserRole.ADMIN and session.user_id != current_user.id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not authorized to view this session"
-        )
+    if current_user.role != UserRole.ADMIN:
+        # Authorized if user is the session owner OR participated as a player
+        is_owner = session.user_id == current_user.id
+        is_participant = False
+        if not is_owner:
+            try:
+                from .database import SessionPlayer
+                part_result = await db.execute(
+                    select(SessionPlayer).where(
+                        SessionPlayer.session_id == session_uuid,
+                        SessionPlayer.user_id == current_user.id
+                    )
+                )
+                is_participant = part_result.scalar_one_or_none() is not None
+            except Exception as e:
+                print(f"⚠️ Authorization check failed: {e}")
+        
+        if not (is_owner or is_participant):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Not authorized to view this session"
+            )
     
     # Load chat history from JSON file
     try:
@@ -2591,7 +2648,11 @@ async def get_room_state(room_code: str, player_id: str = "StreamlitUser"):
 
 
 @app.post("/api/rooms/{room_code}/join")
-async def join_room(room_code: str, player_data: dict):
+async def join_room(
+    room_code: str, 
+    player_data: dict,
+    current_user: User = Depends(get_current_user_optional)
+):
     """
     Join a room for Streamlit client (with matching room system support).
     Player names are auto-assigned as random numbers.
@@ -2599,10 +2660,17 @@ async def join_room(room_code: str, player_data: dict):
     Args:
         room_code: Room identifier
         player_data: Dict (player_id ignored, auto-assigned)
+        current_user: Optional authenticated user
     
     Returns:
         Room status and initial game state with assigned player_id
     """
+    
+    # Log authentication status
+    if current_user:
+        print(f"🔐 User '{current_user.user_id}' (ID: {str(current_user.id)[:8]}...) joining room {room_code} via API")
+    else:
+        print(f"🔓 Anonymous user joining room {room_code} via API")
     
     # Check if room exists
     if room_code not in rooms:
@@ -2698,7 +2766,14 @@ async def join_room(room_code: str, player_data: dict):
     })
     rooms[room_code]['state'] = state
     
-    print(f"👤 Player {player_id} joined room {room_code} ({len(room['current_humans'])}/{max_humans})")
+    # Store user mapping if authenticated
+    if current_user:
+        user_id_str = str(current_user.id)
+        room['player_user_map'][player_id] = user_id_str
+        print(f"👤 ✅ Player {player_id} joined room {room_code} ({len(room['current_humans'])}/{max_humans}) - Mapped to user {user_id_str[:8]}...")
+        print(f"📋 Current player_user_map: {room['player_user_map']}")
+    else:
+        print(f"👤 Player {player_id} joined room {room_code} ({len(room['current_humans'])}/{max_humans}) - Anonymous")
     
     # Check if room is ready to start
     can_start = len(room['current_humans']) >= max_humans
