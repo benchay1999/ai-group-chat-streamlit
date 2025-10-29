@@ -995,6 +995,52 @@ async def save_session_stats(room_code: str, state: dict, current_user: Optional
     print(f"📊 Total token usage: {total_input_tokens} input, {total_output_tokens} output")
     print(f"💰 Total cost: ${total_cost:.6f} (model: {model_name})")
     
+    # Calculate earnings based on performance
+    from .earnings import calculate_earnings
+    
+    # Get player-specific performance data if user is authenticated
+    calculated_earnings_value = None
+    if current_user:
+        # Find the human player's data
+        human_player = None
+        player_user_map = room_data.get('player_user_map', {})
+        for player in state.get('players', []):
+            if player.get('role') == 'human':
+                # Check if this human player is the current user
+                mapped_user_id = player_user_map.get(player['id'])
+                if mapped_user_id and str(current_user.id) == mapped_user_id:
+                    human_player = player
+                    break
+        
+        if human_player:
+            # Count messages from this player
+            num_messages = sum(1 for msg in state.get('chat_history', []) if msg.get('sender') == human_player['id'])
+            
+            # Check if player voted
+            voted = human_player['id'] in state.get('votes', {})
+            
+            # Check if player won (correctly identified AI)
+            won_game = False
+            if state.get('selected_suspect') and state.get('suspect_role') == 'ai':
+                # Player wins if they voted for an AI
+                player_vote = state.get('votes', {}).get(human_player['id'])
+                if player_vote:
+                    for p in state.get('players', []):
+                        if p['id'] == player_vote and p.get('role') == 'ai':
+                            won_game = True
+                            break
+            
+            calculated_earnings_value, earnings_breakdown = calculate_earnings(
+                game_completed=True,
+                won_game=won_game,
+                num_messages=num_messages,
+                discussion_duration=discussion_duration,
+                voted=voted
+            )
+            
+            print(f"💵 Calculated earnings for {human_player['id']}: ${calculated_earnings_value}")
+            print(f"💡 Breakdown: {earnings_breakdown}")
+    
     # Save to PostgreSQL
     try:
         from .database import async_session_maker
@@ -1010,6 +1056,7 @@ async def save_session_stats(room_code: str, state: dict, current_user: Optional
                 discussion_duration=discussion_duration,
                 voting_duration=voting_duration,
                 payment_status=PaymentStatus.PENDING,
+                calculated_earnings=calculated_earnings_value,
                 stats_file_path=path,
                 claimed_at=_time.time() if current_user else None,
                 total_input_tokens=total_input_tokens,
@@ -1792,6 +1839,106 @@ async def get_user_stats(
     }
 
 
+@app.get("/api/users/earnings")
+async def get_user_earnings(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_async_session)
+):
+    """
+    Get detailed earnings statistics for current user.
+    
+    Args:
+        current_user: Current authenticated user
+        db: Database session
+    
+    Returns:
+        Earnings statistics including total, pending, average, etc.
+    """
+    from decimal import Decimal
+    from sqlalchemy import func
+    from datetime import datetime, timedelta
+    
+    # Get all user sessions with earnings data
+    result = await db.execute(
+        select(DBSession)
+        .where(DBSession.user_id == current_user.id)
+        .order_by(desc(DBSession.completed_at))
+    )
+    sessions = result.scalars().all()
+    
+    # Calculate total earnings (paid)
+    total_paid = Decimal("0.00")
+    total_pending = Decimal("0.00")
+    total_calculated = Decimal("0.00")
+    highest_earning = Decimal("0.00")
+    recent_sessions = []
+    
+    # Get dates for time-based stats
+    now = datetime.utcnow()
+    week_ago = now - timedelta(days=7)
+    month_ago = now - timedelta(days=30)
+    
+    earnings_this_week = Decimal("0.00")
+    earnings_this_month = Decimal("0.00")
+    
+    for session in sessions:
+        # Track calculated earnings
+        if session.calculated_earnings:
+            total_calculated += session.calculated_earnings
+            if session.calculated_earnings > highest_earning:
+                highest_earning = session.calculated_earnings
+        
+        # Track actual payments
+        if session.payment_amount:
+            if session.payment_status == PaymentStatus.PAID:
+                total_paid += session.payment_amount
+                
+                # Time-based stats
+                if session.completed_at >= week_ago:
+                    earnings_this_week += session.payment_amount
+                if session.completed_at >= month_ago:
+                    earnings_this_month += session.payment_amount
+            else:
+                total_pending += session.payment_amount
+        
+        # Recent sessions for chart (last 10)
+        if len(recent_sessions) < 10:
+            recent_sessions.append({
+                "date": session.completed_at.isoformat(),
+                "amount": float(session.payment_amount) if session.payment_amount else 0,
+                "calculated": float(session.calculated_earnings) if session.calculated_earnings else 0,
+                "status": session.payment_status.value
+            })
+    
+    # Calculate averages
+    total_games = len(sessions)
+    avg_per_game = (total_paid / total_games) if total_games > 0 else Decimal("0.00")
+    avg_calculated = (total_calculated / total_games) if total_games > 0 else Decimal("0.00")
+    
+    # Get earnings tier
+    from .earnings import get_earnings_tier
+    tier_info = get_earnings_tier(total_paid)
+    
+    return {
+        "total_lifetime_earnings": float(total_paid),
+        "pending_earnings": float(total_pending),
+        "total_calculated_earnings": float(total_calculated),
+        "average_per_game": float(avg_per_game),
+        "average_calculated_per_game": float(avg_calculated),
+        "highest_single_game": float(highest_earning),
+        "total_games": total_games,
+        "earnings_this_week": float(earnings_this_week),
+        "earnings_this_month": float(earnings_this_month),
+        "recent_sessions": recent_sessions,
+        "tier": {
+            "name": tier_info["name"],
+            "color": tier_info["color"],
+            "current_amount": float(total_paid),
+            "next_threshold": float(tier_info["next"]) if tier_info["next"] else None
+        }
+    }
+
+
 # ============================================================================
 # Session Management API Endpoints
 # ============================================================================
@@ -1851,6 +1998,7 @@ async def list_sessions(
                 "completed_at": s.completed_at.isoformat(),
                 "payment_status": s.payment_status.value,
                 "payment_amount": float(s.payment_amount) if s.payment_amount else None,
+                "calculated_earnings": float(s.calculated_earnings) if s.calculated_earnings else None,
                 "claimed_at": s.claimed_at.isoformat() if s.claimed_at else None
             }
             for s in sessions

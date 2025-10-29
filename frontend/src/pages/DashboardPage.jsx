@@ -1,6 +1,6 @@
 /**
- * User Dashboard Page
- * Shows user's gamification stats, sessions, completion keys, and payment status
+ * User Dashboard Page - Play-to-Earn Edition
+ * Crypto/fintech inspired earnings-focused dashboard
  */
 
 import React, { useState, useEffect } from 'react';
@@ -10,30 +10,30 @@ import { sessionsAPI } from '../services/sessionsAPI';
 import { format } from 'date-fns';
 import { 
   Copy, Check, ExternalLink, Key, DollarSign, Clock, 
-  Trophy, Target, Zap, TrendingUp, Award, Star
+  TrendingUp, Zap, Star, Sparkles, Award
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import axios from '../services/api';
-import ProgressBar from '../components/ProgressBar';
-import StatsCard from '../components/StatsCard';
+import EarningsCounter from '../components/EarningsCounter';
+import EarningsChart from '../components/EarningsChart';
 
 const DashboardPage = () => {
   const { user, logout } = useAuth();
   const [sessions, setSessions] = useState([]);
-  const [userStats, setUserStats] = useState(null);
+  const [earnings, setEarnings] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [statsLoading, setStatsLoading] = useState(true);
+  const [earningsLoading, setEarningsLoading] = useState(true);
   const [claimKey, setClaimKey] = useState('');
   const [claiming, setClaiming] = useState(false);
   const [copiedKey, setCopiedKey] = useState(null);
 
   useEffect(() => {
     loadSessions();
-    loadUserStats();
+    loadEarnings();
   }, []);
 
   const loadSessions = async () => {
-    try {
+    try:
       setLoading(true);
       const data = await sessionsAPI.listSessions();
       setSessions(data.sessions);
@@ -45,16 +45,15 @@ const DashboardPage = () => {
     }
   };
 
-  const loadUserStats = async () => {
+  const loadEarnings = async () => {
     try {
-      setStatsLoading(true);
-      const response = await axios.get('/api/users/stats');
-      setUserStats(response.data);
+      setEarningsLoading(true);
+      const response = await axios.get('/api/users/earnings');
+      setEarnings(response.data);
     } catch (error) {
-      console.error('Failed to load user stats:', error);
-      // Don't show error toast - gamification is optional
+      console.error('Failed to load earnings:', error);
     } finally {
-      setStatsLoading(false);
+      setEarningsLoading(false);
     }
   };
 
@@ -67,8 +66,8 @@ const DashboardPage = () => {
       await sessionsAPI.claimKey(claimKey);
       toast.success('Completion key claimed successfully!');
       setClaimKey('');
-      loadSessions(); // Reload sessions
-      loadUserStats(); // Reload stats
+      loadSessions();
+      loadEarnings();
     } catch (error) {
       const message = error.response?.data?.detail || 'Failed to claim key';
       toast.error(message);
@@ -85,9 +84,9 @@ const DashboardPage = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-purple-900 to-gray-900">
+    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-black">
       {/* Header */}
-      <div className="bg-gray-800 shadow-lg border-b border-gray-700">
+      <div className="bg-gray-900 border-b border-gray-800 shadow-xl">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
           <div className="flex items-center justify-between">
             <div>
@@ -113,7 +112,7 @@ const DashboardPage = () => {
               )}
               <button
                 onClick={logout}
-                className="px-4 py-2 bg-gray-700 text-white rounded-lg font-medium hover:bg-gray-600 transition-colors"
+                className="px-4 py-2 bg-gray-800 text-white rounded-lg font-medium hover:bg-gray-700 transition-colors border border-gray-700"
               >
                 Logout
               </button>
@@ -122,111 +121,121 @@ const DashboardPage = () => {
         </div>
       </div>
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Gamification Hero Section */}
-        {userStats && !statsLoading && (
-          <div className="mb-8">
-            {/* Level & Points Card */}
-            <div className="bg-gradient-to-r from-purple-600 to-blue-600 rounded-lg p-8 shadow-xl mb-6">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-6">
-                  <div className="bg-white bg-opacity-20 rounded-full w-24 h-24 flex items-center justify-center backdrop-blur-sm">
-                    <span className="text-5xl font-bold text-white">{userStats.level}</span>
-                  </div>
-                  <div>
-                    <h2 className="text-3xl font-bold text-white mb-1">Level {userStats.level}</h2>
-                    <p className="text-xl text-purple-100">{userStats.total_points.toLocaleString()} Points</p>
-                    {userStats.streak.current > 0 && (
-                      <div className="flex items-center gap-2 mt-2">
-                        <Zap className="text-yellow-300" size={20} />
-                        <span className="text-yellow-200 font-semibold">
-                          {userStats.streak.current} day streak! 🔥
-                        </span>
-                      </div>
-                    )}
-                  </div>
-                </div>
-                <div className="text-right">
-                  <div className="text-purple-100 text-sm mb-1">Next Level</div>
-                  <div className="text-2xl font-bold text-white">{userStats.points_for_next_level.toLocaleString()}</div>
-                  <div className="text-purple-200 text-sm mt-1">
-                    {userStats.level_progress.current.toLocaleString()} / {userStats.level_progress.needed.toLocaleString()}
-                  </div>
+      {/* Earnings Hero Section */}
+      {earnings && !earningsLoading && (
+        <div className="relative overflow-hidden bg-gradient-to-br from-gray-900 via-purple-900 to-black border-b border-gray-800">
+          {/* Animated grid background */}
+          <div className="absolute inset-0 bg-grid-pattern opacity-10" />
+          
+          {/* Main earnings display */}
+          <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+            <div className="text-center mb-8">
+              <div className="flex items-center justify-center gap-2 mb-3">
+                <Sparkles className="w-5 h-5 text-cyan-400" />
+                <p className="text-sm text-cyan-400 font-mono tracking-wider uppercase">
+                  Total Lifetime Earnings
+                </p>
+                <Sparkles className="w-5 h-5 text-cyan-400" />
+              </div>
+              
+              <div className="mb-6">
+                <div className="text-8xl font-black text-transparent bg-clip-text bg-gradient-to-r from-green-400 via-cyan-400 to-blue-500 animate-glow inline-block">
+                  <EarningsCounter 
+                    target={earnings.total_lifetime_earnings} 
+                    duration={2500}
+                    className="text-8xl font-black"
+                    glowColor="green"
+                  />
                 </div>
               </div>
               
-              {/* Progress Bar */}
-              <div className="mt-6">
-                <ProgressBar
-                  current={userStats.level_progress.current}
-                  max={userStats.level_progress.needed}
-                  label="Progress to Next Level"
-                  color="yellow"
-                  showPercentage={true}
-                />
+              <p className="text-xl text-gray-300 mb-2">
+                From <span className="text-white font-semibold">{earnings.total_games}</span> games played
+              </p>
+              
+              {earnings.tier && (
+                <div className="inline-flex items-center gap-2 px-4 py-2 bg-gray-800 bg-opacity-50 rounded-full border border-gray-700">
+                  <Award className="w-5 h-5" style={{ color: earnings.tier.color }} />
+                  <span className="text-sm font-semibold" style={{ color: earnings.tier.color }}>
+                    {earnings.tier.name} Tier
+                  </span>
+                  {earnings.tier.next_threshold && (
+                    <span className="text-xs text-gray-400">
+                      (${earnings.tier.next_threshold - earnings.total_lifetime_earnings:.2f} to next)
+                    </span>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Secondary stats row */}
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+              {/* Pending Earnings */}
+              <div className="bg-gray-800 bg-opacity-50 backdrop-blur-sm rounded-xl p-6 border border-gray-700 animate-pulse-yellow">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-sm text-gray-400 font-medium">Pending</span>
+                  <Clock className="w-5 h-5 text-yellow-500" />
+                </div>
+                <div className="text-3xl font-bold text-yellow-400">
+                  <EarningsCounter 
+                    target={earnings.pending_earnings} 
+                    glowColor="yellow"
+                  />
+                </div>
+              </div>
+
+              {/* Last Game */}
+              <div className="bg-gray-800 bg-opacity-50 backdrop-blur-sm rounded-xl p-6 border border-gray-700">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-sm text-gray-400 font-medium">Last Game</span>
+                  <Zap className="w-5 h-5 text-blue-500" />
+                </div>
+                <div className="text-3xl font-bold text-blue-400">
+                  {earnings.recent_sessions.length > 0 && earnings.recent_sessions[0].amount > 0 ? (
+                    <EarningsCounter 
+                      target={earnings.recent_sessions[0].amount} 
+                      glowColor="blue"
+                    />
+                  ) : (
+                    <span className="text-gray-500">$0.00</span>
+                  )}
+                </div>
+              </div>
+
+              {/* Average Per Game */}
+              <div className="bg-gray-800 bg-opacity-50 backdrop-blur-sm rounded-xl p-6 border border-gray-700">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-sm text-gray-400 font-medium">Avg/Game</span>
+                  <TrendingUp className="w-5 h-5 text-purple-500" />
+                </div>
+                <div className="text-3xl font-bold text-purple-400">
+                  <EarningsCounter 
+                    target={earnings.average_per_game} 
+                    glowColor="purple"
+                  />
+                </div>
+              </div>
+
+              {/* This Week */}
+              <div className="bg-gray-800 bg-opacity-50 backdrop-blur-sm rounded-xl p-6 border border-gray-700 animate-pulse-glow">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-sm text-gray-400 font-medium">This Week</span>
+                  <Star className="w-5 h-5 text-green-500" />
+                </div>
+                <div className="text-3xl font-bold text-green-400">
+                  <EarningsCounter 
+                    target={earnings.earnings_this_week} 
+                    glowColor="green"
+                  />
+                </div>
               </div>
             </div>
 
-            {/* Stats Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
-              <StatsCard
-                title="Games Played"
-                value={userStats.games.total}
-                subtitle={`${userStats.games.wins} wins`}
-                icon="🎮"
-                color="blue"
-              />
-              <StatsCard
-                title="Win Rate"
-                value={`${userStats.games.win_rate}%`}
-                subtitle={`${userStats.games.losses} losses`}
-                icon="🎯"
-                color="green"
-              />
-              <StatsCard
-                title="Current Streak"
-                value={`${userStats.streak.current} days`}
-                subtitle={`Best: ${userStats.streak.longest} days`}
-                icon="🔥"
-                color="yellow"
-              />
-              <StatsCard
-                title="Achievements"
-                value={`${userStats.achievements.unlocked_count}/${userStats.achievements.total_count}`}
-                subtitle="Unlocked"
-                icon="🏆"
-                color="purple"
-              />
-            </div>
-
-            {/* Motivational Message & Next Achievements */}
-            {userStats.motivational_message && (
-              <div className="bg-gradient-to-r from-green-500 to-emerald-600 rounded-lg p-6 mb-6 shadow-lg">
-                <div className="flex items-center gap-3">
-                  <Target className="text-white" size={32} />
-                  <div>
-                    <h3 className="text-xl font-bold text-white mb-1">Keep Going!</h3>
-                    <p className="text-green-50">{userStats.motivational_message}</p>
-                  </div>
-                </div>
-                
-                {/* Next Achievements Preview */}
-                {userStats.next_achievements && userStats.next_achievements.length > 0 && (
-                  <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-3">
-                    {userStats.next_achievements.map((achievement) => (
-                      <div key={achievement.id} className="bg-white bg-opacity-20 rounded-lg p-3 backdrop-blur-sm">
-                        <div className="flex items-center gap-2 mb-1">
-                          <span className="text-2xl">{achievement.icon}</span>
-                          <span className="font-semibold text-white text-sm">{achievement.name}</span>
-                        </div>
-                        <p className="text-xs text-green-100">{achievement.description}</p>
-                        <div className="mt-2 text-xs text-yellow-200 font-semibold">
-                          +{achievement.points} pts • {achievement.progress_needed} more needed
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
+            {/* Earnings Chart */}
+            {earnings.recent_sessions.length > 0 && (
+              <div className="bg-gray-800 bg-opacity-30 backdrop-blur-sm rounded-xl p-6 border border-gray-700 mb-8">
+                <h3 className="text-lg font-semibold text-white mb-4">Recent Earnings Trend</h3>
+                <EarningsChart data={earnings.recent_sessions.slice(0, 10).reverse()} />
               </div>
             )}
 
@@ -234,18 +243,23 @@ const DashboardPage = () => {
             <div className="text-center">
               <Link
                 to="/lobby"
-                className="inline-flex items-center gap-2 px-8 py-4 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-lg font-bold text-lg hover:from-purple-700 hover:to-pink-700 transition-all transform hover:scale-105 shadow-lg"
+                className="inline-flex items-center gap-3 px-10 py-5 bg-gradient-to-r from-green-500 via-cyan-500 to-blue-500 text-white rounded-xl font-bold text-xl hover:from-green-600 hover:via-cyan-600 hover:to-blue-600 transition-all transform hover:scale-105 shadow-2xl animate-pulse-glow"
               >
-                <Star className="animate-pulse" size={24} />
-                Play Another Game
-                <TrendingUp size={24} />
+                <DollarSign className="w-6 h-6" />
+                Earn More
+                <Sparkles className="w-6 h-6" />
               </Link>
+              <p className="text-sm text-gray-400 mt-3">
+                Play games to increase your earnings
+              </p>
             </div>
           </div>
-        )}
+        </div>
+      )}
 
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Claim Completion Key Section */}
-        <div className="bg-gray-800 rounded-lg shadow-xl p-6 mb-8">
+        <div className="bg-gray-800 rounded-xl shadow-2xl p-6 mb-8 border border-gray-700">
           <h2 className="text-2xl font-bold text-white mb-4 flex items-center gap-2">
             <Key className="text-yellow-500" />
             Claim Completion Key
@@ -259,12 +273,12 @@ const DashboardPage = () => {
               value={claimKey}
               onChange={(e) => setClaimKey(e.target.value)}
               placeholder="Paste your completion key here..."
-              className="flex-1 px-4 py-3 bg-gray-700 text-white border border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+              className="flex-1 px-4 py-3 bg-gray-900 text-white border border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-transparent"
             />
             <button
               type="submit"
               disabled={claiming || !claimKey.trim()}
-              className="px-6 py-3 bg-purple-600 text-white rounded-lg font-medium hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 focus:ring-offset-gray-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              className="px-6 py-3 bg-gradient-to-r from-cyan-600 to-blue-600 text-white rounded-lg font-medium hover:from-cyan-700 hover:to-blue-700 focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:ring-offset-2 focus:ring-offset-gray-900 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
             >
               {claiming ? 'Claiming...' : 'Claim Key'}
             </button>
@@ -272,22 +286,23 @@ const DashboardPage = () => {
         </div>
 
         {/* Sessions List */}
-        <div className="bg-gray-800 rounded-lg shadow-xl overflow-hidden">
-          <div className="px-6 py-4 border-b border-gray-700">
+        <div className="bg-gray-800 rounded-xl shadow-2xl overflow-hidden border border-gray-700">
+          <div className="px-6 py-4 border-b border-gray-700 bg-gray-900">
             <h2 className="text-2xl font-bold text-white">Your Sessions</h2>
-            <p className="text-gray-400 mt-1">View your game history and completion keys</p>
+            <p className="text-gray-400 mt-1">View your game history and earnings</p>
           </div>
 
           {loading ? (
             <div className="flex items-center justify-center py-12">
-              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-500"></div>
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-cyan-500"></div>
             </div>
           ) : sessions.length === 0 ? (
             <div className="text-center py-12">
+              <DollarSign className="w-16 h-16 text-gray-600 mx-auto mb-4" />
               <p className="text-gray-400 text-lg mb-4">No sessions yet</p>
               <Link
                 to="/lobby"
-                className="inline-block px-6 py-3 bg-purple-600 text-white rounded-lg font-medium hover:bg-purple-700 transition-colors"
+                className="inline-block px-6 py-3 bg-gradient-to-r from-green-600 to-cyan-600 text-white rounded-lg font-medium hover:from-green-700 hover:to-cyan-700 transition-colors"
               >
                 Play Your First Game
               </Link>
@@ -295,27 +310,27 @@ const DashboardPage = () => {
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full">
-                <thead className="bg-gray-700">
+                <thead className="bg-gray-900">
                   <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
                       Room Code
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
+                      Earnings
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
                       Date
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
                       Language
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
                       Players
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
-                      Payment
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
                       Completion Key
                     </th>
-                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-300 uppercase tracking-wider">
+                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-400 uppercase tracking-wider">
                       Actions
                     </th>
                   </tr>
@@ -329,8 +344,40 @@ const DashboardPage = () => {
                         </span>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="flex items-center text-sm text-gray-300">
-                          <Clock className="w-4 h-4 mr-2 text-gray-500" />
+                        <div className="flex flex-col gap-1">
+                          {session.payment_amount ? (
+                            <div className="flex items-center gap-2">
+                              <span
+                                className={`text-lg font-bold ${
+                                  session.payment_status === 'paid'
+                                    ? 'text-green-400'
+                                    : 'text-yellow-400'
+                                }`}
+                              >
+                                ${session.payment_amount}
+                              </span>
+                              <span
+                                className={`px-2 py-0.5 text-xs font-medium rounded ${
+                                  session.payment_status === 'paid'
+                                    ? 'bg-green-900 text-green-200'
+                                    : 'bg-yellow-900 text-yellow-200 animate-pulse-yellow'
+                                }`}
+                              >
+                                {session.payment_status}
+                              </span>
+                            </div>
+                          ) : session.calculated_earnings ? (
+                            <span className="text-sm text-gray-500">
+                              Suggested: ${session.calculated_earnings}
+                            </span>
+                          ) : (
+                            <span className="text-sm text-gray-500">Pending review</span>
+                          )}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="flex items-center text-sm text-gray-400">
+                          <Clock className="w-4 h-4 mr-2 text-gray-600" />
                           {format(new Date(session.completed_at), 'MMM d, yyyy HH:mm')}
                         </div>
                       </td>
@@ -339,36 +386,17 @@ const DashboardPage = () => {
                           {session.language}
                         </span>
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-400">
                         {session.num_human_players}/{session.total_players}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="flex items-center gap-2">
-                          <span
-                            className={`px-2 py-1 text-xs font-medium rounded ${
-                              session.payment_status === 'paid'
-                                ? 'bg-green-900 text-green-200'
-                                : 'bg-yellow-900 text-yellow-200'
-                            }`}
-                          >
-                            {session.payment_status}
-                          </span>
-                          {session.payment_amount && (
-                            <span className="text-sm text-gray-400 flex items-center">
-                              <DollarSign className="w-4 h-4" />
-                              {session.payment_amount}
-                            </span>
-                          )}
-                        </div>
                       </td>
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-2">
-                          <code className="text-xs text-gray-400 bg-gray-900 px-2 py-1 rounded max-w-xs truncate">
+                          <code className="text-xs text-gray-500 bg-gray-900 px-2 py-1 rounded max-w-xs truncate">
                             {session.completion_key.substring(0, 20)}...
                           </code>
                           <button
                             onClick={() => copyToClipboard(session.completion_key, session.id)}
-                            className="p-1 text-gray-400 hover:text-white transition-colors"
+                            className="p-1 text-gray-500 hover:text-cyan-400 transition-colors"
                             title="Copy completion key"
                           >
                             {copiedKey === session.id ? (
@@ -382,7 +410,7 @@ const DashboardPage = () => {
                       <td className="px-6 py-4 whitespace-nowrap text-right text-sm">
                         <Link
                           to={`/sessions/${session.id}`}
-                          className="inline-flex items-center gap-1 text-purple-400 hover:text-purple-300 font-medium transition-colors"
+                          className="inline-flex items-center gap-1 text-cyan-400 hover:text-cyan-300 font-medium transition-colors"
                         >
                           View Details
                           <ExternalLink className="w-4 h-4" />

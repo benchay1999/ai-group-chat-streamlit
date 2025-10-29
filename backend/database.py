@@ -100,6 +100,7 @@ class Session(Base):
     completed_at = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
     payment_status = Column(Enum(PaymentStatus), default=PaymentStatus.PENDING, nullable=False)
     payment_amount = Column(DECIMAL(10, 2), nullable=True)
+    calculated_earnings = Column(DECIMAL(10, 2), nullable=True)  # Performance-based earnings suggestion
     stats_file_path = Column(String(500), nullable=False)
     claimed_at = Column(DateTime, nullable=True)
     

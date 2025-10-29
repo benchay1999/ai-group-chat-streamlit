@@ -53,8 +53,9 @@ const AdminPage = () => {
     }
   };
 
-  const promptPaymentAmount = (sessionId, currentStatus) => {
-    const amount = prompt('Enter payment amount:');
+  const promptPaymentAmount = (sessionId, currentStatus, suggestedAmount = null) => {
+    const defaultValue = suggestedAmount ? suggestedAmount.toFixed(2) : '';
+    const amount = prompt(`Enter payment amount:${suggestedAmount ? ` (Suggested: $${suggestedAmount.toFixed(2)})` : ''}`, defaultValue);
     if (amount !== null) {
       const parsedAmount = parseFloat(amount);
       if (!isNaN(parsedAmount) && parsedAmount >= 0) {
@@ -63,6 +64,10 @@ const AdminPage = () => {
         toast.error('Invalid amount');
       }
     }
+  };
+
+  const acceptSuggestedAmount = (sessionId, currentStatus, suggestedAmount) => {
+    handleUpdatePayment(sessionId, currentStatus, suggestedAmount);
   };
 
   return (
@@ -210,11 +215,25 @@ const AdminPage = () => {
                           </span>
                         )}
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 font-medium">
-                        {session.payment_amount ? `$${session.payment_amount}` : '-'}
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="flex flex-col gap-1">
+                          <span className="text-sm text-gray-900 font-medium">
+                            {session.payment_amount ? `$${session.payment_amount}` : '-'}
+                          </span>
+                          {session.calculated_earnings && (
+                            <span className={`text-xs ${
+                              session.payment_amount && 
+                              Math.abs(session.payment_amount - session.calculated_earnings) > 0.01
+                                ? 'text-orange-600 font-medium'
+                                : 'text-gray-500'
+                            }`}>
+                              Suggested: ${session.calculated_earnings}
+                            </span>
+                          )}
+                        </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm space-y-1">
-                        <div className="flex gap-2">
+                        <div className="flex gap-2 flex-wrap">
                           {session.payment_status === 'pending' ? (
                             <button
                               onClick={() => handleUpdatePayment(session.id, 'paid')}
@@ -232,8 +251,17 @@ const AdminPage = () => {
                               {updatingSession === session.id ? 'Updating...' : 'Mark Pending'}
                             </button>
                           )}
+                          {session.calculated_earnings && !session.payment_amount && (
+                            <button
+                              onClick={() => acceptSuggestedAmount(session.id, session.payment_status, session.calculated_earnings)}
+                              disabled={updatingSession === session.id}
+                              className="px-3 py-1 bg-cyan-600 text-white rounded text-xs font-medium hover:bg-cyan-700 disabled:opacity-50"
+                            >
+                              Accept ${session.calculated_earnings}
+                            </button>
+                          )}
                           <button
-                            onClick={() => promptPaymentAmount(session.id, session.payment_status)}
+                            onClick={() => promptPaymentAmount(session.id, session.payment_status, session.calculated_earnings)}
                             disabled={updatingSession === session.id}
                             className="px-3 py-1 bg-blue-600 text-white rounded text-xs font-medium hover:bg-blue-700 disabled:opacity-50"
                           >
