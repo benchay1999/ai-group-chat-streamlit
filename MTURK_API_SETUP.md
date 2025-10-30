@@ -143,7 +143,21 @@ The MTurk Sandbox is a free testing environment that mirrors production.
 
 ## ⚙️ Environment Configuration
 
-### Step 1: Update `.env` File
+### Step 1: Run Database Migration
+
+**IMPORTANT:** Run this first to add MTurk columns to the database:
+
+```bash
+cd backend
+python3 -m alembic upgrade head
+```
+
+**Expected output:**
+```
+INFO  [alembic.runtime.migration] Running upgrade 004 -> 006, Add MTurk integration fields to sessions table
+```
+
+### Step 2: Update `.env` File
 
 In your project root, edit the `.env` file (or create from `env.example`):
 
@@ -170,7 +184,7 @@ EXTERNAL_URL=http://localhost:5173/lobby
 MTURK_FRAME_HEIGHT=0
 ```
 
-### Step 2: Verify Configuration
+### Step 3: Verify Configuration
 
 Run the backend and check logs for MTurk initialization:
 

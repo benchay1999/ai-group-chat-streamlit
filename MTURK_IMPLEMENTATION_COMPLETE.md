@@ -299,11 +299,23 @@ Annual (1,000/month): $12,816.00 saved
    MTURK_ENVIRONMENT=sandbox
    ```
 
-2. **Run database migration:**
+2. **Run database migration (REQUIRED):**
    ```bash
    cd backend
    python3 -m alembic upgrade head
    ```
+   
+   **Expected output:**
+   ```
+   INFO  [alembic.runtime.migration] Running upgrade 004 -> 006, Add MTurk integration fields
+   ```
+   
+   **This adds 5 new columns to the sessions table:**
+   - `mturk_worker_id`
+   - `mturk_assignment_id`
+   - `mturk_hit_id`
+   - `mturk_payment_sent`
+   - `mturk_bonus_sent`
 
 3. **Restart backend:**
    ```bash

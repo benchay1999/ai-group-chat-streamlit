@@ -132,12 +132,22 @@ cp env.example .env
 ## 📝 Quick Start Checklist
 
 - [ ] `.env` file configured
-- [ ] Database migration run: `python3 -m alembic upgrade head`
+- [ ] **Database migration run:** `cd backend && python3 -m alembic upgrade head` ⚠️ **REQUIRED!**
 - [ ] Backend dependencies installed: `pip install -r backend/requirements.txt`
 - [ ] Frontend dependencies installed: `cd frontend && npm install`
 - [ ] Backend running: `python run_backend_local.py`
 - [ ] Frontend running: `cd frontend && npm run dev`
 - [ ] Test URL: http://localhost:5173
+
+### ⚠️ Common Mistake
+
+**Error:** `no such column: sessions.mturk_worker_id`
+
+**Fix:** You forgot to run the migration! Run from the `backend` directory:
+```bash
+cd backend
+python3 -m alembic upgrade head
+```
 
 ---
 

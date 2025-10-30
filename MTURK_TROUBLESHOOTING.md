@@ -205,11 +205,12 @@ curl http://localhost:8000/api/admin/mturk/balance \
 
 ### Error
 ```
-sqlalchemy.exc.OperationalError: no such column: sessions.mturk_worker_id
+sqlalchemy.exc.OperationalError: (sqlite3.OperationalError) no such column: sessions.mturk_worker_id
 ```
 
 ### Solution
-Run the migration:
+**IMPORTANT:** Run the migration from the `backend` directory:
+
 ```bash
 cd backend
 python3 -m alembic upgrade head
@@ -217,14 +218,34 @@ python3 -m alembic upgrade head
 
 **Expected output:**
 ```
-INFO  [alembic.runtime.migration] Running upgrade 004 -> 006, Add MTurk integration fields
+INFO  [alembic.runtime.migration] Context impl SQLiteImpl.
+INFO  [alembic.runtime.migration] Will assume non-transactional DDL.
+INFO  [alembic.runtime.migration] Running upgrade 004 -> 006, Add MTurk integration fields to sessions table
 ```
 
 **If migration already applied:**
 ```
 INFO  [alembic.runtime.migration] Context impl SQLiteImpl.
 INFO  [alembic.runtime.migration] Will assume non-transactional DDL.
+(no upgrade message - already at latest version)
 ```
+
+### Verify Migration Success
+```bash
+cd backend
+python3 -c "
+import sqlite3
+conn = sqlite3.connect('group_chat.db')
+cursor = conn.cursor()
+cursor.execute('PRAGMA table_info(sessions)')
+columns = [col[1] for col in cursor.fetchall()]
+mturk_cols = [c for c in columns if 'mturk' in c.lower()]
+print(f'Found {len(mturk_cols)} MTurk columns: {mturk_cols}')
+conn.close()
+"
+```
+
+**Expected:** `Found 5 MTurk columns: ['mturk_worker_id', 'mturk_assignment_id', 'mturk_hit_id', 'mturk_payment_sent', 'mturk_bonus_sent']`
 
 ---
 
