@@ -76,11 +76,7 @@ const AdminPage = () => {
       return;
     }
     
-<<<<<<< Current (Your changes)
-    try:
-=======
     try {
->>>>>>> Incoming (Background Agent changes)
       setUpdatingSession(sessionId);
       const result = await mturkAPI.approvePayment(sessionId);
       
