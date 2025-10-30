@@ -33,7 +33,8 @@ from .database import (
 )
 from .auth import (
     hash_password, authenticate_user, create_access_token,
-    get_current_user, get_current_user_optional, require_admin
+    get_current_user, get_current_user_optional, require_admin,
+    register_or_login_mturk_worker
 )
 from .completion_keys import (
     generate_completion_key, decode_completion_key, extract_session_info
@@ -61,8 +62,18 @@ app.add_middleware(
 
 @app.on_event("startup")
 async def startup_event():
-    """Initialize database on application startup."""
+    """Initialize database and MTurk client on application startup."""
     await init_db()
+    
+    # Initialize MTurk client to verify credentials and show configuration
+    try:
+        from .mturk_api import get_mturk_client
+        client = get_mturk_client()
+        print(f"💰 Base pay: ${client.base_pay}, Max bonus: ${os.getenv('MTURK_MAX_BONUS', '0.05')}")
+    except Exception as e:
+        print(f"⚠️  MTurk client initialization failed: {e}")
+        print("   MTurk features will not be available until credentials are configured.")
+    
     print("🚀 Application started successfully")
 
 
@@ -118,6 +129,21 @@ class SessionResponse(BaseModel):
 class UpdatePaymentRequest(BaseModel):
     payment_status: str
     payment_amount: Optional[float] = None
+
+class MTurkRegisterRequest(BaseModel):
+    worker_id: str
+    assignment_id: str
+    hit_id: str
+
+class MTurkPaymentRequest(BaseModel):
+    session_id: str
+
+class CreateHITRequest(BaseModel):
+    title: str = "Play a group chat game and identify AI players"
+    description: str = "Join a 5-minute group chat game, discuss a topic with other players, and vote for who you think is an AI. Fun and engaging!"
+    keywords: str = "chat, game, conversation, AI, discussion"
+    max_workers: int = 1
+    reward: Optional[float] = None
 
 
 # Thread pool for running blocking AI operations without blocking the event loop
@@ -1045,25 +1071,39 @@ async def save_session_stats(room_code: str, state: dict, current_user: Optional
     try:
         from .database import async_session_maker
         async with async_session_maker() as db:
-            db_session = DBSession(
-                id=session_id,
-                room_code=room_code,
-                completion_key=completion_key,
-                user_id=current_user.id if current_user else None,
-                language=language,
-                total_players=total_players,
-                num_human_players=num_humans,
-                discussion_duration=discussion_duration,
-                voting_duration=voting_duration,
-                payment_status=PaymentStatus.PENDING,
-                calculated_earnings=calculated_earnings_value,
-                stats_file_path=path,
-                claimed_at=_time.time() if current_user else None,
-                total_input_tokens=total_input_tokens,
-                total_output_tokens=total_output_tokens,
-                total_cost=total_cost,
-                model_name=model_name
-            )
+            # Build session data dict
+            session_data = {
+                "id": session_id,
+                "room_code": room_code,
+                "completion_key": completion_key,
+                "user_id": current_user.id if current_user else None,
+                "language": language,
+                "total_players": total_players,
+                "num_human_players": num_humans,
+                "discussion_duration": discussion_duration,
+                "voting_duration": voting_duration,
+                "payment_status": PaymentStatus.PENDING,
+                "stats_file_path": path,
+                "claimed_at": _time.time() if current_user else None,
+                "total_input_tokens": total_input_tokens,
+                "total_output_tokens": total_output_tokens,
+                "total_cost": total_cost,
+                "model_name": model_name
+            }
+            
+            # Only add calculated_earnings if the column exists in the model
+            if hasattr(DBSession, 'calculated_earnings'):
+                session_data["calculated_earnings"] = calculated_earnings_value
+            
+            # Add MTurk fields if present in room data
+            mturk_context = room_data.get('mturk_context', {})
+            if mturk_context:
+                session_data["mturk_worker_id"] = mturk_context.get('worker_id')
+                session_data["mturk_assignment_id"] = mturk_context.get('assignment_id')
+                session_data["mturk_hit_id"] = mturk_context.get('hit_id')
+                print(f"💼 MTurk context saved: worker={mturk_context.get('worker_id')}, assignment={mturk_context.get('assignment_id')}")
+            
+            db_session = DBSession(**session_data)
             db.add(db_session)
             
             # Save per-agent token usage
@@ -1287,6 +1327,7 @@ async def websocket_endpoint(websocket: WebSocket, room_code: str, player_id: st
     # Try to get authenticated user from token query param
     user_id = None
     authenticated_user = None
+    mturk_context = None
     try:
         token = websocket.query_params.get('token')
         print(f"🔑 Token received: {'Yes' if token else 'No'}")
@@ -1309,6 +1350,18 @@ async def websocket_endpoint(websocket: WebSocket, room_code: str, player_id: st
                         user_id = str(user.id)
                         authenticated_user = user
                         print(f"👤 ✅ Authenticated user '{user.user_id}' (ID: {user_id[:8]}...) as {player_id}")
+                        
+                        # Check if this is an MTurk worker (username starts with 'A' and is long)
+                        if user.username and len(user.username) > 10 and user.username.startswith('A'):
+                            # Try to get MTurk context from localStorage (passed via query params)
+                            import json
+                            mturk_json = websocket.query_params.get('mturk_context')
+                            if mturk_json:
+                                try:
+                                    mturk_context = json.loads(mturk_json)
+                                    print(f"💼 MTurk worker detected: {mturk_context.get('worker_id')}")
+                                except:
+                                    pass
                     else:
                         print(f"⚠️ User not found in database for UUID: {user_uuid}")
             else:
@@ -1373,6 +1426,13 @@ async def websocket_endpoint(websocket: WebSocket, room_code: str, player_id: st
         print(f"👤 ✅ Stored initial mapping: {player_id} -> user {user_id[:8]}...")
     else:
         print(f"⚠️ No user_id to store for player {player_id}")
+    
+    # Store MTurk context if available
+    if mturk_context:
+        if 'mturk_context' not in rooms[room_code]:
+            rooms[room_code]['mturk_context'] = {}
+        rooms[room_code]['mturk_context'][player_id] = mturk_context
+        print(f"💼 ✅ Stored MTurk context for {player_id}: worker={mturk_context.get('worker_id')}")
     
     # Add human player to game state if not already there
     state = rooms[room_code]['state']
@@ -1734,6 +1794,52 @@ async def get_current_user_info(
     )
 
 
+# ============================================================================
+# MTurk Integration API Endpoints
+# ============================================================================
+
+@app.post("/api/auth/mturk-register")
+async def mturk_register(
+    request: MTurkRegisterRequest,
+    db: AsyncSession = Depends(get_async_session)
+):
+    """
+    Auto-register or login an MTurk worker.
+    Called by frontend when MTurk URL parameters are detected.
+    
+    Args:
+        request: MTurk worker credentials (workerId, assignmentId, hitId)
+        db: Database session
+    
+    Returns:
+        JWT access token and user info
+    """
+    # Check for preview mode
+    if request.assignment_id == "ASSIGNMENT_ID_NOT_AVAILABLE":
+        return {
+            "success": True,
+            "preview_mode": True,
+            "message": "Preview mode - accept HIT to participate"
+        }
+    
+    # Register or login worker
+    user, access_token = await register_or_login_mturk_worker(db, request.worker_id)
+    
+    # Store MTurk IDs in session context (will be saved with game session)
+    return {
+        "success": True,
+        "access_token": access_token,
+        "token_type": "bearer",
+        "user_id": user.user_id,
+        "role": user.role.value,
+        "mturk_context": {
+            "worker_id": request.worker_id,
+            "assignment_id": request.assignment_id,
+            "hit_id": request.hit_id
+        }
+    }
+
+
 @app.get("/api/users/stats")
 async def get_user_stats(
     current_user: User = Depends(get_current_user),
@@ -1882,14 +1988,17 @@ async def get_user_earnings(
     earnings_this_month = Decimal("0.00")
     
     for session in sessions:
-        # Track calculated earnings
-        if session.calculated_earnings:
-            total_calculated += session.calculated_earnings
-            if session.calculated_earnings > highest_earning:
-                highest_earning = session.calculated_earnings
+        # Track calculated earnings (use getattr for backward compatibility)
+        calc_earnings = getattr(session, 'calculated_earnings', None)
+        if calc_earnings:
+            total_calculated += calc_earnings
         
         # Track actual payments
         if session.payment_amount:
+            # Track highest PAID earning (not calculated)
+            if session.payment_amount > highest_earning:
+                highest_earning = session.payment_amount
+                
             if session.payment_status == PaymentStatus.PAID:
                 total_paid += session.payment_amount
                 
@@ -1906,7 +2015,7 @@ async def get_user_earnings(
             recent_sessions.append({
                 "date": session.completed_at.isoformat(),
                 "amount": float(session.payment_amount) if session.payment_amount else 0,
-                "calculated": float(session.calculated_earnings) if session.calculated_earnings else 0,
+                "calculated": float(calc_earnings) if calc_earnings else 0,
                 "status": session.payment_status.value
             })
     
@@ -1998,7 +2107,7 @@ async def list_sessions(
                 "completed_at": s.completed_at.isoformat(),
                 "payment_status": s.payment_status.value,
                 "payment_amount": float(s.payment_amount) if s.payment_amount else None,
-                "calculated_earnings": float(s.calculated_earnings) if s.calculated_earnings else None,
+                "calculated_earnings": float(getattr(s, 'calculated_earnings', None)) if getattr(s, 'calculated_earnings', None) else None,
                 "claimed_at": s.claimed_at.isoformat() if s.claimed_at else None
             }
             for s in sessions
@@ -2481,6 +2590,223 @@ async def admin_analytics(
         "time_series": time_series_list,
         "high_cost_sessions": high_cost_list
     }
+
+
+# ============================================================================
+# MTurk Admin API Endpoints
+# ============================================================================
+
+@app.post("/api/admin/mturk/sessions/{session_id}/approve-payment")
+async def approve_mturk_payment(
+    session_id: str,
+    admin_user: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_async_session)
+):
+    """
+    Approve MTurk assignment and send bonus payment.
+    Triggers MTurk API calls to approve assignment (base pay) and send bonus.
+    
+    Args:
+        session_id: Session UUID
+        admin_user: Current admin user
+        db: Database session
+    
+    Returns:
+        Payment result with approval and bonus status
+    """
+    from decimal import Decimal
+    from .mturk_api import process_payment
+    
+    # Convert session_id to UUID
+    try:
+        session_uuid = uuid_lib.UUID(session_id)
+    except (ValueError, AttributeError):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid session ID format"
+        )
+    
+    # Get session
+    result = await db.execute(
+        select(DBSession).where(DBSession.id == session_uuid)
+    )
+    session = result.scalar_one_or_none()
+    
+    if not session:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Session not found"
+        )
+    
+    # Check if this is an MTurk session
+    if not session.mturk_assignment_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="This is not an MTurk session"
+        )
+    
+    # Check if already paid
+    if session.mturk_payment_sent:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Payment already sent for this session"
+        )
+    
+    # Check if calculated earnings exist
+    if not session.calculated_earnings:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No calculated earnings for this session"
+        )
+    
+    try:
+        # Process payment via MTurk API with max_bonus cap
+        from .config import MTURK_MAX_BONUS
+        max_bonus = Decimal(str(MTURK_MAX_BONUS))
+        
+        payment_result = process_payment(
+            assignment_id=session.mturk_assignment_id,
+            worker_id=session.mturk_worker_id,
+            calculated_earnings=Decimal(str(session.calculated_earnings)),
+            max_bonus=max_bonus
+        )
+        
+        # Update session with payment status
+        session.mturk_payment_sent = 1 if payment_result['approved'] else 0
+        session.mturk_bonus_sent = 1 if payment_result.get('bonus_sent', False) else 0
+        session.payment_status = PaymentStatus.PAID
+        session.payment_amount = session.calculated_earnings
+        
+        await db.commit()
+        await db.refresh(session)
+        
+        return {
+            "success": True,
+            "message": "MTurk payment processed successfully",
+            "payment_result": payment_result,
+            "session": {
+                "id": str(session.id),
+                "room_code": session.room_code,
+                "worker_id": session.mturk_worker_id,
+                "assignment_id": session.mturk_assignment_id,
+                "payment_amount": float(session.payment_amount),
+                "payment_status": session.payment_status.value
+            }
+        }
+        
+    except Exception as e:
+        print(f"❌ MTurk payment error: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"MTurk API error: {str(e)}"
+        )
+
+
+@app.post("/api/admin/mturk/create-hit")
+async def create_mturk_hit(
+    request: CreateHITRequest,
+    admin_user: User = Depends(require_admin)
+):
+    """
+    Create a new MTurk HIT for the group chat game.
+    
+    Args:
+        request: HIT creation parameters
+        admin_user: Current admin user
+    
+    Returns:
+        Created HIT details
+    """
+    from .mturk_api import create_game_hit
+    from decimal import Decimal
+    
+    try:
+        reward = Decimal(str(request.reward)) if request.reward else None
+        
+        hit_info = create_game_hit(
+            max_workers=request.max_workers,
+            title=request.title,
+            description=request.description,
+            keywords=request.keywords,
+            reward=reward
+        )
+        
+        return {
+            "success": True,
+            "message": "HIT created successfully",
+            "hit": hit_info
+        }
+        
+    except Exception as e:
+        print(f"❌ HIT creation error: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"MTurk API error: {str(e)}"
+        )
+
+
+@app.get("/api/admin/mturk/hits")
+async def list_mturk_hits(
+    admin_user: User = Depends(require_admin)
+):
+    """
+    List all MTurk HITs.
+    
+    Args:
+        admin_user: Current admin user
+    
+    Returns:
+        List of HITs
+    """
+    from .mturk_api import get_mturk_client
+    
+    try:
+        client = get_mturk_client()
+        hits = client.list_hits(max_results=100)
+        
+        return {
+            "success": True,
+            "hits": hits
+        }
+        
+    except Exception as e:
+        print(f"❌ List HITs error: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"MTurk API error: {str(e)}"
+        )
+
+
+@app.get("/api/admin/mturk/balance")
+async def get_mturk_balance(
+    admin_user: User = Depends(require_admin)
+):
+    """
+    Get MTurk account balance.
+    
+    Args:
+        admin_user: Current admin user
+    
+    Returns:
+        Account balance information
+    """
+    from .mturk_api import get_mturk_client
+    
+    try:
+        client = get_mturk_client()
+        balance = client.get_account_balance()
+        
+        return {
+            "success": True,
+            "balance": balance
+        }
+        
+    except Exception as e:
+        print(f"❌ Get balance error: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"MTurk API error: {str(e)}"
+        )
 
 
 # ============================================================================

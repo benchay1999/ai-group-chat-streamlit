@@ -254,3 +254,55 @@ async def create_admin_user(db: AsyncSession, user_id: str, password: str) -> Us
     await db.refresh(admin_user)
     return admin_user
 
+
+async def register_or_login_mturk_worker(
+    db: AsyncSession,
+    worker_id: str
+) -> tuple:
+    """
+    Auto-register or login an MTurk worker.
+    Creates a new user account if worker doesn't exist, or returns existing user.
+    
+    Args:
+        db: Database session
+        worker_id: MTurk worker ID
+    
+    Returns:
+        Tuple of (User object, JWT access token)
+    """
+    import secrets
+    
+    # Check if worker already exists
+    existing_user = await get_user_by_user_id(db, worker_id)
+    
+    if existing_user:
+        # Worker exists, generate new token
+        access_token = create_access_token(
+            data={"sub": str(existing_user.id), "user_id": existing_user.user_id}
+        )
+        return existing_user, access_token
+    
+    # Create new worker account
+    # Generate a secure random password (worker won't need it, auth is via MTurk)
+    auto_password = secrets.token_urlsafe(32)
+    hashed_password = hash_password(auto_password)
+    
+    new_user = User(
+        user_id=worker_id,
+        password_hash=hashed_password,
+        role=UserRole.USER
+    )
+    
+    db.add(new_user)
+    await db.commit()
+    await db.refresh(new_user)
+    
+    # Generate access token
+    access_token = create_access_token(
+        data={"sub": str(new_user.id), "user_id": new_user.user_id}
+    )
+    
+    print(f"✅ Auto-registered MTurk worker: {worker_id}")
+    
+    return new_user, access_token
+

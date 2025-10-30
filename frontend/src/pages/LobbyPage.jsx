@@ -11,8 +11,9 @@ import { useLanguage } from '../context/LanguageContext';
 import { useAuth } from '../contexts/AuthContext';
 import RoomCard from '../components/RoomCard';
 import CreateRoomModal from '../components/CreateRoomModal';
+import MTurkAutoLogin from '../components/MTurkAutoLogin';
 import toast from 'react-hot-toast';
-import { User, LogIn } from 'lucide-react';
+import { User, LogIn, Award } from 'lucide-react';
 
 const LobbyPage = () => {
   const navigate = useNavigate();
@@ -114,6 +115,9 @@ const LobbyPage = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-600 via-blue-600 to-indigo-700">
+      {/* MTurk Auto-Login Component */}
+      <MTurkAutoLogin />
+      
       {/* Header */}
       <div className="bg-white bg-opacity-10 backdrop-blur-md border-b border-white border-opacity-20">
         <div className="max-w-7xl mx-auto px-6 py-6">
@@ -127,13 +131,22 @@ const LobbyPage = () => {
               {isAuthenticated ? (
                 <button
                   onClick={() => navigate('/dashboard')}
-                  className="flex items-center gap-2 px-4 py-2 bg-white bg-opacity-20 rounded-full hover:bg-opacity-30 transition-all"
+                  className="flex items-center gap-2 px-4 py-2 bg-white bg-opacity-20 rounded-full hover:bg-opacity-30 transition-all group"
                   title="Go to Dashboard"
                 >
-                  <User className="w-4 h-4 text-white" />
+                  {user?.is_mturk_worker ? (
+                    <Award className="w-4 h-4 text-yellow-300 animate-pulse" />
+                  ) : (
+                    <User className="w-4 h-4 text-white" />
+                  )}
                   <span className="text-sm font-semibold text-white">
                     {user?.user_id}
                   </span>
+                  {user?.is_mturk_worker && (
+                    <span className="text-xs bg-yellow-400 text-yellow-900 px-2 py-0.5 rounded-full font-bold">
+                      MTurk
+                    </span>
+                  )}
                 </button>
               ) : (
                 <button

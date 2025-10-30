@@ -6,10 +6,10 @@
 import { LineChart, Line, ResponsiveContainer, Tooltip } from 'recharts';
 
 const EarningsChart = ({ data }) => {
-  // Transform data for chart
+  // Transform data for chart - ONLY show actual payments, not calculated suggestions
   const chartData = data.map((session, index) => ({
     index,
-    amount: session.amount || session.calculated || 0,
+    amount: session.amount || 0, // Only admin-set payment amounts
   }));
 
   const CustomTooltip = ({ active, payload }) => {

@@ -104,6 +104,13 @@ class Session(Base):
     stats_file_path = Column(String(500), nullable=False)
     claimed_at = Column(DateTime, nullable=True)
     
+    # MTurk integration fields
+    mturk_worker_id = Column(String(255), nullable=True, index=True)  # MTurk worker ID
+    mturk_assignment_id = Column(String(255), nullable=True, unique=True, index=True)  # MTurk assignment ID
+    mturk_hit_id = Column(String(255), nullable=True, index=True)  # MTurk HIT ID
+    mturk_payment_sent = Column(Integer, default=0, nullable=False)  # Boolean: 0=False, 1=True (SQLite compatible)
+    mturk_bonus_sent = Column(Integer, default=0, nullable=False)  # Boolean: 0=False, 1=True (SQLite compatible)
+    
     # Token usage tracking
     total_input_tokens = Column(Integer, default=0, nullable=False)
     total_output_tokens = Column(Integer, default=0, nullable=False)

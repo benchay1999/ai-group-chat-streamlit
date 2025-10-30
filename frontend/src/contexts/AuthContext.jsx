@@ -90,9 +90,45 @@ export const AuthProvider = ({ children }) => {
   const logout = () => {
     localStorage.removeItem('access_token');
     localStorage.removeItem('user');
+    localStorage.removeItem('mturk_context');
     setUser(null);
     setIsAuthenticated(false);
     toast.success('Logged out successfully');
+  };
+
+  const mturkLogin = async (workerId, assignmentId, hitId) => {
+    try {
+      const data = await authAPI.mturkRegister(workerId, assignmentId, hitId);
+      
+      // Check if preview mode
+      if (data.preview_mode) {
+        return { success: false, preview_mode: true, message: data.message };
+      }
+      
+      // Save token and user to localStorage
+      localStorage.setItem('access_token', data.access_token);
+      const userData = {
+        user_id: data.user_id,
+        role: data.role,
+        is_mturk_worker: true,
+      };
+      localStorage.setItem('user', JSON.stringify(userData));
+      
+      // Save MTurk context for session tracking
+      localStorage.setItem('mturk_context', JSON.stringify(data.mturk_context));
+
+      // Fetch full user data
+      const fullUserData = await authAPI.getCurrentUser();
+      setUser({ ...fullUserData, is_mturk_worker: true });
+      setIsAuthenticated(true);
+
+      toast.success(`Welcome, MTurk Worker! 🎯`);
+      return { success: true, mturk_context: data.mturk_context };
+    } catch (error) {
+      const message = error.response?.data?.detail || 'MTurk authentication failed';
+      toast.error(message);
+      return { success: false, error: message };
+    }
   };
 
   const value = {
@@ -102,6 +138,7 @@ export const AuthProvider = ({ children }) => {
     login,
     register,
     logout,
+    mturkLogin,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

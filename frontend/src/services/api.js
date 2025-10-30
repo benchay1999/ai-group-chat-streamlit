@@ -168,8 +168,21 @@ export const getWebSocketURL = (roomCode, playerId) => {
   const baseURL = BACKEND_URL.replace(/^https?:\/\//, '');
   
   // Include auth token if user is logged in
-  const token = localStorage.getItem('token');
-  const queryParam = token ? `?token=${token}` : '';
+  const token = localStorage.getItem('access_token');
+  const params = new URLSearchParams();
+  
+  if (token) {
+    params.append('token', token);
+  }
+  
+  // Include MTurk context if available
+  const mturkContext = localStorage.getItem('mturk_context');
+  if (mturkContext) {
+    params.append('mturk_context', mturkContext);
+  }
+  
+  const queryString = params.toString();
+  const queryParam = queryString ? `?${queryString}` : '';
   
   return `${wsProtocol}://${baseURL}/ws/${roomCode}/${playerId}${queryParam}`;
 };

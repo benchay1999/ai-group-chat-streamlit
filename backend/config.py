@@ -86,3 +86,12 @@ JWT_SECRET_KEY = os.getenv('JWT_SECRET_KEY', 'your-secret-key-change-this-in-pro
 JWT_COMPLETION_SECRET = os.getenv('JWT_COMPLETION_SECRET', 'completion-secret-key-change-this')
 JWT_ALGORITHM = 'HS256'
 ACCESS_TOKEN_EXPIRE_HOURS = 24
+
+# MTurk Configuration
+MTURK_ENVIRONMENT = os.getenv('MTURK_ENVIRONMENT', 'sandbox')  # 'sandbox' or 'production'
+MTURK_BASE_PAY = os.getenv('MTURK_BASE_PAY', '0.05')  # Base payment per HIT
+MTURK_MAX_BONUS = os.getenv('MTURK_MAX_BONUS', '0.05')  # Maximum bonus per HIT (total = base + bonus)
+EXTERNAL_URL = os.getenv('EXTERNAL_URL', 'http://localhost:5173/lobby')  # Public URL for ExternalQuestion
+MTURK_FRAME_HEIGHT = os.getenv('MTURK_FRAME_HEIGHT', '0')  # 0 = auto-resize
+AWS_ACCESS_KEY_ID = os.getenv('AWS_ACCESS_KEY_ID')  # AWS credentials for MTurk API
+AWS_SECRET_ACCESS_KEY = os.getenv('AWS_SECRET_ACCESS_KEY')

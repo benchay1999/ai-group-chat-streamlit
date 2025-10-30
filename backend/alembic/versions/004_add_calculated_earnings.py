@@ -1,7 +1,7 @@
 """Add calculated_earnings column to sessions
 
-Revision ID: 004_add_calculated_earnings
-Revises: 000_initial_schema
+Revision ID: 004
+Revises: 000
 Create Date: 2025-01-29 00:00:00.000000
 
 """
@@ -10,8 +10,8 @@ import sqlalchemy as sa
 from sqlalchemy.dialects.postgresql import UUID
 
 # revision identifiers, used by Alembic.
-revision = '004_add_calculated_earnings'
-down_revision = '000_initial_schema'
+revision = '004'
+down_revision = '000'
 branch_labels = None
 depends_on = None
 

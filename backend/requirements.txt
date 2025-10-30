@@ -15,6 +15,7 @@ passlib[argon2]
 argon2-cffi
 alembic
 python-multipart
+boto3
 # For PostgreSQL (future production use):
 # asyncpg
 # psycopg2-binary
