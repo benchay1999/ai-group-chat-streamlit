@@ -2577,8 +2577,18 @@ async def request_cashout(
         
         print(f"🔍 Step 4: Generating redemption URLs...")
         
+        # Get HITGroupId from MTurk (needed for worker preview URL)
+        # Note: HITId != HITGroupId, must query MTurk to get the group ID
+        try:
+            hit_response = mturk_client.client.get_hit(HITId=mturk_hit_id)
+            hit_group_id = hit_response['HIT']['HITGroupId']
+            print(f"   ✅ HITGroupId: {hit_group_id}")
+        except Exception as e:
+            print(f"   ⚠️ Could not get HITGroupId, using HITId as fallback: {e}")
+            hit_group_id = mturk_hit_id  # Fallback (may not work)
+        
         # MTurk HIT preview URL (for production use)
-        mturk_hit_url = f"{worker_endpoint}/mturk/preview?groupId={mturk_hit_id}"
+        mturk_hit_url = f"{worker_endpoint}/mturk/preview?groupId={hit_group_id}"
         
         # Dev/Testing URL (for testing without accepting HIT)
         # This allows testing the redemption flow without MTurk API calls
