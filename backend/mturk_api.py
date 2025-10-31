@@ -440,20 +440,25 @@ class MTurkClient:
             Dict with HIT details including hit_id and hit_url
         """
         # Build ExternalQuestion XML for cashout confirmation page
+        # Important: Escape XML special characters in URL (& becomes &amp;)
+        import xml.sax.saxutils as saxutils
+        escaped_url = saxutils.escape(external_url)
+        
         external_question = f"""<?xml version="1.0" encoding="UTF-8"?>
 <ExternalQuestion xmlns="http://mechanicalturk.amazonaws.com/AWSMechanicalTurkDataSchemas/2006-07-14/ExternalQuestion.xsd">
-  <ExternalURL>{external_url}</ExternalURL>
+  <ExternalURL>{escaped_url}</ExternalURL>
   <FrameHeight>{self.frame_height}</FrameHeight>
 </ExternalQuestion>"""
         
         # Qualification requirement: worker must have the unique qualification
+        # Note: Cannot use both RequiredToPreview and ActionsGuarded together
+        # Using RequiredToPreview=True ensures only the target worker can see the HIT
         qualification_requirements = [
             {
                 'QualificationTypeId': qualification_id,
                 'Comparator': 'EqualTo',
                 'IntegerValues': [1],
-                'RequiredToPreview': True,
-                'ActionsGuarded': 'Accept'
+                'RequiredToPreview': True
             }
         ]
         

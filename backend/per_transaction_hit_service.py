@@ -73,13 +73,22 @@ async def create_worker_specific_hit(
         qual_name = f"ChatGame_User_{user.user_id}_{transaction.id}"
         qual_description = f"Qualification for ChatGame user {user.user_id} transaction {transaction.id}"
         
+        # Create the qualification type
         qualification_id = mturk_client.create_worker_qualification(
             worker_id=user.mturk_worker_id,
             qualification_name=qual_name
         )
         
         print(f"   ✅ Qualification created: {qualification_id}")
-        print(f"   ✅ Assigned to worker: {user.mturk_worker_id}")
+        
+        # Assign the qualification to the worker
+        mturk_client.assign_qualification_to_worker(
+            qualification_id=qualification_id,
+            worker_id=user.mturk_worker_id,
+            value=1
+        )
+        
+        print(f"   ✅ Qualification assigned to worker: {user.mturk_worker_id}")
         
         # Step 2: Create HIT with qualification requirement
         print(f"\n2️⃣  Creating HIT with qualification requirement...")
