@@ -1245,9 +1245,12 @@ async def save_session_stats(room_code: str, state: dict, current_user: Optional
                         'earnings_usd': float(player_earnings_value)
                     })
                     
-                    # Store for legacy session.calculated_earnings field
+                    # Store for legacy session.calculated_earnings field (use TOTAL gems earned including bonuses)
                     if not calculated_earnings_value and current_user and str(current_user.id) == str(mapped_user_uuid):
-                        calculated_earnings_value = player_earnings_value
+                        # Convert total gems earned (including bonuses) back to USD for storage
+                        from .cashout_service import gems_to_usd
+                        calculated_earnings_value = gems_to_usd(gems_earned)
+                        print(f"📊 Session calculated_earnings set to ${calculated_earnings_value} ({gems_earned} gems total)")
                         
                 except Exception as e:
                     print(f"❌ Error crediting gems to player {player_id} (user {mapped_user_id_str}): {e}")

@@ -9,6 +9,7 @@ import { GameProvider } from './context/GameContext';
 import { LanguageProvider } from './context/LanguageContext';
 import { AuthProvider } from './contexts/AuthContext';
 import ProtectedRoute from './components/ProtectedRoute';
+import ErrorBoundary from './components/ErrorBoundary';
 import LobbyPage from './pages/LobbyPage';
 import JoinPage from './pages/JoinPage';
 import WaitingPage from './pages/WaitingPage';
@@ -45,7 +46,9 @@ function App() {
                 path="/dashboard"
                 element={
                   <ProtectedRoute>
-                    <DashboardPage />
+                    <ErrorBoundary>
+                      <DashboardPage />
+                    </ErrorBoundary>
                   </ProtectedRoute>
                 }
               />

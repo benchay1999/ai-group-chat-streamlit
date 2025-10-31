@@ -10,7 +10,7 @@ import { sessionsAPI } from '../services/sessionsAPI';
 import { format } from 'date-fns';
 import { 
   Copy, Check, ExternalLink, Key, DollarSign, 
-  TrendingUp, Zap, Star, Sparkles, Award, Gem, Wallet, AlertCircle, ArrowRight
+  TrendingUp, Zap, Star, Sparkles, Award, Gem, Wallet, AlertCircle, ArrowRight, Clock
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../services/api';
@@ -40,10 +40,11 @@ const DashboardPage = () => {
     try {
       setLoading(true);
       const data = await sessionsAPI.listSessions();
-      setSessions(data.sessions);
+      setSessions(data?.sessions || []);
     } catch (error) {
       toast.error('Failed to load sessions');
-      console.error(error);
+      console.error('Error loading sessions:', error);
+      setSessions([]); // Set to empty array on error
     } finally {
       setLoading(false);
     }
@@ -53,11 +54,37 @@ const DashboardPage = () => {
     try {
       setEarningsLoading(true);
       const response = await api.get('/api/users/earnings');
-      setEarnings(response.data);
+      // Ensure all required fields exist with defaults
+      const earningsData = {
+        total_lifetime_earnings: response.data?.total_lifetime_earnings || 0,
+        current_balance: response.data?.current_balance || 0,
+        total_cashed_out: response.data?.total_cashed_out || 0,
+        average_per_game: response.data?.average_per_game || 0,
+        last_game_gems: response.data?.last_game_gems || 0,
+        highest_single_game: response.data?.highest_single_game || 0,
+        total_games: response.data?.total_games || 0,
+        earnings_this_week: response.data?.earnings_this_week || 0,
+        earnings_this_month: response.data?.earnings_this_month || 0,
+        recent_sessions: response.data?.recent_sessions || [],
+        tier: response.data?.tier || { 
+          name: 'Bronze', 
+          color: '#CD7F32', 
+          current_amount: 0, 
+          next_threshold: 10 
+        },
+        gem_details: response.data?.gem_details || {
+          total_gems_earned: 0,
+          current_gem_balance: 0,
+          total_gems_cashed_out: 0,
+          conversion_rate: 1000
+        }
+      };
+      setEarnings(earningsData);
     } catch (error) {
       console.error('Failed to load earnings:', error);
       toast.error('Failed to load earnings data. Please refresh the page.');
-      // Keep earnings as null to show error/loading state instead of fake data
+      // Keep earnings as null to show error state
+      setEarnings(null);
     } finally {
       setEarningsLoading(false);
     }
@@ -70,6 +97,8 @@ const DashboardPage = () => {
       setWalletData(data);
     } catch (error) {
       console.error('Failed to load wallet:', error);
+      toast.error('Failed to load wallet data');
+      setWalletData(null); // Explicitly set to null on error
     } finally {
       setWalletLoading(false);
     }
@@ -186,7 +215,7 @@ const DashboardPage = () => {
               <div className="mb-6">
                 <div className="text-8xl font-black text-transparent bg-clip-text bg-gradient-to-r from-green-400 via-cyan-400 to-blue-500 animate-glow inline-block">
                   <EarningsCounter 
-                    target={earnings.total_lifetime_earnings || 0} 
+                    target={earnings?.total_lifetime_earnings || 0} 
                     duration={2500}
                     className="text-8xl font-black"
                     glowColor="green"
@@ -195,10 +224,10 @@ const DashboardPage = () => {
               </div>
               
               <p className="text-xl text-gray-300 mb-2">
-                From <span className="text-white font-semibold">{earnings.total_games || 0}</span> games played
+                From <span className="text-white font-semibold">{earnings?.total_games || 0}</span> games played
               </p>
               
-              {earnings.tier && (
+              {earnings?.tier && (
                 <div className="inline-flex items-center gap-2 px-4 py-2 bg-gray-800 bg-opacity-50 rounded-full border border-gray-700">
                   <Award className="w-5 h-5" style={{ color: earnings.tier.color }} />
                   <span className="text-sm font-semibold" style={{ color: earnings.tier.color }}>
@@ -206,7 +235,7 @@ const DashboardPage = () => {
                   </span>
                   {earnings.tier.next_threshold && (
                     <span className="text-xs text-gray-400">
-                      (${((earnings.tier.next_threshold || 0) - (earnings.total_lifetime_earnings || 0)).toFixed(2)} to next)
+                      (${((earnings.tier.next_threshold || 0) - (earnings?.total_lifetime_earnings || 0)).toFixed(2)} to next)
                     </span>
                   )}
                 </div>
@@ -224,7 +253,7 @@ const DashboardPage = () => {
                 <div className="flex items-baseline gap-2">
                   <div className="text-3xl font-bold text-blue-400">
                     <EarningsCounter 
-                      target={earnings.last_game_gems || 0}
+                      target={earnings?.last_game_gems || 0}
                       decimals={0}
                       prefix=""
                       glowColor="blue"
@@ -243,7 +272,7 @@ const DashboardPage = () => {
                 <div className="flex items-baseline gap-2">
                   <div className="text-3xl font-bold text-purple-400">
                     <EarningsCounter 
-                      target={earnings.average_per_game || 0}
+                      target={earnings?.average_per_game || 0}
                       decimals={0}
                       prefix=""
                       glowColor="purple"
@@ -261,7 +290,7 @@ const DashboardPage = () => {
                 </div>
                 <div className="text-3xl font-bold text-green-400">
                   <EarningsCounter 
-                    target={earnings.earnings_this_week || 0}
+                    target={earnings?.earnings_this_week || 0}
                     glowColor="green"
                   />
                 </div>
@@ -269,7 +298,7 @@ const DashboardPage = () => {
             </div>
 
             {/* Earnings Chart */}
-            {earnings.recent_sessions && earnings.recent_sessions.length > 0 && (
+            {earnings?.recent_sessions && Array.isArray(earnings.recent_sessions) && earnings.recent_sessions.length > 0 && (
               <div className="bg-gray-800 bg-opacity-30 backdrop-blur-sm rounded-xl p-6 border border-gray-700 mb-8">
                 <h3 className="text-lg font-semibold text-white mb-4">Recent Games (Gems Earned)</h3>
                 <EarningsChart data={earnings.recent_sessions.slice(0, 10).reverse()} />
@@ -315,7 +344,7 @@ const DashboardPage = () => {
               
               <div className="mb-4">
                 <div className="text-5xl font-black text-white mb-2">
-                  {walletData.gem_balance.toLocaleString()}
+                  {(walletData?.gem_balance || 0).toLocaleString()}
                 </div>
                 <div className="text-purple-300 text-lg">gems</div>
               </div>
@@ -323,7 +352,7 @@ const DashboardPage = () => {
               <div className="flex items-center justify-between p-3 bg-purple-950 bg-opacity-50 rounded-lg mb-4">
                 <span className="text-purple-200 text-sm">USD Value</span>
                 <span className="text-white font-bold text-xl">
-                  ${walletData.usd_equivalent.toFixed(2)}
+                  ${(walletData?.usd_equivalent || 0).toFixed(2)}
                 </span>
               </div>
               
@@ -343,13 +372,13 @@ const DashboardPage = () => {
 
             {/* MTurk Worker ID Setup */}
             <div className={`rounded-xl shadow-2xl p-6 border ${
-              walletData.has_worker_id 
+              walletData?.has_worker_id 
                 ? 'bg-gradient-to-br from-green-900 via-green-800 to-emerald-900 border-green-700' 
                 : 'bg-gradient-to-br from-yellow-900 via-yellow-800 to-orange-900 border-yellow-700'
             }`}>
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-2xl font-bold text-white flex items-center gap-2">
-                  {walletData.has_worker_id ? (
+                  {walletData?.has_worker_id ? (
                     <>
                       <Check className="w-7 h-7 text-green-300" />
                       MTurk Connected
@@ -363,7 +392,7 @@ const DashboardPage = () => {
                 </h2>
               </div>
               
-              {walletData.has_worker_id ? (
+              {walletData?.has_worker_id ? (
                 <>
                   <div className="mb-4">
                     <div className="text-green-100 text-lg mb-2">
@@ -377,17 +406,17 @@ const DashboardPage = () => {
                   <div className="p-3 bg-green-950 bg-opacity-50 rounded-lg mb-4">
                     <div className="text-green-300 text-xs mb-1">Total Gems Earned</div>
                     <div className="text-white font-bold text-2xl">
-                      {walletData.total_gems_earned.toLocaleString()}
+                      {(walletData?.total_gems_earned || 0).toLocaleString()}
                     </div>
                   </div>
                   
                   <div className="p-3 bg-green-950 bg-opacity-50 rounded-lg mb-4">
                     <div className="text-green-300 text-xs mb-1">Total Cashed Out</div>
                     <div className="text-white font-bold text-2xl">
-                      {walletData.total_gems_cashed_out.toLocaleString()} gems
+                      {(walletData?.total_gems_cashed_out || 0).toLocaleString()} gems
                     </div>
                     <div className="text-green-200 text-sm">
-                      (${(walletData.total_gems_cashed_out / 1000).toFixed(2)} USD)
+                      (${((walletData?.total_gems_cashed_out || 0) / 1000).toFixed(2)} USD)
                     </div>
                   </div>
 
