@@ -1,209 +1,250 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
-Delete All MTurk HITs
-Cleans up all HITs in the current environment (sandbox or production)
+Delete ALL HITs from MTurk and clean up database.
+Use with caution - this is a nuclear option!
 """
 
-import os
-import sys
-from dotenv import load_dotenv
-import boto3
-from botocore.exceptions import ClientError
+import asyncio
+from datetime import datetime
+from sqlalchemy import select
+from database import async_session_maker, CashoutTransaction, CashoutStatus, User
+from mturk_api import get_mturk_client
 
-load_dotenv()
 
-def delete_all_hits():
-    """Delete all HITs in the current MTurk environment."""
-    environment = os.getenv('MTURK_ENVIRONMENT', 'sandbox')
-    aws_access_key = os.getenv('AWS_ACCESS_KEY_ID')
-    aws_secret_key = os.getenv('AWS_SECRET_ACCESS_KEY')
-
-    endpoints = {
-        'sandbox': 'https://mturk-requester-sandbox.us-east-1.amazonaws.com',
-        'production': 'https://mturk-requester.us-east-1.amazonaws.com'
-    }
-
-    if not aws_access_key or not aws_secret_key:
-        print("❌ ERROR: AWS credentials not found in .env file!")
-        print("   Please set AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY")
-        return False
-
-    print("=" * 70)
-    print("  MTurk HIT Cleanup Tool")
-    print("=" * 70)
-    print(f"\n⚠️  WARNING: This will DELETE ALL HITs in {environment.upper()} environment!")
-    print(f"   Environment: {environment}")
+async def delete_all_hits():
+    """
+    Delete all HITs from MTurk and cancel all pending cashout transactions.
+    """
+    print("="*70)
+    print("🗑️  DELETE ALL HITs - NUCLEAR CLEANUP")
+    print("="*70)
+    print("\n⚠️  WARNING: This will:")
+    print("   - Delete/expire ALL HITs in MTurk")
+    print("   - Cancel ALL pending cashout transactions")
+    print("   - Refund gems for all cancelled transactions")
+    print()
     
-    confirm = input("\n⚠️  Are you ABSOLUTELY SURE you want to delete ALL HITs? (type 'DELETE ALL' to confirm): ").strip()
-    if confirm != 'DELETE ALL':
-        print("❌ Operation cancelled. No HITs were deleted.")
-        return False
-
-    print(f"\n🔧 Connecting to MTurk {environment.upper()} environment...")
-
+    # Step 1: Get MTurk client
     try:
-        mturk = boto3.client(
-            'mturk',
-            region_name='us-east-1',
-            endpoint_url=endpoints[environment],
-            aws_access_key_id=aws_access_key,
-            aws_secret_access_key=aws_secret_key
-        )
-
-        # Get account balance
-        try:
-            balance = mturk.get_account_balance()
-            print(f"💰 Current Account Balance: ${balance['AvailableBalance']}")
-        except:
-            pass
-
-        print(f"\n🔍 Finding all HITs...")
-        
-        # List all HITs
-        hits_to_delete = []
-        next_token = None
-        page = 1
-        
+        mturk_client = get_mturk_client()
+        print(f"✅ Connected to MTurk ({mturk_client.environment} environment)\n")
+    except Exception as e:
+        print(f"❌ Failed to connect to MTurk: {e}")
+        return
+    
+    # Step 2: List all HITs from MTurk
+    print("📋 Fetching all HITs from MTurk...")
+    
+    all_hits = []
+    next_token = None
+    
+    try:
         while True:
-            try:
-                if next_token:
-                    response = mturk.list_hits(NextToken=next_token, MaxResults=100)
-                else:
-                    response = mturk.list_hits(MaxResults=100)
-                
-                hits = response.get('HITs', [])
-                hits_to_delete.extend(hits)
-                
-                print(f"   Page {page}: Found {len(hits)} HITs")
-                page += 1
-                
-                next_token = response.get('NextToken')
-                if not next_token:
-                    break
-                    
-            except ClientError as e:
-                if 'RequestError' in str(e):
-                    break
-                else:
-                    raise
-
-        if not hits_to_delete:
-            print("\n✅ No HITs found. Environment is already clean!")
-            return True
-
-        print(f"\n📋 Total HITs found: {len(hits_to_delete)}")
-        print("\n" + "=" * 70)
-        print("HITs to be deleted:")
-        print("=" * 70)
-        
-        for idx, hit in enumerate(hits_to_delete, 1):
-            hit_id = hit['HITId']
-            title = hit.get('Title', 'Unknown')
-            status = hit.get('HITStatus', 'Unknown')
-            max_assignments = hit.get('MaxAssignments', 0)
-            available = hit.get('NumberOfAssignmentsAvailable', 0)
-            pending = hit.get('NumberOfAssignmentsPending', 0)
-            completed = hit.get('NumberOfAssignmentsCompleted', 0)
+            if next_token:
+                response = mturk_client.client.list_hits(
+                    NextToken=next_token,
+                    MaxResults=100
+                )
+            else:
+                response = mturk_client.client.list_hits(MaxResults=100)
             
-            print(f"\n{idx}. HIT ID: {hit_id}")
+            hits = response.get('HITs', [])
+            all_hits.extend(hits)
+            
+            next_token = response.get('NextToken')
+            if not next_token:
+                break
+        
+        print(f"   Found {len(all_hits)} HIT(s) in MTurk\n")
+        
+    except Exception as e:
+        print(f"❌ Error listing HITs: {e}")
+        all_hits = []
+    
+    # Step 3: Delete/expire each HIT
+    if all_hits:
+        print("🗑️  Deleting HITs from MTurk...\n")
+        
+        deleted_count = 0
+        expired_count = 0
+        error_count = 0
+        
+        for hit in all_hits:
+            hit_id = hit['HITId']
+            hit_status = hit.get('HITStatus', 'Unknown')
+            title = hit.get('Title', 'Untitled')
+            
+            print(f"   Processing HIT: {hit_id}")
+            print(f"      Title: {title}")
+            print(f"      Status: {hit_status}")
+            
+            # Try to delete first
+            try:
+                mturk_client.client.delete_hit(HITId=hit_id)
+                print(f"      ✅ Deleted")
+                deleted_count += 1
+            except Exception as delete_error:
+                # If can't delete, try to expire
+                try:
+                    mturk_client.client.update_expiration_for_hit(
+                        HITId=hit_id,
+                        ExpireAt=datetime.utcnow()
+                    )
+                    print(f"      ✅ Expired")
+                    expired_count += 1
+                except Exception as expire_error:
+                    print(f"      ❌ Could not delete or expire: {expire_error}")
+                    error_count += 1
+            
+            print()
+        
+        print("─"*70)
+        print(f"MTurk Cleanup Summary:")
+        print(f"   Deleted: {deleted_count}")
+        print(f"   Expired: {expired_count}")
+        print(f"   Errors: {error_count}")
+        print("─"*70)
+        print()
+    
+    # Step 4: Clean up database
+    print("🗄️  Cleaning up database...\n")
+    
+    async with async_session_maker() as db:
+        # Get all pending/hit_created transactions
+        result = await db.execute(
+            select(CashoutTransaction)
+            .where(CashoutTransaction.status.in_([
+                CashoutStatus.PENDING,
+                CashoutStatus.HIT_CREATED
+            ]))
+        )
+        pending_txs = result.scalars().all()
+        
+        if not pending_txs:
+            print("   ✅ No pending transactions in database")
+        else:
+            print(f"   Found {len(pending_txs)} pending transaction(s)")
+            print(f"   Cancelling and refunding...\n")
+            
+            total_refunded = 0
+            cancelled_count = 0
+            
+            for tx in pending_txs:
+                # Get user
+                user_result = await db.execute(
+                    select(User).where(User.id == tx.user_id)
+                )
+                user = user_result.scalar_one_or_none()
+                
+                if user:
+                    print(f"   Transaction: {tx.id}")
+                    print(f"      User: {user.user_id}")
+                    print(f"      Amount: {tx.amount_gems} gems (${tx.amount_usd})")
+                    
+                    # Refund gems
+                    user.gem_balance += tx.amount_gems
+                    if user.total_gems_cashed_out >= tx.amount_gems:
+                        user.total_gems_cashed_out -= tx.amount_gems
+                    
+                    total_refunded += tx.amount_gems
+                    print(f"      ✅ Refunded {tx.amount_gems} gems")
+                
+                # Cancel transaction
+                tx.status = CashoutStatus.CANCELLED
+                tx.error_message = "Cancelled: Admin deleted all HITs"
+                tx.completed_at = datetime.utcnow()
+                cancelled_count += 1
+                print()
+            
+            # Commit all changes
+            await db.commit()
+            
+            print("─"*70)
+            print(f"Database Cleanup Summary:")
+            print(f"   Transactions cancelled: {cancelled_count}")
+            print(f"   Total gems refunded: {total_refunded}")
+            print("─"*70)
+    
+    print()
+    print("="*70)
+    print("✅ CLEANUP COMPLETE - ALL HITs DELETED")
+    print("="*70)
+
+
+async def list_all_hits():
+    """Just list all HITs without deleting."""
+    print("="*70)
+    print("📋 LIST ALL HITs")
+    print("="*70)
+    
+    try:
+        mturk_client = get_mturk_client()
+        print(f"\n✅ Connected to MTurk ({mturk_client.environment} environment)\n")
+    except Exception as e:
+        print(f"\n❌ Failed to connect to MTurk: {e}")
+        return
+    
+    all_hits = []
+    next_token = None
+    
+    try:
+        while True:
+            if next_token:
+                response = mturk_client.client.list_hits(
+                    NextToken=next_token,
+                    MaxResults=100
+                )
+            else:
+                response = mturk_client.client.list_hits(MaxResults=100)
+            
+            hits = response.get('HITs', [])
+            all_hits.extend(hits)
+            
+            next_token = response.get('NextToken')
+            if not next_token:
+                break
+        
+        print(f"Found {len(all_hits)} HIT(s)\n")
+        
+        if not all_hits:
+            print("✅ No HITs found")
+            return
+        
+        for i, hit in enumerate(all_hits, 1):
+            hit_id = hit['HITId']
+            title = hit.get('Title', 'Untitled')
+            status = hit.get('HITStatus', 'Unknown')
+            reward = hit.get('Reward', 'Unknown')
+            created = hit.get('CreationTime', 'Unknown')
+            expiration = hit.get('Expiration', 'Unknown')
+            
+            print(f"{i}. HIT ID: {hit_id}")
             print(f"   Title: {title}")
             print(f"   Status: {status}")
-            print(f"   Assignments: {completed}/{max_assignments} completed, {pending} pending, {available} available")
-
-        print("\n" + "=" * 70)
-        final_confirm = input(f"\n⚠️  Proceed with deleting {len(hits_to_delete)} HIT(s)? (yes/no): ").strip().lower()
-        if final_confirm != 'yes':
-            print("❌ Operation cancelled.")
-            return False
-
-        print(f"\n🗑️  Deleting {len(hits_to_delete)} HIT(s)...")
-        deleted_count = 0
-        error_count = 0
-
-        for idx, hit in enumerate(hits_to_delete, 1):
-            hit_id = hit['HITId']
-            title = hit.get('Title', 'Unknown')
-            
-            try:
-                # First, try to expire the HIT (required before deletion)
-                try:
-                    mturk.update_expiration_for_hit(
-                        HITId=hit_id,
-                        ExpireAt=0  # Expire immediately
-                    )
-                    print(f"   [{idx}/{len(hits_to_delete)}] Expired HIT: {hit_id[:20]}... ({title})")
-                except ClientError as e:
-                    if 'HITAlreadyExpired' not in str(e):
-                        print(f"   ⚠️  Could not expire HIT {hit_id[:20]}...: {e}")
-
-                # Now delete the HIT
-                mturk.delete_hit(HITId=hit_id)
-                print(f"   [{idx}/{len(hits_to_delete)}] ✅ Deleted HIT: {hit_id[:20]}... ({title})")
-                deleted_count += 1
-                
-            except ClientError as e:
-                error_msg = str(e)
-                if 'HITDoesNotExist' in error_msg:
-                    print(f"   [{idx}/{len(hits_to_delete)}] ⚠️  HIT already deleted: {hit_id[:20]}...")
-                    deleted_count += 1  # Count as successful
-                elif 'assignments with status' in error_msg.lower():
-                    print(f"   [{idx}/{len(hits_to_delete)}] ⚠️  Cannot delete HIT {hit_id[:20]}...: Has active assignments")
-                    print(f"      You may need to manually approve/reject assignments first")
-                    error_count += 1
-                else:
-                    print(f"   [{idx}/{len(hits_to_delete)}] ❌ Failed to delete HIT {hit_id[:20]}...: {e}")
-                    error_count += 1
-            except Exception as e:
-                print(f"   [{idx}/{len(hits_to_delete)}] ❌ Unexpected error deleting HIT {hit_id[:20]}...: {e}")
-                error_count += 1
-
-        print("\n" + "=" * 70)
-        print("  DELETION SUMMARY")
-        print("=" * 70)
-        print(f"✅ Successfully deleted: {deleted_count} HIT(s)")
-        if error_count > 0:
-            print(f"❌ Failed to delete: {error_count} HIT(s)")
-            print("\n⚠️  Note: Some HITs may have active assignments and require manual intervention.")
-        else:
-            print("🎉 All HITs deleted successfully!")
-
-        # Show updated balance
-        try:
-            balance = mturk.get_account_balance()
-            print(f"\n💰 Updated Account Balance: ${balance['AvailableBalance']}")
-        except:
-            pass
-
-        print("\n" + "=" * 70)
-        print("✅ Cleanup complete!")
-        print("=" * 70)
+            print(f"   Reward: {reward}")
+            print(f"   Created: {created}")
+            print(f"   Expires: {expiration}")
+            print()
         
-        return error_count == 0
-
-    except ClientError as e:
-        print(f"❌ ERROR: Failed to connect to MTurk: {e}")
-        return False
     except Exception as e:
-        print(f"❌ An unexpected error occurred: {e}")
-        import traceback
-        traceback.print_exc()
-        return False
+        print(f"❌ Error listing HITs: {e}")
 
 
 if __name__ == "__main__":
-    print("\n🧹 MTurk HIT Cleanup Tool\n")
+    import sys
     
-    success = delete_all_hits()
-    
-    if success:
-        print("\n✅ All done! You can now create a new standing HIT.")
-        print("\nNext steps:")
-        print("   1. Run: python3 create_standing_hit.py")
-        print("   2. Update CASHOUT_HIT_ID in your .env file")
-        print("   3. Restart your backend server")
-        sys.exit(0)
+    if len(sys.argv) > 1 and sys.argv[1] == "--list":
+        asyncio.run(list_all_hits())
     else:
-        print("\n⚠️  Cleanup completed with errors. Please review the output above.")
-        sys.exit(1)
-
+        print("\n⚠️  THIS WILL DELETE ALL HITs!")
+        print("⚠️  Are you sure? This action cannot be undone.")
+        print("\nTo proceed, run:")
+        print("   python3 delete_all_hits.py --confirm")
+        print("\nTo just list HITs without deleting:")
+        print("   python3 delete_all_hits.py --list")
+        print()
+        
+        if len(sys.argv) > 1 and sys.argv[1] == "--confirm":
+            asyncio.run(delete_all_hits())
+        else:
+            print("Aborted. No HITs were deleted.")

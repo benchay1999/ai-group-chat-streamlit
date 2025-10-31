@@ -2769,8 +2769,7 @@ async def cancel_cashout_request(
     Returns:
         Cancellation confirmation with returned gems
     """
-    from .cashout_service import cancel_cashout_transaction, CashoutError
-    from .database import CashoutTransaction, CashoutStatus
+    from .cashout_cancel_service import cancel_cashout_transaction
     import uuid as uuid_module
     import traceback
     
@@ -2781,67 +2780,17 @@ async def cancel_cashout_request(
         except ValueError:
             raise HTTPException(status_code=400, detail="Invalid transaction ID format")
         
-        # Get transaction
-        result = await db.execute(
-            select(CashoutTransaction).where(CashoutTransaction.id == transaction_uuid)
-        )
-        transaction = result.scalar_one_or_none()
-        
-        if not transaction:
-            raise HTTPException(status_code=404, detail="Transaction not found")
-        
-        # CRITICAL: Verify ownership (prevent users from cancelling others' transactions)
-        if transaction.user_id != current_user.id:
-            print(f"⚠️ SECURITY: User {current_user.user_id} attempted to cancel transaction owned by {transaction.user_id}")
-            raise HTTPException(status_code=403, detail="You can only cancel your own transactions")
-        
-        # Check if transaction can be cancelled
-        if transaction.status != CashoutStatus.PENDING:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Cannot cancel transaction with status '{transaction.status.value}'. Only PENDING transactions can be cancelled."
-            )
-        
-        print(f"🔄 User {current_user.user_id} cancelling transaction {transaction_id}")
-        print(f"   Amount: {transaction.amount_gems} gems (${transaction.amount_usd})")
-        print(f"   Current user balance: {current_user.gem_balance} gems")
-        
-        # Get user's current balance before cancellation
-        user_result = await db.execute(
-            select(User).where(User.id == current_user.id)
-        )
-        user = user_result.scalar_one()
-        old_balance = user.gem_balance
-        
-        # Cancel transaction (this will return gems)
-        await cancel_cashout_transaction(
-            transaction=transaction,
+        # Use the new cancellation service
+        result = await cancel_cashout_transaction(
+            transaction_id=str(transaction_uuid),
+            user=current_user,
             db=db,
-            reason="Cancelled by user"
+            reason="User requested cancellation"
         )
         
-        # Refresh user to get new balance
-        await db.refresh(user)
+        return result
         
-        print(f"✅ Transaction cancelled successfully")
-        print(f"   Gems returned: {transaction.amount_gems}")
-        print(f"   Balance: {old_balance} → {user.gem_balance} gems")
-        
-        return {
-            "success": True,
-            "transaction_id": transaction_id,
-            "amount_gems": transaction.amount_gems,
-            "amount_usd": float(transaction.amount_usd),
-            "gems_returned": transaction.amount_gems,
-            "new_balance": user.gem_balance,
-            "previous_balance": old_balance,
-            "message": f"Transaction cancelled. {transaction.amount_gems} gems have been returned to your wallet."
-        }
-        
-    except HTTPException:
-        # Re-raise HTTP exceptions as-is
-        raise
-    except CashoutError as e:
+    except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         print(f"❌ Error cancelling cashout: {e}")
@@ -3381,6 +3330,48 @@ async def admin_analytics(
 # ============================================================================
 # MTurk Admin API Endpoints
 # ============================================================================
+
+@app.post("/api/admin/garbage-collect-hits")
+async def admin_garbage_collect_hits(
+    age_hours: int = 48,
+    admin_user: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_async_session)
+):
+    """
+    Admin endpoint to garbage collect old, abandoned HITs.
+    
+    Finds and cleans up transactions with HITs that are:
+    - Status: PENDING, HIT_CREATED, or PROCESSING  
+    - Older than specified hours
+    - No completion
+    
+    For each, it will:
+    - Delete/expire the HIT
+    - Cancel the transaction
+    - Refund gems
+    
+    Args:
+        age_hours: How old (in hours) before considering abandoned (default: 48)
+        admin_user: Admin user (required)
+        db: Database session
+        
+    Returns:
+        Cleanup statistics
+    """
+    from .cashout_cancel_service import garbage_collect_old_hits
+    
+    print(f"\n🗑️  Admin {admin_user.user_id} triggered garbage collection")
+    print(f"   Age threshold: {age_hours} hours")
+    
+    try:
+        result = await garbage_collect_old_hits(db=db, age_hours=age_hours)
+        return result
+    except Exception as e:
+        print(f"❌ Error during garbage collection: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Garbage collection failed: {str(e)}")
+
 
 @app.post("/api/admin/mturk/sessions/{session_id}/approve-payment")
 async def approve_mturk_payment(

@@ -63,6 +63,71 @@ async def create_worker_specific_hit(
     print(f"Worker ID: {user.mturk_worker_id}")
     print(f"Amount: ${transaction.amount_usd}")
     
+    # Validate worker ID exists
+    if not user.mturk_worker_id:
+        raise ValueError("MTurk Worker ID not set. Please add your Worker ID in your profile settings.")
+    
+    # STEP 0: Cancel any existing pending HITs for this user
+    print(f"\n0️⃣  Checking for existing pending cashouts...")
+    from sqlalchemy import select, and_
+    from .database import CashoutStatus
+    
+    existing_result = await db.execute(
+        select(CashoutTransaction)
+        .where(
+            and_(
+                CashoutTransaction.user_id == user.id,
+                CashoutTransaction.status.in_([CashoutStatus.PENDING, CashoutStatus.HIT_CREATED])
+            )
+        )
+    )
+    existing_txs = existing_result.scalars().all()
+    
+    if existing_txs:
+        print(f"   Found {len(existing_txs)} existing pending cashout(s)")
+        print(f"   🚫 Auto-cancelling old cashouts...")
+        
+        from .mturk_api import get_mturk_client
+        mturk_client_cancel = get_mturk_client()
+        
+        for old_tx in existing_txs:
+            if old_tx.id == transaction.id:
+                continue  # Don't cancel the current transaction
+            
+            print(f"   Cancelling: {old_tx.id}")
+            
+            # Delete/expire old HIT
+            if old_tx.mturk_hit_id:
+                try:
+                    mturk_client_cancel.client.delete_hit(HITId=old_tx.mturk_hit_id)
+                    print(f"      ✅ Old HIT deleted")
+                except:
+                    try:
+                        from datetime import datetime
+                        mturk_client_cancel.client.update_expiration_for_hit(
+                            HITId=old_tx.mturk_hit_id,
+                            ExpireAt=datetime.utcnow()
+                        )
+                        print(f"      ✅ Old HIT expired")
+                    except:
+                        print(f"      ⚠️  Could not clean old HIT")
+            
+            # Refund gems
+            user.gem_balance += old_tx.amount_gems
+            if user.total_gems_cashed_out >= old_tx.amount_gems:
+                user.total_gems_cashed_out -= old_tx.amount_gems
+            
+            # Mark as cancelled
+            old_tx.status = CashoutStatus.CANCELLED
+            old_tx.error_message = "Auto-cancelled: New cashout requested"
+            
+            print(f"      ✅ {old_tx.amount_gems} gems refunded")
+        
+        await db.commit()
+        print(f"   ✅ Old cashouts cleaned up")
+    else:
+        print(f"   ✅ No existing pending cashouts")
+    
     try:
         mturk_client = get_mturk_client()
         environment = mturk_client.environment
@@ -82,16 +147,87 @@ async def create_worker_specific_hit(
         print(f"   ✅ Qualification created: {qualification_id}")
         
         # Assign the qualification to the worker
-        mturk_client.assign_qualification_to_worker(
-            qualification_id=qualification_id,
-            worker_id=user.mturk_worker_id,
-            value=1
-        )
+        print(f"   🔄 Assigning qualification to worker {user.mturk_worker_id}...")
+        print(f"   📋 DEBUG: Qualification ID: {qualification_id}")
+        print(f"   📋 DEBUG: Worker ID: '{user.mturk_worker_id}' (length: {len(user.mturk_worker_id)})")
+        print(f"   📋 DEBUG: Worker ID stripped: '{user.mturk_worker_id.strip()}'")
         
-        print(f"   ✅ Qualification assigned to worker: {user.mturk_worker_id}")
+        # Use stripped worker ID to avoid whitespace issues
+        worker_id_clean = user.mturk_worker_id.strip()
+        
+        try:
+            mturk_client.client.associate_qualification_with_worker(
+                QualificationTypeId=qualification_id,
+                WorkerId=worker_id_clean,
+                IntegerValue=1,
+                SendNotification=False
+            )
+            print(f"   ✅ Qualification assigned to worker: {worker_id_clean}")
+        except Exception as assign_error:
+            print(f"   ❌ FAILED TO ASSIGN QUALIFICATION!")
+            print(f"   ❌ Error: {assign_error}")
+            print(f"   ❌ This means the Worker ID is INVALID or doesn't exist in MTurk!")
+            raise Exception(f"Cannot assign qualification to worker {worker_id_clean}: {assign_error}")
+        
+        # Verify the qualification was assigned
+        print(f"   🔍 Verifying qualification assignment...")
+        
+        verification_successful = False
+        max_retries = 3
+        
+        for attempt in range(max_retries):
+            try:
+                verification = mturk_client.client.get_qualification_score(
+                    QualificationTypeId=qualification_id,
+                    WorkerId=worker_id_clean
+                )
+                qual_value = verification.get('Qualification', {}).get('IntegerValue', 'N/A')
+                print(f"   ✅ Verification successful (attempt {attempt + 1}) - Worker has qualification with value: {qual_value}")
+                verification_successful = True
+                break
+            except Exception as verify_error:
+                print(f"   ⚠️  Verification attempt {attempt + 1} failed: {verify_error}")
+                
+                if attempt < max_retries - 1:
+                    import time
+                    wait_time = 2 * (attempt + 1)  # Exponential backoff: 2s, 4s
+                    print(f"   ⏳ Waiting {wait_time} seconds before retry...")
+                    time.sleep(wait_time)
+                else:
+                    print(f"   ❌ CRITICAL: Could not verify qualification assignment after {max_retries} attempts!")
+                    print(f"   ❌ This means the worker may not be able to access the HIT!")
+                    print(f"   ❌ Worker ID used: {user.mturk_worker_id}")
+                    print(f"   ❌ Qualification ID: {qualification_id}")
+                    
+                    # This is critical - raise an error
+                    raise Exception(
+                        f"Failed to verify qualification assignment for worker {worker_id_clean}. "
+                        f"The worker may not be able to access the HIT. "
+                        f"Please verify the Worker ID is correct and matches the MTurk account."
+                    )
         
         # Step 2: Create HIT with qualification requirement
         print(f"\n2️⃣  Creating HIT with qualification requirement...")
+        
+        # Add a small delay to ensure MTurk has fully propagated the qualification
+        import time
+        print(f"   ⏳ Waiting 5 seconds for MTurk to fully propagate qualification...")
+        time.sleep(5)  # Increased from 3 to 5 seconds for extra safety
+        print(f"   ✅ Proceeding with HIT creation")
+        
+        # Final verification before HIT creation
+        print(f"   🔍 Final pre-HIT verification...")
+        try:
+            final_check = mturk_client.client.get_qualification_score(
+                QualificationTypeId=qualification_id,
+                WorkerId=worker_id_clean
+            )
+            print(f"   ✅ Final check passed - Worker still has qualification")
+        except Exception as e:
+            print(f"   ⚠️  WARNING: Final check failed: {e}")
+            print(f"   ⚠️  Proceeding anyway, but worker may have access issues")
+            print(f"   ⚠️  Worker ID used: {worker_id_clean}")
+            print(f"   ⚠️  Qualification ID: {qualification_id}")
         
         # Generate external URL for the cashout confirmation page
         external_url = os.getenv('EXTERNAL_URL', 'http://localhost:3000')
@@ -99,10 +235,16 @@ async def create_worker_specific_hit(
         cashout_confirm_url = f"{base_url}/cashout-confirm?code={transaction.redemption_code}&tx={transaction.id}"
         
         # Create the HIT
+        print(f"\n   🔧 Creating HIT with parameters:")
+        print(f"      Amount: ${transaction.amount_usd}")
+        print(f"      Qualification ID: {qualification_id}")
+        print(f"      Worker ID (for reference): {worker_id_clean}")
+        print(f"      External URL: {cashout_confirm_url[:80]}...")
+        
         hit_result = mturk_client.create_cashout_hit(
             amount=transaction.amount_usd,
             qualification_id=qualification_id,
-            worker_id=user.mturk_worker_id,
+            worker_id=worker_id_clean,
             external_url=cashout_confirm_url,
             duration_seconds=86400,  # 24 hours
             auto_approve_seconds=3600  # 1 hour

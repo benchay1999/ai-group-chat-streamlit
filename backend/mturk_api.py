@@ -462,12 +462,17 @@ class MTurkClient:
             }
         ]
         
+        # Format amount properly for MTurk (must be string with 2 decimal places)
+        reward_amount = f"{float(amount):.2f}"
+        
+        print(f"💰 Creating HIT with reward: ${reward_amount} (from amount: {amount}, type: {type(amount)})")
+        
         try:
             response = self.client.create_hit(
-                Title=f"ChatGame Payout - Confirm Receipt",
-                Description=f"Confirm your payout from ChatGame. Only you can see this HIT.",
+                Title=f"ChatGame Payout - ${reward_amount}",
+                Description=f"Confirm your ${reward_amount} payout from ChatGame. Only you can see this HIT.",
                 Keywords="payout, payment, confirmation",
-                Reward=str(amount),
+                Reward=reward_amount,
                 MaxAssignments=1,
                 LifetimeInSeconds=duration_seconds,
                 AssignmentDurationInSeconds=1800,  # 30 minutes to complete once accepted
@@ -483,7 +488,15 @@ class MTurkClient:
             worker_endpoint = self.worker_endpoints[self.environment]
             hit_url = f"{worker_endpoint}/mturk/preview?groupId={hit['HITGroupId']}"
             
-            print(f"✅ Created cashout HIT: {hit_id} for ${amount}")
+            # Log the actual reward that was set
+            actual_reward = hit.get('Reward', 'Unknown')
+            print(f"✅ Created cashout HIT: {hit_id}")
+            print(f"   💵 Reward set to: ${actual_reward}")
+            print(f"   🔗 Worker URL: {hit_url}")
+            
+            # Verify the reward matches what we requested
+            if actual_reward != reward_amount:
+                print(f"   ⚠️  WARNING: Reward mismatch! Requested: ${reward_amount}, Got: ${actual_reward}")
             
             return {
                 'hit_id': hit_id,
