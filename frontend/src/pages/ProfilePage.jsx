@@ -6,7 +6,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { updateMturkWorkerId, getUserProfile } from '../services/walletAPI';
+import { updateMTurkWorkerId, getUserProfile } from '../services/walletAPI';
 import { User, AlertCircle, CheckCircle, ArrowLeft } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -60,7 +60,7 @@ const ProfilePage = () => {
       setSaving(true);
       setMessage({ type: '', text: '' });
       
-      const result = await updateMturkWorkerId(workerId.trim());
+      const result = await updateMTurkWorkerId(workerId.trim());
       
       setMessage({ type: 'success', text: 'Worker ID saved successfully!' });
       toast.success('MTurk Worker ID updated!');
