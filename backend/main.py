@@ -1205,8 +1205,16 @@ async def save_session_stats(room_code: str, state: dict, current_user: Optional
                         print(f"❌ User with UUID {mapped_user_uuid} not found in database")
                         continue
                     
-                    # Convert USD to gems (1000 gems = $1.00)
-                    gems_earned = int(float(player_earnings_value) * GEMS_PER_DOLLAR)
+                    # FIXED PAYOUT: Single-player games get exactly 2000 gems (for MTurk testing)
+                    # Multi-player games use performance-based earnings
+                    if num_humans == 1:
+                        # Fixed payout for single-player games
+                        gems_earned = 2000
+                        print(f"💎 Fixed payout: 2000 gems for single-player game (MTurk standard rate)")
+                    else:
+                        # Convert USD to gems for multi-player games (1000 gems = $1.00)
+                        gems_earned = int(float(player_earnings_value) * GEMS_PER_DOLLAR)
+                        print(f"💎 Performance-based payout: {gems_earned} gems (${player_earnings_value})")
                     
                     # VALIDATION: Ensure gems_earned is reasonable
                     if gems_earned < 0:
@@ -1215,12 +1223,6 @@ async def save_session_stats(room_code: str, state: dict, current_user: Optional
                     elif gems_earned > 100000:  # Sanity check: max 100,000 gems per game ($100)
                         print(f"⚠️ Suspiciously high gems ({gems_earned}), capping at 100,000")
                         gems_earned = 100000
-                    
-                    # TEMPORARY: Add 2000 gems bonus for single-player games (for MTurk testing)
-                    # TODO: Remove this temporary bonus after MTurk payment system is verified
-                    if num_humans == 1:
-                        gems_earned += 2000
-                        print(f"🎁 BONUS: Added 2000 gems for single-player game (temporary for MTurk testing)")
                     
                     # Validate final amount
                     if gems_earned <= 0:
@@ -1246,11 +1248,13 @@ async def save_session_stats(room_code: str, state: dict, current_user: Optional
                     })
                     
                     # Store for legacy session.calculated_earnings field (use TOTAL gems earned including bonuses)
-                    if not calculated_earnings_value and current_user and str(current_user.id) == str(mapped_user_uuid):
+                    # FIXED: Set for ANY authenticated player, not just current_user
+                    # This ensures calculated_earnings is ALWAYS populated for proper last_game_gems display
+                    if not calculated_earnings_value and mapped_user_uuid:
                         # Convert total gems earned (including bonuses) back to USD for storage
                         from .cashout_service import gems_to_usd
                         calculated_earnings_value = gems_to_usd(gems_earned)
-                        print(f"📊 Session calculated_earnings set to ${calculated_earnings_value} ({gems_earned} gems total)")
+                        print(f"📊 Session calculated_earnings set to ${calculated_earnings_value} ({gems_earned} gems total) for player {player_id}")
                         
                 except Exception as e:
                     print(f"❌ Error crediting gems to player {player_id} (user {mapped_user_id_str}): {e}")
@@ -2328,31 +2332,50 @@ async def get_user_earnings(
     # Calculate average per game (IN GEMS, not USD)
     avg_gems_per_game = int((total_gems_earned / total_games) if total_games > 0 else 0)
     
-    # Get recent sessions to calculate last game gems
+    # Get recent sessions via SessionPlayer table (PROPER USER-SESSION MAPPING)
+    # This correctly handles cases where Session.user_id is NULL
+    from .database import SessionPlayer
+    
     result = await db.execute(
         select(DBSession)
-        .where(DBSession.user_id == current_user.id)
+        .join(SessionPlayer, SessionPlayer.session_id == DBSession.id)
+        .where(SessionPlayer.user_id == current_user.id)
+        .where(SessionPlayer.role == 'human')  # Only human players, not AI
         .order_by(desc(DBSession.completed_at))
         .limit(10)
     )
     sessions = result.scalars().all()
     
-    # Calculate last game amount (IN GEMS)
-    last_game_gems = avg_gems_per_game  # Default to average if can't determine
+    print(f"📊 Found {len(sessions)} recent sessions for user {current_user.user_id}")
+    
+    # Calculate last game amount (IN GEMS) - Use a smarter approach
+    last_game_gems = 0  # Start with 0, will be updated if we find a recent game
     highest_earning_gems = 0
     recent_sessions = []
     
     for idx, session in enumerate(sessions):
-        # Estimate gems for this session
+        # Try multiple methods to estimate gems (in order of reliability)
+        estimated_gems = 0
+        
+        # METHOD 1: Use calculated_earnings if available (includes bonuses per fix)
         if hasattr(session, 'calculated_earnings') and session.calculated_earnings:
-            # Convert old USD earnings to gems
             estimated_gems = int(float(session.calculated_earnings) * GEMS_PER_DOLLAR)
-        else:
-            # Use average
+            print(f"   Session {idx}: {estimated_gems} gems (from calculated_earnings=${session.calculated_earnings})")
+        
+        # METHOD 2: For new sessions without calculated_earnings, estimate from total_gems_earned
+        elif idx == 0 and total_games > 0:
+            # For the most recent game, use the average as best estimate
             estimated_gems = avg_gems_per_game
+            print(f"   Session {idx}: {estimated_gems} gems (estimated from average)")
+        
+        # METHOD 3: Fallback to average for older sessions
+        else:
+            estimated_gems = avg_gems_per_game
+            print(f"   Session {idx}: {estimated_gems} gems (fallback to average)")
         
         if idx == 0:  # Most recent game
             last_game_gems = estimated_gems
+            print(f"✅ Last game gems set to: {last_game_gems}")
         
         if estimated_gems > highest_earning_gems:
             highest_earning_gems = estimated_gems
@@ -2363,6 +2386,11 @@ async def get_user_earnings(
             "amount": estimated_gems,
             "status": "completed"
         })
+    
+    # FALLBACK: If no sessions found but user has gems, use average
+    if len(sessions) == 0 and total_games > 0:
+        last_game_gems = avg_gems_per_game
+        print(f"⚠️ No sessions found via SessionPlayer, using average: {last_game_gems} gems")
     
     # Get dates for time-based stats
     now = datetime.utcnow()
