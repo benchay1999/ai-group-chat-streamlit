@@ -53,9 +53,31 @@ const DashboardPage = () => {
     try {
       setEarningsLoading(true);
       const response = await api.get('/api/users/earnings');
+      console.log('Earnings data received:', response.data);
       setEarnings(response.data);
     } catch (error) {
       console.error('Failed to load earnings:', error);
+      toast.error('Failed to load earnings data');
+      // Set default earnings to prevent blank page
+      setEarnings({
+        total_lifetime_earnings: 0,
+        current_balance: 0,
+        total_cashed_out: 0,
+        average_per_game: 0,
+        last_game_gems: 0,
+        highest_single_game: 0,
+        total_games: 0,
+        earnings_this_week: 0,
+        earnings_this_month: 0,
+        recent_sessions: [],
+        tier: { name: 'Bronze', color: '#CD7F32', current_amount: 0, next_threshold: 10 },
+        gem_details: {
+          total_gems_earned: 0,
+          current_gem_balance: 0,
+          total_gems_cashed_out: 0,
+          conversion_rate: 1000
+        }
+      });
     } finally {
       setEarningsLoading(false);
     }
