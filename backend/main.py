@@ -2451,26 +2451,62 @@ async def request_cashout(
         environment = mturk_client.environment
         worker_endpoint = mturk_client.worker_endpoints[environment]
         
-        # Link to the standing cashout HIT
-        hit_url = f"{worker_endpoint}/mturk/preview?groupId={mturk_hit_id}"
+        # Generate cashout redemption URLs
+        # For sandbox/testing: Use dev mode (no MTurk HIT needed)
+        # For production: Use MTurk HIT workflow
         
-        return {
+        # Direct redemption URL (dev mode - for testing)
+        direct_redemption_url = f"{EXTERNAL_URL.replace('/lobby', '')}/cashout-confirm?dev=true"
+        
+        # MTurk HIT preview URL (production mode)
+        mturk_preview_url = f"{worker_endpoint}/mturk/preview?groupId={mturk_hit_id}"
+        
+        # Determine which workflow to show based on environment
+        is_sandbox = environment == 'sandbox'
+        
+        response_data = {
             "success": True,
             "transaction_id": str(transaction.id),
             "amount_usd": float(transaction.amount_usd),
             "amount_gems": transaction.amount_gems,
             "redemption_code": transaction.redemption_code,
             "status": transaction.status.value,
-            "hit_url": hit_url,
             "expires_at": transaction.expires_at.isoformat() if transaction.expires_at else None,
-            "instructions": {
+            "environment": environment
+        }
+        
+        # Add appropriate URLs and instructions based on environment
+        if is_sandbox:
+            # SANDBOX: Provide dev mode link (easier testing, no MTurk complexity)
+            response_data["redemption_url"] = direct_redemption_url
+            response_data["mturk_preview_url"] = mturk_preview_url  # Optional, for full flow testing
+            response_data["instructions"] = {
+                "mode": "sandbox_testing",
+                "step1": "✅ EASY METHOD (Recommended for Testing):",
+                "step1a": "1. Copy your redemption code above",
+                "step1b": "2. Click the 'Redeem Code' button below",
+                "step1c": "3. Paste code and submit - Done!",
+                "step1d": "(No MTurk HIT needed for sandbox testing)",
+                "step2": "🔧 OR Test Full MTurk Flow (Advanced):",
+                "step2a": "1. Go to MTurk HIT link",
+                "step2b": "2. Accept HIT (or return previous one first)",
+                "step2c": "3. Paste code in HIT interface",
+                "note": "⚠️ If you get 'No HITs available', return your current assignment first!"
+            }
+        else:
+            # PRODUCTION: Use MTurk HIT workflow
+            response_data["hit_url"] = mturk_preview_url
+            response_data["instructions"] = {
+                "mode": "production",
                 "step1": "Copy your redemption code (shown above)",
                 "step2": "Click the MTurk HIT link below",
                 "step3": "Accept the HIT and paste your redemption code",
                 "step4": "Submit the HIT - payment will be processed immediately!",
-                "note": "Your code is valid for 7 days. Don't share it with anyone!"
+                "note": "Your code is valid for 7 days. Don't share it with anyone!",
+                "troubleshooting": "If you see 'No HITs available', you may have already accepted one. Return it first from your MTurk dashboard."
             }
-        }
+        
+        return response_data
         
     except CashoutError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -2552,6 +2588,105 @@ async def get_cashout_status(
     except Exception as e:
         print(f"❌ Error getting cashout status: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to get cashout status: {str(e)}")
+
+
+@app.post("/api/wallet/cashout-cancel/{transaction_id}")
+async def cancel_cashout_request(
+    transaction_id: str,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_async_session)
+):
+    """
+    Cancel a pending cashout transaction and return gems to user.
+    Only PENDING transactions can be cancelled.
+    Only the transaction owner can cancel their own transactions.
+    
+    Args:
+        transaction_id: Transaction UUID to cancel
+        current_user: Current authenticated user
+        db: Database session
+        
+    Returns:
+        Cancellation confirmation with returned gems
+    """
+    from .cashout_service import cancel_cashout_transaction, CashoutError
+    from .database import CashoutTransaction, CashoutStatus
+    import uuid as uuid_module
+    import traceback
+    
+    try:
+        # Parse transaction ID
+        try:
+            transaction_uuid = uuid_module.UUID(transaction_id)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid transaction ID format")
+        
+        # Get transaction
+        result = await db.execute(
+            select(CashoutTransaction).where(CashoutTransaction.id == transaction_uuid)
+        )
+        transaction = result.scalar_one_or_none()
+        
+        if not transaction:
+            raise HTTPException(status_code=404, detail="Transaction not found")
+        
+        # CRITICAL: Verify ownership (prevent users from cancelling others' transactions)
+        if transaction.user_id != current_user.id:
+            print(f"⚠️ SECURITY: User {current_user.user_id} attempted to cancel transaction owned by {transaction.user_id}")
+            raise HTTPException(status_code=403, detail="You can only cancel your own transactions")
+        
+        # Check if transaction can be cancelled
+        if transaction.status != CashoutStatus.PENDING:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Cannot cancel transaction with status '{transaction.status.value}'. Only PENDING transactions can be cancelled."
+            )
+        
+        print(f"🔄 User {current_user.user_id} cancelling transaction {transaction_id}")
+        print(f"   Amount: {transaction.amount_gems} gems (${transaction.amount_usd})")
+        print(f"   Current user balance: {current_user.gem_balance} gems")
+        
+        # Get user's current balance before cancellation
+        user_result = await db.execute(
+            select(User).where(User.id == current_user.id)
+        )
+        user = user_result.scalar_one()
+        old_balance = user.gem_balance
+        
+        # Cancel transaction (this will return gems)
+        await cancel_cashout_transaction(
+            transaction=transaction,
+            db=db,
+            reason="Cancelled by user"
+        )
+        
+        # Refresh user to get new balance
+        await db.refresh(user)
+        
+        print(f"✅ Transaction cancelled successfully")
+        print(f"   Gems returned: {transaction.amount_gems}")
+        print(f"   Balance: {old_balance} → {user.gem_balance} gems")
+        
+        return {
+            "success": True,
+            "transaction_id": transaction_id,
+            "amount_gems": transaction.amount_gems,
+            "amount_usd": float(transaction.amount_usd),
+            "gems_returned": transaction.amount_gems,
+            "new_balance": user.gem_balance,
+            "previous_balance": old_balance,
+            "message": f"Transaction cancelled. {transaction.amount_gems} gems have been returned to your wallet."
+        }
+        
+    except HTTPException:
+        # Re-raise HTTP exceptions as-is
+        raise
+    except CashoutError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        print(f"❌ Error cancelling cashout: {e}")
+        print(f"   Stack trace: {traceback.format_exc()}")
+        raise HTTPException(status_code=500, detail=f"Failed to cancel cashout: {str(e)}")
 
 
 @app.post("/api/wallet/redeem")

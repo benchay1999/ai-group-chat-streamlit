@@ -4,16 +4,19 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { Gem, DollarSign, TrendingUp, History, AlertCircle, ExternalLink, Clock } from 'lucide-react';
-import { getWalletBalance, getCashoutHistory } from '../services/walletAPI';
+import { useNavigate } from 'react-router-dom';
+import { Gem, DollarSign, TrendingUp, History, AlertCircle, ExternalLink, Clock, X, ArrowLeft } from 'lucide-react';
+import { getWalletBalance, getCashoutHistory, cancelCashout } from '../services/walletAPI';
 import CashoutModal from './CashoutModal';
 
 const Wallet = () => {
+  const navigate = useNavigate();
   const [walletData, setWalletData] = useState(null);
   const [transactions, setTransactions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showCashoutModal, setShowCashoutModal] = useState(false);
   const [error, setError] = useState(null);
+  const [cancellingTx, setCancellingTx] = useState(null);
 
   useEffect(() => {
     loadWalletData();
@@ -61,6 +64,39 @@ const Wallet = () => {
     return new Date(dateString).toLocaleString();
   };
 
+  const handleCancelTransaction = async (transactionId, amountGems) => {
+    // Confirm with user
+    const confirmed = window.confirm(
+      `Are you sure you want to cancel this cashout?\n\n` +
+      `Amount: ${amountGems.toLocaleString()} gems will be returned to your wallet.`
+    );
+    
+    if (!confirmed) return;
+    
+    try {
+      setCancellingTx(transactionId);
+      
+      const result = await cancelCashout(transactionId);
+      
+      // Show success message
+      alert(
+        `✅ Transaction Cancelled\n\n` +
+        `${result.gems_returned.toLocaleString()} gems have been returned to your wallet.\n` +
+        `New Balance: ${result.new_balance.toLocaleString()} gems`
+      );
+      
+      // Reload wallet data
+      await loadWalletData();
+      
+    } catch (err) {
+      console.error('Error cancelling transaction:', err);
+      const errorMsg = err.response?.data?.detail || 'Failed to cancel transaction';
+      alert(`❌ Error: ${errorMsg}`);
+    } finally {
+      setCancellingTx(null);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -93,6 +129,17 @@ const Wallet = () => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-50 to-blue-50 p-6">
       <div className="max-w-6xl mx-auto">
+        {/* Back Button */}
+        <div className="mb-6">
+          <button
+            onClick={() => navigate('/lobby')}
+            className="inline-flex items-center px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 hover:text-gray-900 transition-colors shadow-sm"
+          >
+            <ArrowLeft className="w-4 h-4 mr-2" />
+            Back to Dashboard
+          </button>
+        </div>
+
         {/* Header */}
         <div className="mb-8">
           <h1 className="text-4xl font-bold text-gray-900 mb-2">💎 My Wallet</h1>
@@ -216,6 +263,7 @@ const Wallet = () => {
                     <th className="text-left py-3 px-4 font-semibold text-gray-700">Amount</th>
                     <th className="text-left py-3 px-4 font-semibold text-gray-700">Status</th>
                     <th className="text-left py-3 px-4 font-semibold text-gray-700">Completed</th>
+                    <th className="text-left py-3 px-4 font-semibold text-gray-700">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -235,6 +283,35 @@ const Wallet = () => {
                       </td>
                       <td className="py-3 px-4 text-sm text-gray-600">
                         {tx.completed_at ? formatDate(tx.completed_at) : '-'}
+                      </td>
+                      <td className="py-3 px-4">
+                        {tx.status === 'pending' && (
+                          <button
+                            onClick={() => handleCancelTransaction(tx.transaction_id, tx.amount_gems)}
+                            disabled={cancellingTx === tx.transaction_id}
+                            className={`inline-flex items-center px-3 py-1 rounded-lg text-sm font-medium transition ${
+                              cancellingTx === tx.transaction_id
+                                ? 'bg-gray-200 text-gray-500 cursor-not-allowed'
+                                : 'bg-red-50 text-red-700 hover:bg-red-100 border border-red-200'
+                            }`}
+                            title="Cancel this pending transaction and return gems to wallet"
+                          >
+                            {cancellingTx === tx.transaction_id ? (
+                              <>
+                                <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-gray-500 mr-2"></div>
+                                Cancelling...
+                              </>
+                            ) : (
+                              <>
+                                <X className="w-4 h-4 mr-1" />
+                                Cancel
+                              </>
+                            )}
+                          </button>
+                        )}
+                        {tx.status !== 'pending' && (
+                          <span className="text-sm text-gray-400">-</span>
+                        )}
                       </td>
                     </tr>
                   ))}

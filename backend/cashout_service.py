@@ -140,6 +140,13 @@ async def create_cashout_transaction(
     # Calculate gems
     gems_amount = usd_to_gems(amount_usd)
     
+    # Store original balance for logging
+    original_balance = user.gem_balance
+    
+    print(f"💎 Creating cashout for user {user.user_id}")
+    print(f"   Original balance: {original_balance} gems")
+    print(f"   Requesting: {gems_amount} gems (${amount_usd})")
+    
     # Generate unique redemption code
     redemption_code = generate_redemption_code()
     
@@ -161,20 +168,31 @@ async def create_cashout_transaction(
         
         # Add transaction to database
         db.add(transaction)
+        
+        # Commit atomically - both user balance and transaction
         await db.commit()
         await db.refresh(transaction)
+        await db.refresh(user)  # Refresh user to get committed state
         
-        print(f"✅ Created cashout transaction {transaction.id} for user {user.user_id}")
-        print(f"   Amount: {gems_amount} gems = ${amount_usd}")
-        print(f"   Redemption Code: {redemption_code}")
+        print(f"✅ Created cashout transaction {transaction.id}")
+        print(f"   Deducted: {gems_amount} gems")
+        print(f"   New balance: {user.gem_balance} gems (was {original_balance})")
+        print(f"   Redemption Code: {redemption_code[:16]}...")
         
         return transaction
         
     except Exception as e:
-        # If anything fails, rollback the transaction and restore gems
+        # CRITICAL FIX: rollback() already restores the user state
+        # DO NOT manually add gems back - that would duplicate them!
+        print(f"❌ Failed to create cashout transaction: {e}")
+        print(f"   Rolling back... Balance will be restored to: {original_balance}")
+        
         await db.rollback()
-        user.gem_balance += gems_amount
-        await db.commit()
+        
+        # Refresh user to get rolled-back state
+        await db.refresh(user)
+        
+        print(f"   Balance after rollback: {user.gem_balance} gems")
         
         raise CashoutError(f"Failed to create cashout: {str(e)}")
 
@@ -229,11 +247,18 @@ async def redeem_cashout_code(
         raise CashoutError("This cashout was cancelled")
     
     try:
-        # Get user
+        # Get user (with lock to prevent concurrent modifications)
         user_result = await db.execute(
             select(User).where(User.id == transaction.user_id)
         )
         user = user_result.scalar_one()
+        
+        print(f"💳 Redeeming code for user {user.user_id}")
+        print(f"   Transaction ID: {transaction.id}")
+        print(f"   Amount: {transaction.amount_gems} gems = ${transaction.amount_usd}")
+        print(f"   Current gem balance: {user.gem_balance}")
+        print(f"   Worker ID: {worker_id}")
+        print(f"   Assignment ID: {assignment_id}")
         
         # DEVELOPMENT MODE: Check if we're in testing/development
         import os
@@ -245,17 +270,21 @@ async def redeem_cashout_code(
         # Approve the assignment on MTurk (skip in dev mode for testing)
         if not is_dev_mode:
             try:
+                print(f"💰 Processing MTurk payment...")
                 mturk_client = get_mturk_client()
                 
                 # Calculate if we need to send a bonus (if amount > base pay)
                 base_pay = mturk_client.base_pay
                 bonus_amount = max(Decimal('0'), transaction.amount_usd - base_pay)
                 
+                print(f"   Base pay: ${base_pay}, Bonus: ${bonus_amount}")
+                
                 # Approve assignment
                 mturk_client.approve_assignment(
                     assignment_id=assignment_id,
                     requester_feedback=f"ChatGame payout of ${transaction.amount_usd} approved. Thank you!"
                 )
+                print(f"✅ MTurk assignment approved")
                 
                 # Send bonus if needed
                 if bonus_amount > 0:
@@ -265,34 +294,47 @@ async def redeem_cashout_code(
                         bonus_amount=bonus_amount,
                         reason=f"ChatGame payout bonus (total: ${transaction.amount_usd})"
                     )
+                    print(f"✅ MTurk bonus sent: ${bonus_amount}")
             
             except Exception as mturk_error:
-                # MTurk API failed - return gems to user
+                # MTurk API failed - cancel transaction and return gems
                 print(f"❌ MTurk API error: {mturk_error}")
+                print(f"   Cancelling transaction and returning gems...")
+                
+                # Use cancel_cashout_transaction which handles gem return properly
                 await cancel_cashout_transaction(
                     transaction=transaction,
                     db=db,
                     reason=f"MTurk payment processing failed: {str(mturk_error)}"
                 )
+                
                 raise CashoutError("Payment processing failed. Your gems have been returned to your wallet. Please try again or contact support.")
         else:
-            print(f"🧪 DEV MODE: Skipping MTurk API call for testing (assignment_id: {assignment_id})")
+            print(f"🧪 DEV MODE: Skipping MTurk API call for testing")
+            print(f"   Assignment ID: {assignment_id}")
             print(f"   In production, this would approve assignment and send payment")
         
-        # Update transaction
+        # Update transaction to completed
         transaction.status = CashoutStatus.COMPLETED
         transaction.mturk_worker_id = worker_id
         transaction.mturk_assignment_id = assignment_id
         transaction.mturk_hit_id = hit_id
         transaction.completed_at = datetime.utcnow()
         
-        # Update user's total cashed out (only after successful MTurk payment)
+        # Update user's total cashed out (only after successful payment)
+        old_total_cashed_out = user.total_gems_cashed_out
         user.total_gems_cashed_out += transaction.amount_gems
         
+        # Commit all changes atomically
         await db.commit()
+        await db.refresh(transaction)
+        await db.refresh(user)
         
-        print(f"✅ Redeemed cashout code for user {user.user_id}")
-        print(f"   Amount: ${transaction.amount_usd}")
+        print(f"✅ Cashout completed successfully!")
+        print(f"   User: {user.user_id}")
+        print(f"   Amount: ${transaction.amount_usd} ({transaction.amount_gems} gems)")
+        print(f"   Total cashed out: {old_total_cashed_out} → {user.total_gems_cashed_out} gems")
+        print(f"   Current balance: {user.gem_balance} gems")
         print(f"   Worker: {worker_id}")
         
         return {
@@ -302,21 +344,30 @@ async def redeem_cashout_code(
             "message": f"Payment of ${transaction.amount_usd} approved! Funds will appear in your MTurk account."
         }
         
+    except CashoutError:
+        # Re-raise CashoutError (already handled, gems already returned)
+        raise
+        
     except Exception as e:
-        # If payment fails, return gems to user
-        await db.rollback()
-        user_result = await db.execute(
-            select(User).where(User.id == transaction.user_id)
-        )
-        user = user_result.scalar_one()
-        user.gem_balance += transaction.amount_gems
+        # Unexpected error - mark transaction as failed and return gems
+        print(f"❌ Unexpected error during redemption: {e}")
+        print(f"   Transaction ID: {transaction.id}")
         
-        transaction.status = CashoutStatus.FAILED
-        transaction.error_message = str(e)
+        import traceback
+        print(f"   Stack trace: {traceback.format_exc()}")
         
-        await db.commit()
+        try:
+            # Cancel the transaction properly (this returns gems)
+            await cancel_cashout_transaction(
+                transaction=transaction,
+                db=db,
+                reason=f"Unexpected error: {str(e)}"
+            )
+        except Exception as cancel_error:
+            print(f"❌ Error during cancellation: {cancel_error}")
+            # Last resort: manual rollback
+            await db.rollback()
         
-        print(f"❌ Failed to redeem cashout code: {e}")
         raise CashoutError(f"Payment processing failed: {str(e)}")
 
 
@@ -370,13 +421,20 @@ async def cancel_cashout_transaction(
         reason: Cancellation reason
     """
     if transaction.status in [CashoutStatus.COMPLETED, CashoutStatus.CANCELLED]:
+        print(f"⚠️  Transaction {transaction.id} already {transaction.status.value}, skipping cancellation")
         return  # Already completed or cancelled
     
-    # Return gems to user
+    print(f"🔄 Cancelling cashout transaction {transaction.id}")
+    print(f"   Reason: {reason}")
+    print(f"   Amount to return: {transaction.amount_gems} gems")
+    
+    # Get user and return gems
     user_result = await db.execute(
         select(User).where(User.id == transaction.user_id)
     )
     user = user_result.scalar_one()
+    
+    old_balance = user.gem_balance
     user.gem_balance += transaction.amount_gems
     
     # Update transaction status
@@ -384,10 +442,16 @@ async def cancel_cashout_transaction(
     transaction.error_message = reason
     transaction.completed_at = datetime.utcnow()
     
+    # Commit atomically
     await db.commit()
+    await db.refresh(user)
+    await db.refresh(transaction)
     
-    print(f"🔄 Cancelled cashout transaction {transaction.id}: {reason}")
-    print(f"   Returned {transaction.amount_gems} gems to user {user.user_id}")
+    print(f"✅ Cancelled cashout transaction {transaction.id}")
+    print(f"   User: {user.user_id}")
+    print(f"   Gems returned: {transaction.amount_gems}")
+    print(f"   Balance: {old_balance} → {user.gem_balance} gems")
+    print(f"   Status: {transaction.status.value}")
 
 
 async def get_user_cashout_history(

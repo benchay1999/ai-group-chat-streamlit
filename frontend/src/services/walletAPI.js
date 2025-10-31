@@ -66,12 +66,23 @@ export const getUserProfile = async () => {
   return response.data;
 };
 
+/**
+ * Cancel a pending cashout transaction
+ * @param {string} transactionId - Transaction UUID to cancel
+ * @returns {Promise<Object>} Cancellation result
+ */
+export const cancelCashout = async (transactionId) => {
+  const response = await api.post(`/api/wallet/cashout-cancel/${transactionId}`);
+  return response.data;
+};
+
 export default {
   getWalletBalance,
   requestCashout,
   getCashoutHistory,
   getCashoutStatus,
   updateMTurkWorkerId,
-  getUserProfile
+  getUserProfile,
+  cancelCashout
 };
 
