@@ -15,12 +15,13 @@ export const getWalletBalance = async () => {
 };
 
 /**
- * Request a cashout
+ * Request a cashout - UPDATED to V2 system
+ * Uses per-transaction private HITs (no more "No HITs available" errors!)
  * @param {number} amountUsd - Amount in USD to cash out
- * @returns {Promise<Object>} Cashout transaction details
+ * @returns {Promise<Object>} Cashout transaction details with private HIT URL
  */
 export const requestCashout = async (amountUsd) => {
-  const response = await api.post('/api/wallet/cashout', {
+  const response = await api.post('/api/wallet/cashout/v2', {
     amount_usd: amountUsd
   });
   return response.data;

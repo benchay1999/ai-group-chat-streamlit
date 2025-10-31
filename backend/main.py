@@ -2673,6 +2673,38 @@ async def get_cashout_history(
         raise HTTPException(status_code=500, detail=f"Failed to get cashout history: {str(e)}")
 
 
+# ============================================================================
+# NEW: Per-Transaction HIT Cashout System (V2)
+# ============================================================================
+
+@app.post("/api/wallet/cashout/v2")
+async def cashout_v2(
+    request: Request,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_async_session)
+):
+    """
+    NEW cashout system using per-transaction private HITs.
+    
+    Each cashout creates a private HIT visible only to the requesting worker.
+    This eliminates:
+    - MaxAssignments exhaustion issues
+    - "No HITs available" errors
+    - HITGroupId vs HITId confusion
+    - Complex standing HIT management
+    
+    Benefits:
+    - Creates a new private HIT for each cashout
+    - Worker-specific (only the cashout requester can see it)
+    - Scalable to unlimited cashouts
+    - Auto-cleanup after completion
+    
+    This is the RECOMMENDED cashout method going forward.
+    """
+    from .cashout_endpoint_v2 import request_cashout_v2
+    return await request_cashout_v2(request, current_user, db)
+
+
 @app.get("/api/wallet/cashout-status/{transaction_id}")
 async def get_cashout_status(
     transaction_id: str,
