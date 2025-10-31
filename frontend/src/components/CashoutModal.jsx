@@ -39,11 +39,24 @@ const CashoutModal = ({ walletData, onClose, onSuccess }) => {
       
       const result = await requestCashout(amount);
       
-      // Validate HIT URL before showing result
-      if (!result.hit_url || result.hit_url.includes('undefined') || result.hit_url === '') {
+      // Validate response has required fields
+      if (!result.redemption_code) {
+        setError('Failed to generate redemption code. Please try again.');
+        return;
+      }
+      
+      // Get the appropriate URL based on environment
+      // Sandbox: redemption_url or mturk_preview_url
+      // Production: hit_url
+      const redemptionLink = result.redemption_url || result.hit_url || result.mturk_preview_url;
+      
+      if (!redemptionLink) {
         setError('Cashout system not properly configured. Please contact support.');
         return;
       }
+      
+      // Add the redemption link to result for display
+      result.hit_url = redemptionLink;
       
       setCashoutResult(result);
       
@@ -133,7 +146,7 @@ const CashoutModal = ({ walletData, onClose, onSuccess }) => {
             className="block w-full py-4 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-lg font-bold text-lg hover:from-green-600 hover:to-emerald-700 transition-all shadow-lg hover:shadow-xl flex items-center justify-center gap-3 mb-4"
           >
             <ExternalLink className="w-6 h-6" />
-            Go to MTurk HIT
+            {cashoutResult.redemption_url ? 'Redeem Code Now' : 'Go to MTurk HIT'}
           </a>
 
           {/* Secondary Info */}

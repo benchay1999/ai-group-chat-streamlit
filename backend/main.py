@@ -14,7 +14,6 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Depends, HTTPExcept
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import os
-from dotenv import load_dotenv
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, update, desc
 import uuid as uuid_lib
@@ -45,8 +44,9 @@ import time as _time
 from collections import defaultdict
 from fastapi import Request
 
-# Force load from .env file, overriding any system/conda environment variables
-load_dotenv(override=True)
+# Import robust environment configuration
+# This module handles .env loading with explicit path resolution
+from . import env_config
 
 app = FastAPI(title="AI Group Chat API", version="2.0.0")
 
@@ -150,14 +150,11 @@ async def startup_event():
     except Exception as e:
         print(f"⚠️  Cashout monitor initialization failed: {e}")
     
-    # Validate cashout configuration
-    cashout_hit_id = os.getenv('CASHOUT_HIT_ID')
-    if not cashout_hit_id:
-        print("⚠️  WARNING: CASHOUT_HIT_ID not configured!")
-        print("   Cashout feature will not work until you:")
-        print("   1. Create a standing HIT on MTurk")
-        print("   2. Set CASHOUT_HIT_ID in your .env file")
-        print("   See REDEMPTION_CODE_SYSTEM.md for setup instructions")
+    # Configuration validation already done by env_config module at import time
+    # Additional startup validation
+    config_status = env_config.get_config_status()
+    if not config_status['cashout_hit_id_configured']:
+        print("⚠️  CASHOUT SYSTEM NOT CONFIGURED - Cashout requests will fail!")
     
     print("🚀 Application started successfully")
 
@@ -2428,32 +2425,56 @@ async def request_cashout(
     body = await request.json()
     amount_usd = Decimal(str(body.get('amount_usd', 0)))
     
+    print(f"\n{'='*70}")
+    print(f"📥 CASHOUT REQUEST from user: {current_user.user_id}")
+    print(f"   Amount: ${amount_usd}")
+    print(f"   User balance: {current_user.gem_balance} gems")
+    print(f"{'='*70}")
+    
     try:
-        # Check if cashout system is configured
-        mturk_hit_id = os.getenv('CASHOUT_HIT_ID')
-        
-        if not mturk_hit_id:
+        # Check if cashout system is configured (using cached value)
+        print(f"🔍 Step 1: Checking cashout configuration...")
+        try:
+            mturk_hit_id = env_config.get_cashout_hit_id()
+            print(f"   ✅ HIT ID loaded: {mturk_hit_id}")
+        except ValueError as e:
+            # Detailed error with diagnostic info
+            config_status = env_config.get_config_status()
+            error_details = {
+                "error": "Cashout system not properly configured",
+                "env_file_path": config_status['env_file_path'],
+                "env_file_exists": config_status['env_file_exists'],
+                "solution": "Set CASHOUT_HIT_ID in your .env file and restart the server"
+            }
+            print(f"   ❌ Configuration error: {error_details}")
             raise HTTPException(
                 status_code=503,
-                detail="Cashout system not configured. Please contact administrator to set up the MTurk cashout HIT."
+                detail=f"Cashout system not configured. Environment file: {config_status['env_file_path']}, Exists: {config_status['env_file_exists']}. Please contact administrator."
             )
         
         # Create cashout transaction with redemption code
+        print(f"🔍 Step 2: Creating cashout transaction...")
         transaction = await create_cashout_transaction(
             user=current_user,
             amount_usd=amount_usd,
             db=db
         )
+        print(f"   ✅ Transaction created: {transaction.id}")
         
         # Get MTurk environment to provide correct HIT URL
+        print(f"🔍 Step 3: Getting MTurk environment...")
         from .mturk_api import get_mturk_client
         mturk_client = get_mturk_client()
         environment = mturk_client.environment
         worker_endpoint = mturk_client.worker_endpoints[environment]
+        print(f"   ✅ Environment: {environment}")
+        print(f"   ✅ Worker endpoint: {worker_endpoint}")
         
         # Generate cashout redemption URLs
         # For sandbox/testing: Use dev mode (no MTurk HIT needed)
         # For production: Use MTurk HIT workflow
+        
+        print(f"🔍 Step 4: Generating redemption URLs...")
         
         # Direct redemption URL (dev mode - for testing)
         direct_redemption_url = f"{EXTERNAL_URL.replace('/lobby', '')}/cashout-confirm?dev=true"
@@ -2463,6 +2484,9 @@ async def request_cashout(
         
         # Determine which workflow to show based on environment
         is_sandbox = environment == 'sandbox'
+        print(f"   ✅ Is sandbox: {is_sandbox}")
+        print(f"   ✅ Direct URL: {direct_redemption_url}")
+        print(f"   ✅ MTurk URL: {mturk_preview_url}")
         
         response_data = {
             "success": True,
@@ -2506,12 +2530,27 @@ async def request_cashout(
                 "troubleshooting": "If you see 'No HITs available', you may have already accepted one. Return it first from your MTurk dashboard."
             }
         
+        print(f"✅ CASHOUT REQUEST SUCCESSFUL")
+        print(f"   Transaction ID: {response_data['transaction_id']}")
+        print(f"   Redemption Code: {response_data['redemption_code'][:16]}...")
+        print(f"{'='*70}\n")
+        
         return response_data
         
+    except HTTPException:
+        # Re-raise HTTP exceptions as-is
+        print(f"❌ CASHOUT REQUEST FAILED - HTTP Exception")
+        print(f"{'='*70}\n")
+        raise
     except CashoutError as e:
+        print(f"❌ CASHOUT REQUEST FAILED - Cashout Error: {e}")
+        print(f"{'='*70}\n")
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
-        print(f"❌ Error creating cashout: {e}")
+        print(f"❌ CASHOUT REQUEST FAILED - Unexpected Error: {e}")
+        import traceback
+        print(f"   Stack trace:\n{traceback.format_exc()}")
+        print(f"{'='*70}\n")
         raise HTTPException(status_code=500, detail=f"Failed to create cashout: {str(e)}")
 
 

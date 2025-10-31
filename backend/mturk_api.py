@@ -8,10 +8,14 @@ from typing import Dict, List, Optional
 from decimal import Decimal
 import boto3
 from botocore.exceptions import ClientError
-from dotenv import load_dotenv
-
-# Force load from .env file, overriding any system/conda environment variables
-load_dotenv(override=True)
+d
+# Use robust environment configuration
+try:
+    from . import env_config
+except ImportError:
+    # Fallback for standalone scripts
+    from dotenv import load_dotenv
+    load_dotenv(override=True)
 
 
 class MTurkClient:
@@ -36,21 +40,39 @@ class MTurkClient:
             'production': 'https://www.mturk.com'
         }
         
+        # Get AWS credentials
+        aws_access_key_id = os.getenv('AWS_ACCESS_KEY_ID')
+        aws_secret_access_key = os.getenv('AWS_SECRET_ACCESS_KEY')
+        
+        # Validate credentials exist
+        if not aws_access_key_id or not aws_secret_access_key:
+            error_msg = "AWS credentials not configured. Please set AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY in .env file"
+            print(f"❌ MTurkClient initialization failed: {error_msg}")
+            raise ValueError(error_msg)
+        
+        print(f"🔧 Initializing MTurk client...")
+        print(f"   Environment: {self.environment}")
+        print(f"   Endpoint: {self.endpoints[self.environment]}")
+        print(f"   AWS Key ID: {aws_access_key_id[:8]}...{aws_access_key_id[-4:] if len(aws_access_key_id) > 12 else '***'}")
+        
         # Initialize boto3 client
-        self.client = boto3.client(
-            'mturk',
-            endpoint_url=self.endpoints[self.environment],
-            region_name='us-east-1',
-            aws_access_key_id=os.getenv('AWS_ACCESS_KEY_ID'),
-            aws_secret_access_key=os.getenv('AWS_SECRET_ACCESS_KEY')
-        )
+        try:
+            self.client = boto3.client(
+                'mturk',
+                endpoint_url=self.endpoints[self.environment],
+                region_name='us-east-1',
+                aws_access_key_id=aws_access_key_id,
+                aws_secret_access_key=aws_secret_access_key
+            )
+            print(f"✅ MTurk client initialized successfully ({self.environment} environment)")
+        except Exception as e:
+            print(f"❌ Failed to initialize MTurk boto3 client: {e}")
+            raise
         
         # Configuration
         self.base_pay = Decimal(os.getenv('MTURK_BASE_PAY', '0.05'))
         self.external_url = os.getenv('EXTERNAL_URL', 'http://localhost:5173/lobby')
         self.frame_height = int(os.getenv('MTURK_FRAME_HEIGHT', '0'))
-        
-        print(f"✅ MTurk client initialized ({self.environment} environment)")
         
     def get_account_balance(self) -> Dict:
         """
