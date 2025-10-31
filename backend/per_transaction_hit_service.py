@@ -208,26 +208,7 @@ async def create_worker_specific_hit(
         
         # Step 2: Create HIT with qualification requirement
         print(f"\n2️⃣  Creating HIT with qualification requirement...")
-        
-        # Add a small delay to ensure MTurk has fully propagated the qualification
-        import time
-        print(f"   ⏳ Waiting 5 seconds for MTurk to fully propagate qualification...")
-        time.sleep(5)  # Increased from 3 to 5 seconds for extra safety
-        print(f"   ✅ Proceeding with HIT creation")
-        
-        # Final verification before HIT creation
-        print(f"   🔍 Final pre-HIT verification...")
-        try:
-            final_check = mturk_client.client.get_qualification_score(
-                QualificationTypeId=qualification_id,
-                WorkerId=worker_id_clean
-            )
-            print(f"   ✅ Final check passed - Worker still has qualification")
-        except Exception as e:
-            print(f"   ⚠️  WARNING: Final check failed: {e}")
-            print(f"   ⚠️  Proceeding anyway, but worker may have access issues")
-            print(f"   ⚠️  Worker ID used: {worker_id_clean}")
-            print(f"   ⚠️  Qualification ID: {qualification_id}")
+        print(f"   ⏭️  Creating HIT immediately (frontend will wait 5s before allowing access)")
         
         # Generate external URL for the cashout confirmation page
         external_url = os.getenv('EXTERNAL_URL', 'http://localhost:3000')

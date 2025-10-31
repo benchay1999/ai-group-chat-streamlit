@@ -13,6 +13,7 @@ const CashoutModal = ({ walletData, onClose, onSuccess }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [cashoutResult, setCashoutResult] = useState(null);
+  const [countdown, setCountdown] = useState(5);
 
   const maxAmount = (walletData.gem_balance / 1000).toFixed(2);
   const gemsNeeded = Math.ceil(parseFloat(amountUsd || 0) * 1000);
@@ -58,6 +59,7 @@ const CashoutModal = ({ walletData, onClose, onSuccess }) => {
       }
       
       setCashoutResult(result);
+      setCountdown(5); // Start 5-second countdown
       
     } catch (err) {
       console.error('Cashout error:', err);
@@ -67,6 +69,16 @@ const CashoutModal = ({ walletData, onClose, onSuccess }) => {
       setLoading(false);
     }
   };
+
+  // Countdown effect
+  React.useEffect(() => {
+    if (cashoutResult && countdown > 0) {
+      const timer = setTimeout(() => {
+        setCountdown(countdown - 1);
+      }, 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [cashoutResult, countdown]);
 
   if (cashoutResult) {
     return (
@@ -139,16 +151,29 @@ const CashoutModal = ({ walletData, onClose, onSuccess }) => {
 
           {/* Redemption Buttons */}
           <div className="space-y-3 mb-4">
-            {/* MTurk HIT Button (Primary) */}
-            <a
-              href={cashoutResult.hit_url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="block w-full py-4 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-lg font-bold text-lg hover:from-green-600 hover:to-emerald-700 transition-all shadow-lg hover:shadow-xl flex items-center justify-center gap-3"
-            >
-              <ExternalLink className="w-6 h-6" />
-              Go to MTurk HIT
-            </a>
+            {/* MTurk HIT Button (Primary) - Disabled for 5 seconds */}
+            {countdown > 0 ? (
+              <div className="block w-full py-4 bg-gray-400 text-white rounded-lg font-bold text-lg cursor-not-allowed flex items-center justify-center gap-3 relative">
+                <div className="absolute inset-0 flex items-center justify-center bg-blue-600 bg-opacity-20 rounded-lg">
+                  <div className="text-center">
+                    <div className="text-3xl font-bold mb-1">{countdown}</div>
+                    <div className="text-sm">Preparing MTurk HIT...</div>
+                  </div>
+                </div>
+                <ExternalLink className="w-6 h-6 opacity-30" />
+                <span className="opacity-30">Go to MTurk HIT</span>
+              </div>
+            ) : (
+              <a
+                href={cashoutResult.hit_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="block w-full py-4 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-lg font-bold text-lg hover:from-green-600 hover:to-emerald-700 transition-all shadow-lg hover:shadow-xl flex items-center justify-center gap-3 animate-pulse"
+              >
+                <ExternalLink className="w-6 h-6" />
+                Go to MTurk HIT ✨
+              </a>
+            )}
 
             {/* Dev/Test Mode Button (Sandbox only) */}
             {cashoutResult.dev_test_url && (

@@ -451,14 +451,13 @@ class MTurkClient:
 </ExternalQuestion>"""
         
         # Qualification requirement: worker must have the unique qualification
-        # Note: Cannot use both RequiredToPreview and ActionsGuarded together
-        # Using RequiredToPreview=True ensures only the target worker can see the HIT
+        # No ActionsGuarded - just basic requirement check
+        # This allows qualified workers to see and accept, non-qualified cannot accept
         qualification_requirements = [
             {
                 'QualificationTypeId': qualification_id,
                 'Comparator': 'EqualTo',
-                'IntegerValues': [1],
-                'RequiredToPreview': True
+                'IntegerValues': [1]
             }
         ]
         
@@ -504,7 +503,7 @@ class MTurkClient:
                 'hit_group_id': hit['HITGroupId'],
                 'hit_url': hit_url,
                 'amount': str(amount),
-                'expiration': hit['Expiration']
+                'expiration': hit['Expiration'].isoformat() if hit.get('Expiration') else None
             }
             
         except ClientError as e:

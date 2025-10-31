@@ -123,6 +123,15 @@ async def request_cashout_v2(
         print(f"HIT URL: {hit_result['hit_url']}")
         print(f"{'='*70}\n")
         
+        # Log the response being returned
+        print(f"📤 Returning response to frontend:")
+        print(f"   success: {response.get('success')}")
+        print(f"   amount_usd: {response.get('amount_usd')}")
+        print(f"   hit_url: {response.get('hit_url')[:80] if response.get('hit_url') else 'None'}...")
+        print(f"   redemption_code: {response.get('redemption_code')[:20] if response.get('redemption_code') else 'None'}...")
+        print(f"   expires_at type: {type(response.get('expires_at'))}")
+        print(f"   expires_at value: {response.get('expires_at')}")
+        
         return response
         
     except HTTPException:
