@@ -53,31 +53,11 @@ const DashboardPage = () => {
     try {
       setEarningsLoading(true);
       const response = await api.get('/api/users/earnings');
-      console.log('Earnings data received:', response.data);
       setEarnings(response.data);
     } catch (error) {
       console.error('Failed to load earnings:', error);
-      toast.error('Failed to load earnings data');
-      // Set default earnings to prevent blank page
-      setEarnings({
-        total_lifetime_earnings: 0,
-        current_balance: 0,
-        total_cashed_out: 0,
-        average_per_game: 0,
-        last_game_gems: 0,
-        highest_single_game: 0,
-        total_games: 0,
-        earnings_this_week: 0,
-        earnings_this_month: 0,
-        recent_sessions: [],
-        tier: { name: 'Bronze', color: '#CD7F32', current_amount: 0, next_threshold: 10 },
-        gem_details: {
-          total_gems_earned: 0,
-          current_gem_balance: 0,
-          total_gems_cashed_out: 0,
-          conversion_rate: 1000
-        }
-      });
+      toast.error('Failed to load earnings data. Please refresh the page.');
+      // Keep earnings as null to show error/loading state instead of fake data
     } finally {
       setEarningsLoading(false);
     }
@@ -159,6 +139,33 @@ const DashboardPage = () => {
         </div>
       </div>
 
+      {/* Earnings Loading State */}
+      {earningsLoading && (
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+          <div className="bg-gray-800 bg-opacity-50 rounded-xl p-12 text-center">
+            <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-cyan-400 mx-auto mb-4"></div>
+            <p className="text-gray-300 text-lg">Loading earnings data...</p>
+          </div>
+        </div>
+      )}
+
+      {/* Earnings Error State */}
+      {!earnings && !earningsLoading && (
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+          <div className="bg-red-900 bg-opacity-20 border border-red-700 rounded-xl p-8 text-center">
+            <AlertCircle className="w-16 h-16 text-red-500 mx-auto mb-4" />
+            <h2 className="text-2xl font-bold text-red-400 mb-2">Failed to Load Earnings Data</h2>
+            <p className="text-gray-300 mb-4">Unable to retrieve your earnings information. Please try again.</p>
+            <button
+              onClick={loadEarnings}
+              className="px-6 py-3 bg-red-600 hover:bg-red-700 text-white rounded-lg font-semibold transition-colors"
+            >
+              Retry
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Earnings Hero Section */}
       {earnings && !earningsLoading && (
         <div className="relative overflow-hidden bg-gradient-to-br from-gray-900 via-purple-900 to-black border-b border-gray-800">
@@ -179,7 +186,7 @@ const DashboardPage = () => {
               <div className="mb-6">
                 <div className="text-8xl font-black text-transparent bg-clip-text bg-gradient-to-r from-green-400 via-cyan-400 to-blue-500 animate-glow inline-block">
                   <EarningsCounter 
-                    target={earnings.total_lifetime_earnings} 
+                    target={earnings.total_lifetime_earnings || 0} 
                     duration={2500}
                     className="text-8xl font-black"
                     glowColor="green"
@@ -188,7 +195,7 @@ const DashboardPage = () => {
               </div>
               
               <p className="text-xl text-gray-300 mb-2">
-                From <span className="text-white font-semibold">{earnings.total_games}</span> games played
+                From <span className="text-white font-semibold">{earnings.total_games || 0}</span> games played
               </p>
               
               {earnings.tier && (
@@ -199,7 +206,7 @@ const DashboardPage = () => {
                   </span>
                   {earnings.tier.next_threshold && (
                     <span className="text-xs text-gray-400">
-                      (${(earnings.tier.next_threshold - earnings.total_lifetime_earnings).toFixed(2)} to next)
+                      (${((earnings.tier.next_threshold || 0) - (earnings.total_lifetime_earnings || 0)).toFixed(2)} to next)
                     </span>
                   )}
                 </div>
@@ -262,7 +269,7 @@ const DashboardPage = () => {
             </div>
 
             {/* Earnings Chart */}
-            {earnings.recent_sessions.length > 0 && (
+            {earnings.recent_sessions && earnings.recent_sessions.length > 0 && (
               <div className="bg-gray-800 bg-opacity-30 backdrop-blur-sm rounded-xl p-6 border border-gray-700 mb-8">
                 <h3 className="text-lg font-semibold text-white mb-4">Recent Games (Gems Earned)</h3>
                 <EarningsChart data={earnings.recent_sessions.slice(0, 10).reverse()} />
