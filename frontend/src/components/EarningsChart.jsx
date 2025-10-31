@@ -1,15 +1,15 @@
 /**
  * EarningsChart Component
- * Mini earnings trend chart showing recent session earnings
+ * Mini earnings trend chart showing recent session earnings (in gems)
  */
 
 import { LineChart, Line, ResponsiveContainer, Tooltip } from 'recharts';
 
 const EarningsChart = ({ data }) => {
-  // Transform data for chart - ONLY show actual payments, not calculated suggestions
+  // Transform data for chart - shows gem earnings per session
   const chartData = data.map((session, index) => ({
     index,
-    amount: session.amount || 0, // Only admin-set payment amounts
+    amount: session.amount || 0, // Gem amounts
   }));
 
   const CustomTooltip = ({ active, payload }) => {
@@ -17,7 +17,7 @@ const EarningsChart = ({ data }) => {
       return (
         <div className="bg-gray-800 border border-gray-600 rounded px-3 py-2 shadow-lg">
           <p className="text-green-400 font-semibold">
-            ${payload[0].value.toFixed(2)}
+            {payload[0].value.toLocaleString()} gems
           </p>
         </div>
       );

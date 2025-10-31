@@ -9,7 +9,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { sessionsAPI } from '../services/sessionsAPI';
 import { format } from 'date-fns';
 import { 
-  Copy, Check, ExternalLink, Key, DollarSign, Clock, 
+  Copy, Check, ExternalLink, Key, DollarSign, 
   TrendingUp, Zap, Star, Sparkles, Award, Gem, Wallet, AlertCircle, ArrowRight
 } from 'lucide-react';
 import toast from 'react-hot-toast';
@@ -149,7 +149,7 @@ const DashboardPage = () => {
               <div className="flex items-center justify-center gap-2 mb-3">
                 <Sparkles className="w-5 h-5 text-cyan-400" />
                 <p className="text-sm text-cyan-400 font-mono tracking-wider uppercase">
-                  Total Lifetime Earnings
+                  Total Cash Earned (Cashed Out)
                 </p>
                 <Sparkles className="w-5 h-5 text-cyan-400" />
               </div>
@@ -185,62 +185,54 @@ const DashboardPage = () => {
             </div>
 
             {/* Secondary stats row */}
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
-              {/* Pending Earnings */}
-              <div className="bg-gray-800 bg-opacity-50 backdrop-blur-sm rounded-xl p-6 border border-gray-700 animate-pulse-yellow">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-sm text-gray-400 font-medium">Pending</span>
-                  <Clock className="w-5 h-5 text-yellow-500" />
-                </div>
-                <div className="text-3xl font-bold text-yellow-400">
-                  <EarningsCounter 
-                    target={earnings.pending_earnings} 
-                    glowColor="yellow"
-                  />
-                </div>
-              </div>
-
-              {/* Last Game */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+              {/* Last Game (IN GEMS) */}
               <div className="bg-gray-800 bg-opacity-50 backdrop-blur-sm rounded-xl p-6 border border-gray-700">
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-sm text-gray-400 font-medium">Last Game</span>
                   <Zap className="w-5 h-5 text-blue-500" />
                 </div>
-                <div className="text-3xl font-bold text-blue-400">
-                  {earnings.recent_sessions.length > 0 && earnings.recent_sessions[0].amount > 0 ? (
+                <div className="flex items-baseline gap-2">
+                  <div className="text-3xl font-bold text-blue-400">
                     <EarningsCounter 
-                      target={earnings.recent_sessions[0].amount} 
+                      target={earnings.last_game_gems || 0}
+                      decimals={0}
+                      prefix=""
                       glowColor="blue"
                     />
-                  ) : (
-                    <span className="text-gray-500">$0.00</span>
-                  )}
+                  </div>
+                  <span className="text-sm text-gray-400">gems</span>
                 </div>
               </div>
 
-              {/* Average Per Game */}
+              {/* Average Per Game (IN GEMS) */}
               <div className="bg-gray-800 bg-opacity-50 backdrop-blur-sm rounded-xl p-6 border border-gray-700">
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-sm text-gray-400 font-medium">Avg/Game</span>
                   <TrendingUp className="w-5 h-5 text-purple-500" />
                 </div>
-                <div className="text-3xl font-bold text-purple-400">
-                  <EarningsCounter 
-                    target={earnings.average_per_game} 
-                    glowColor="purple"
-                  />
+                <div className="flex items-baseline gap-2">
+                  <div className="text-3xl font-bold text-purple-400">
+                    <EarningsCounter 
+                      target={earnings.average_per_game || 0}
+                      decimals={0}
+                      prefix=""
+                      glowColor="purple"
+                    />
+                  </div>
+                  <span className="text-sm text-gray-400">gems</span>
                 </div>
               </div>
 
-              {/* This Week */}
+              {/* This Week (ACTUAL CASHOUTS IN USD) */}
               <div className="bg-gray-800 bg-opacity-50 backdrop-blur-sm rounded-xl p-6 border border-gray-700 animate-pulse-glow">
                 <div className="flex items-center justify-between mb-2">
-                  <span className="text-sm text-gray-400 font-medium">This Week</span>
+                  <span className="text-sm text-gray-400 font-medium">Cashed Out This Week</span>
                   <Star className="w-5 h-5 text-green-500" />
                 </div>
                 <div className="text-3xl font-bold text-green-400">
                   <EarningsCounter 
-                    target={earnings.earnings_this_week} 
+                    target={earnings.earnings_this_week || 0}
                     glowColor="green"
                   />
                 </div>
@@ -250,7 +242,7 @@ const DashboardPage = () => {
             {/* Earnings Chart */}
             {earnings.recent_sessions.length > 0 && (
               <div className="bg-gray-800 bg-opacity-30 backdrop-blur-sm rounded-xl p-6 border border-gray-700 mb-8">
-                <h3 className="text-lg font-semibold text-white mb-4">Recent Earnings Trend</h3>
+                <h3 className="text-lg font-semibold text-white mb-4">Recent Games (Gems Earned)</h3>
                 <EarningsChart data={earnings.recent_sessions.slice(0, 10).reverse()} />
               </div>
             )}

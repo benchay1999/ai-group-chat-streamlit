@@ -1231,9 +1231,11 @@ async def save_session_stats(room_code: str, state: dict, current_user: Optional
                     old_balance = db_user.gem_balance
                     db_user.gem_balance += gems_earned
                     db_user.total_gems_earned += gems_earned
+                    db_user.total_games += 1  # INCREMENT TOTAL GAMES COUNTER
                     
                     print(f"💎 Credited {gems_earned} gems to user {db_user.user_id} (${player_earnings_value})")
                     print(f"   Balance: {old_balance} → {db_user.gem_balance} gems")
+                    print(f"   Total games played: {db_user.total_games}")
                     
                     # Track for session data (use first authenticated player's earnings for legacy)
                     credited_players.append({
@@ -2270,6 +2272,7 @@ async def get_user_earnings(
 ):
     """
     Get detailed earnings statistics for current user.
+    USES GEM ECONOMY SYSTEM - synced with wallet balance.
     
     Args:
         current_user: Current authenticated user
@@ -2281,87 +2284,156 @@ async def get_user_earnings(
     from decimal import Decimal
     from sqlalchemy import func
     from datetime import datetime, timedelta
+    from .config import GEMS_PER_DOLLAR
+    from .cashout_service import gems_to_usd
     
-    # Get all user sessions with earnings data
+    print(f"\n{'='*70}")
+    print(f"📊 EARNINGS REQUEST for user: {current_user.user_id}")
+    print(f"{'='*70}")
+    
+    # GEM ECONOMY: Use user's gem statistics (SYNCED WITH WALLET)
+    total_gems_earned = current_user.total_gems_earned
+    current_gem_balance = current_user.gem_balance
+    total_gems_cashed_out = current_user.total_gems_cashed_out
+    total_games = current_user.total_games
+    
+    # FALLBACK: If total_games is 0 but user has sessions, sync it from session count
+    if total_games == 0:
+        result = await db.execute(
+            select(func.count(DBSession.id))
+            .where(DBSession.user_id == current_user.id)
+        )
+        session_count = result.scalar() or 0
+        if session_count > 0:
+            print(f"⚠️ SYNC: User {current_user.user_id} has {session_count} sessions but total_games=0. Syncing...")
+            current_user.total_games = session_count
+            await db.commit()
+            await db.refresh(current_user)
+            total_games = session_count
+            print(f"✅ SYNCED: total_games updated to {total_games}")
+    
+    # Convert to USD for display
+    current_balance_usd = gems_to_usd(current_gem_balance)
+    total_cashed_out_usd = gems_to_usd(total_gems_cashed_out)  # This is the real "lifetime earnings"
+    
+    print(f"User Stats (GEM ECONOMY - synced with wallet):")
+    print(f"   Total games: {total_games}")
+    print(f"   Total gems earned: {total_gems_earned} gems")
+    print(f"   Current balance: {current_gem_balance} gems = ${current_balance_usd}")
+    print(f"   Lifetime earnings (cashed out): {total_gems_cashed_out} gems = ${total_cashed_out_usd}")
+    
+    # Calculate average per game (IN GEMS, not USD)
+    avg_gems_per_game = int((total_gems_earned / total_games) if total_games > 0 else 0)
+    
+    # Get recent sessions to calculate last game gems
     result = await db.execute(
         select(DBSession)
         .where(DBSession.user_id == current_user.id)
         .order_by(desc(DBSession.completed_at))
+        .limit(10)
     )
     sessions = result.scalars().all()
     
-    # Calculate total earnings (paid)
-    total_paid = Decimal("0.00")
-    total_pending = Decimal("0.00")
-    total_calculated = Decimal("0.00")
-    highest_earning = Decimal("0.00")
+    # Calculate last game amount (IN GEMS)
+    last_game_gems = avg_gems_per_game  # Default to average if can't determine
+    highest_earning_gems = 0
     recent_sessions = []
+    
+    for idx, session in enumerate(sessions):
+        # Estimate gems for this session
+        if hasattr(session, 'calculated_earnings') and session.calculated_earnings:
+            # Convert old USD earnings to gems
+            estimated_gems = int(float(session.calculated_earnings) * GEMS_PER_DOLLAR)
+        else:
+            # Use average
+            estimated_gems = avg_gems_per_game
+        
+        if idx == 0:  # Most recent game
+            last_game_gems = estimated_gems
+        
+        if estimated_gems > highest_earning_gems:
+            highest_earning_gems = estimated_gems
+        
+        # Store sessions with gem amounts for trend chart
+        recent_sessions.append({
+            "date": session.completed_at.isoformat(),
+            "amount": estimated_gems,
+            "status": "completed"
+        })
     
     # Get dates for time-based stats
     now = datetime.utcnow()
     week_ago = now - timedelta(days=7)
     month_ago = now - timedelta(days=30)
     
-    earnings_this_week = Decimal("0.00")
-    earnings_this_month = Decimal("0.00")
+    # Calculate actual cashouts this week/month (REAL EARNINGS, not estimated)
+    from .database import CashoutTransaction, CashoutStatus
     
-    for session in sessions:
-        # Track calculated earnings (use getattr for backward compatibility)
-        calc_earnings = getattr(session, 'calculated_earnings', None)
-        if calc_earnings:
-            total_calculated += calc_earnings
-        
-        # Track actual payments
-        if session.payment_amount:
-            # Track highest PAID earning (not calculated)
-            if session.payment_amount > highest_earning:
-                highest_earning = session.payment_amount
-                
-            if session.payment_status == PaymentStatus.PAID:
-                total_paid += session.payment_amount
-                
-                # Time-based stats
-                if session.completed_at >= week_ago:
-                    earnings_this_week += session.payment_amount
-                if session.completed_at >= month_ago:
-                    earnings_this_month += session.payment_amount
-            else:
-                total_pending += session.payment_amount
-        
-        # Recent sessions for chart (last 10)
-        if len(recent_sessions) < 10:
-            recent_sessions.append({
-                "date": session.completed_at.isoformat(),
-                "amount": float(session.payment_amount) if session.payment_amount else 0,
-                "calculated": float(calc_earnings) if calc_earnings else 0,
-                "status": session.payment_status.value
-            })
+    result_week = await db.execute(
+        select(func.sum(CashoutTransaction.amount_gems))
+        .where(CashoutTransaction.user_id == current_user.id)
+        .where(CashoutTransaction.status == CashoutStatus.COMPLETED)
+        .where(CashoutTransaction.created_at >= week_ago)
+    )
+    gems_cashed_week = result_week.scalar() or 0
+    earnings_this_week_usd = gems_to_usd(gems_cashed_week)
     
-    # Calculate averages
-    total_games = len(sessions)
-    avg_per_game = (total_paid / total_games) if total_games > 0 else Decimal("0.00")
-    avg_calculated = (total_calculated / total_games) if total_games > 0 else Decimal("0.00")
+    result_month = await db.execute(
+        select(func.sum(CashoutTransaction.amount_gems))
+        .where(CashoutTransaction.user_id == current_user.id)
+        .where(CashoutTransaction.status == CashoutStatus.COMPLETED)
+        .where(CashoutTransaction.created_at >= month_ago)
+    )
+    gems_cashed_month = result_month.scalar() or 0
+    earnings_this_month_usd = gems_to_usd(gems_cashed_month)
     
-    # Get earnings tier
+    # Get earnings tier (based on total cashed out, not total earned)
     from .earnings import get_earnings_tier
-    tier_info = get_earnings_tier(total_paid)
+    tier_info = get_earnings_tier(total_cashed_out_usd)
+    
+    print(f"\nCalculated Stats:")
+    print(f"   Avg per game: {avg_gems_per_game} gems")
+    print(f"   Last game: {last_game_gems} gems")
+    print(f"   Cashed out this week: {gems_cashed_week} gems = ${earnings_this_week_usd}")
+    print(f"   Tier: {tier_info['name']} (based on total cashed out)")
+    print(f"✅ SYNCED: total_lifetime_earnings (${total_cashed_out_usd}) = wallet.total_gems_cashed_out ({total_gems_cashed_out} gems)")
+    print(f"{'='*70}\n")
     
     return {
-        "total_lifetime_earnings": float(total_paid),
-        "pending_earnings": float(total_pending),
-        "total_calculated_earnings": float(total_calculated),
-        "average_per_game": float(avg_per_game),
-        "average_calculated_per_game": float(avg_calculated),
-        "highest_single_game": float(highest_earning),
+        # PRIMARY STATS (✅ SYNCED WITH WALLET)
+        # NOTE: "total_lifetime_earnings" now means ACTUAL CASH EARNED (cashed out), not total gems
+        "total_lifetime_earnings": float(total_cashed_out_usd),  # = wallet.total_gems_cashed_out / 1000
+        # "pending_earnings" REMOVED per user request
+        "current_balance": float(current_balance_usd),  # = wallet.gem_balance / 1000
+        "total_cashed_out": float(total_cashed_out_usd),  # = wallet.total_gems_cashed_out / 1000
+        
+        # PER-GAME STATS (IN GEMS, not USD)
+        "average_per_game": avg_gems_per_game,  # Gems per game
+        "last_game_gems": last_game_gems,  # Last game in gems
+        "highest_single_game": highest_earning_gems,  # Highest in gems
         "total_games": total_games,
-        "earnings_this_week": float(earnings_this_week),
-        "earnings_this_month": float(earnings_this_month),
+        
+        # TIME-BASED STATS (Actual cashouts, not estimated)
+        "earnings_this_week": float(earnings_this_week_usd),  # USD cashed out this week
+        "earnings_this_month": float(earnings_this_month_usd),  # USD cashed out this month
+        
+        # RECENT HISTORY (now in gems)
         "recent_sessions": recent_sessions,
+        
+        # TIER INFO (based on total cashed out)
         "tier": {
             "name": tier_info["name"],
             "color": tier_info["color"],
-            "current_amount": float(total_paid),
+            "current_amount": float(total_cashed_out_usd),
             "next_threshold": float(tier_info["next"]) if tier_info["next"] else None
+        },
+        
+        # GEM ECONOMY DETAILS
+        "gem_details": {
+            "total_gems_earned": total_gems_earned,
+            "current_gem_balance": current_gem_balance,
+            "total_gems_cashed_out": total_gems_cashed_out,
+            "conversion_rate": GEMS_PER_DOLLAR
         }
     }
 

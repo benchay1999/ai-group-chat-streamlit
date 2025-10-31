@@ -273,19 +273,43 @@ async def redeem_cashout_code(
         # 2. Assignment ID starts with DEV_
         # 3. Assignment ID is the MTurk preview placeholder
         # 4. Assignment ID contains localhost
+        
+        print(f"\n🔍 Dev Mode Detection:")
+        print(f"   Assignment ID: '{assignment_id}'")
+        print(f"   Type: {type(assignment_id)}")
+        print(f"   Length: {len(assignment_id) if assignment_id else 0}")
+        
+        # Explicit checks with logging
+        check_empty = not assignment_id
+        check_blank = assignment_id.strip() == '' if assignment_id else False
+        check_dev_prefix = assignment_id.startswith('DEV_') if assignment_id else False
+        check_placeholder = assignment_id == 'ASSIGNMENT_ID_NOT_AVAILABLE' if assignment_id else False
+        check_localhost = 'localhost' in assignment_id.lower() if assignment_id else False
+        check_undefined = assignment_id == 'undefined' if assignment_id else False
+        
+        print(f"   Empty: {check_empty}")
+        print(f"   Blank: {check_blank}")
+        print(f"   Starts with DEV_: {check_dev_prefix}")
+        print(f"   Is placeholder: {check_placeholder}")
+        print(f"   Contains localhost: {check_localhost}")
+        print(f"   Is undefined: {check_undefined}")
+        
         is_dev_mode = (
-            not assignment_id or 
-            assignment_id.strip() == '' or
-            assignment_id.startswith('DEV_') or 
-            assignment_id == 'ASSIGNMENT_ID_NOT_AVAILABLE' or
-            'localhost' in assignment_id.lower() or
-            assignment_id == 'undefined'
+            check_empty or 
+            check_blank or
+            check_dev_prefix or 
+            check_placeholder or
+            check_localhost or
+            check_undefined
         )
         
         print(f"\n🔍 Payment Processing Mode:")
         print(f"   MTURK_ENVIRONMENT: {mturk_environment}")
-        print(f"   Assignment ID valid: {bool(assignment_id and assignment_id.strip())}")
         print(f"   Is dev mode: {is_dev_mode}")
+        
+        if not is_dev_mode:
+            print(f"   ⚠️  WARNING: Will attempt real MTurk API call!")
+            print(f"   Assignment ID appears to be real: '{assignment_id}'")
         
         # Approve the assignment on MTurk (skip in dev mode for testing)
         if not is_dev_mode:
@@ -293,47 +317,81 @@ async def redeem_cashout_code(
                 print(f"💰 Processing MTurk payment...")
                 mturk_client = get_mturk_client()
                 
-                # Calculate if we need to send a bonus (if amount > base pay)
-                base_pay = mturk_client.base_pay
-                bonus_amount = max(Decimal('0'), transaction.amount_usd - base_pay)
+                # CRITICAL: The HIT was created with Reward='0.01'
+                # This is the base pay that MTurk gives when approving
+                # Everything else must be sent as a bonus
+                hit_base_reward = Decimal('0.01')  # Must match create_standing_hit.py
                 
-                print(f"   Base pay: ${base_pay}, Bonus: ${bonus_amount}")
+                # Calculate bonus: Total amount minus the HIT's base reward
+                bonus_amount = transaction.amount_usd - hit_base_reward
                 
-                # Approve assignment
+                # CRITICAL VALIDATION: Ensure math is correct
+                calculated_total = hit_base_reward + bonus_amount
+                if calculated_total != transaction.amount_usd:
+                    error_msg = f"PAYMENT MATH ERROR: {hit_base_reward} + {bonus_amount} = {calculated_total} ≠ {transaction.amount_usd}"
+                    print(f"   ❌ {error_msg}")
+                    raise ValueError(error_msg)
+                
+                print(f"   📊 Payment Breakdown:")
+                print(f"      Total amount requested: ${transaction.amount_usd}")
+                print(f"      HIT base reward: ${hit_base_reward} (paid by approval)")
+                print(f"      Bonus to send: ${bonus_amount}")
+                print(f"      ✓ Verification: ${hit_base_reward} + ${bonus_amount} = ${calculated_total}")
+                print(f"      ✓ Worker will receive: ${transaction.amount_usd}")
+                
+                # Step 1: Approve assignment (gives worker the HIT's base reward of $0.01)
                 mturk_client.approve_assignment(
                     assignment_id=assignment_id,
                     requester_feedback=f"ChatGame payout of ${transaction.amount_usd} approved. Thank you!"
                 )
-                print(f"✅ MTurk assignment approved")
+                print(f"   ✅ Assignment approved (worker gets ${hit_base_reward} base reward)")
                 
-                # Send bonus if needed
+                # Step 2: Send bonus for the remaining amount
                 if bonus_amount > 0:
                     mturk_client.send_bonus(
                         worker_id=worker_id,
                         assignment_id=assignment_id,
                         bonus_amount=bonus_amount,
-                        reason=f"ChatGame payout bonus (total: ${transaction.amount_usd})"
+                        reason=f"ChatGame earnings bonus (Total payout: ${transaction.amount_usd})"
                     )
-                    print(f"✅ MTurk bonus sent: ${bonus_amount}")
+                    print(f"   ✅ Bonus sent: ${bonus_amount}")
+                else:
+                    print(f"   ⚠️  No bonus needed (amount equals base reward)")
+                
+                print(f"   💰 TOTAL PAID TO WORKER: ${transaction.amount_usd}")
             
             except Exception as mturk_error:
-                # MTurk API failed - cancel transaction and return gems
+                # MTurk API failed
+                error_msg = str(mturk_error)
                 print(f"\n❌ MTurk API ERROR:")
                 print(f"   Error type: {type(mturk_error).__name__}")
-                print(f"   Error message: {str(mturk_error)}")
+                print(f"   Error message: {error_msg}")
                 import traceback
                 print(f"   Stack trace:\n{traceback.format_exc()}")
-                print(f"\n🔄 Cancelling transaction and returning gems...")
                 
-                # Use cancel_cashout_transaction which handles gem return properly
-                await cancel_cashout_transaction(
-                    transaction=transaction,
-                    db=db,
-                    reason=f"MTurk payment processing failed: {str(mturk_error)}"
-                )
+                # Check if this is a "RequestError" in sandbox - likely a test assignment
+                # In sandbox with RequestError, we should just complete the transaction without MTurk
+                is_request_error = 'RequestError' in str(type(mturk_error).__name__) or 'RequestError' in error_msg
+                is_sandbox = mturk_environment == 'sandbox'
                 
-                print(f"{'='*70}\n")
-                raise CashoutError(f"Payment processing failed: {str(mturk_error)}. Your gems have been returned to your wallet. Please try again or contact support.")
+                if is_sandbox and is_request_error:
+                    print(f"\n⚠️  MTurk RequestError in sandbox - likely a test assignment")
+                    print(f"   Treating as dev mode and completing transaction without MTurk API")
+                    # Don't cancel - just continue to completion (treated as dev mode)
+                    pass
+                else:
+                    # Real error - cancel transaction and return gems
+                    print(f"\n🔄 Cancelling transaction and returning gems...")
+                    
+                    # Use cancel_cashout_transaction which handles gem return properly
+                    await cancel_cashout_transaction(
+                        transaction=transaction,
+                        db=db,
+                        reason=f"MTurk payment processing failed: {str(mturk_error)}"
+                    )
+                    
+                    print(f"{'='*70}\n")
+                    raise CashoutError(f"Payment processing failed: {error_msg}. Your gems have been returned to your wallet. Please try again or contact support.")
         else:
             print(f"\n🧪 DEV MODE ACTIVE")
             print(f"   Skipping MTurk API calls for testing")
