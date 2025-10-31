@@ -10,7 +10,8 @@ import boto3
 from botocore.exceptions import ClientError
 from dotenv import load_dotenv
 
-load_dotenv()
+# Force load from .env file, overriding any system/conda environment variables
+load_dotenv(override=True)
 
 
 class MTurkClient:
@@ -69,77 +70,6 @@ class MTurkClient:
             print(f"❌ Error getting account balance: {e}")
             raise
     
-    def create_hit(
-        self,
-        title: str,
-        description: str,
-        keywords: str,
-        reward: Optional[Decimal] = None,
-        max_assignments: int = 1,
-        assignment_duration_in_seconds: int = 1800,  # 30 minutes
-        lifetime_in_seconds: int = 86400,  # 24 hours
-        auto_approval_delay_in_seconds: int = 259200,  # 3 days
-        qualification_requirements: Optional[List[Dict]] = None
-    ) -> Dict:
-        """
-        Create a HIT with ExternalQuestion pointing to the game.
-        
-        Args:
-            title: HIT title shown to workers
-            description: HIT description
-            keywords: Comma-separated keywords for search
-            reward: Payment amount (defaults to base_pay)
-            max_assignments: Number of workers to complete this HIT
-            assignment_duration_in_seconds: Time worker has to complete after accepting
-            lifetime_in_seconds: How long HIT is available
-            auto_approval_delay_in_seconds: Time before auto-approval
-            qualification_requirements: List of qualification requirements
-            
-        Returns:
-            Dict with HIT details including HITId
-        """
-        if reward is None:
-            reward = self.base_pay
-            
-        # Build ExternalQuestion XML
-        external_question = f"""<?xml version="1.0" encoding="UTF-8"?>
-<ExternalQuestion xmlns="http://mechanicalturk.amazonaws.com/AWSMechanicalTurkDataSchemas/2006-07-14/ExternalQuestion.xsd">
-  <ExternalURL>{self.external_url}</ExternalURL>
-  <FrameHeight>{self.frame_height}</FrameHeight>
-</ExternalQuestion>"""
-        
-        try:
-            response = self.client.create_hit(
-                Title=title,
-                Description=description,
-                Keywords=keywords,
-                Reward=str(reward),
-                MaxAssignments=max_assignments,
-                LifetimeInSeconds=lifetime_in_seconds,
-                AssignmentDurationInSeconds=assignment_duration_in_seconds,
-                AutoApprovalDelayInSeconds=auto_approval_delay_in_seconds,
-                Question=external_question,
-                QualificationRequirements=qualification_requirements or []
-            )
-            
-            hit = response['HIT']
-            print(f"✅ Created HIT: {hit['HITId']}")
-            
-            return {
-                'hit_id': hit['HITId'],
-                'hit_type_id': hit['HITTypeId'],
-                'hit_group_id': hit['HITGroupId'],
-                'creation_time': hit['CreationTime'],
-                'expiration': hit['Expiration'],
-                'max_assignments': hit['MaxAssignments'],
-                'reward': hit['Reward'],
-                'title': hit['Title']
-            }
-            
-        except ClientError as e:
-            print(f"❌ Error creating HIT: {e}")
-            raise
-    
     def get_hit(self, hit_id: str) -> Dict:
         """
         Get details about a specific HIT.
@@ -155,42 +85,6 @@ class MTurkClient:
             return response['HIT']
         except ClientError as e:
             print(f"❌ Error getting HIT {hit_id}: {e}")
-            raise
-    
-    def list_hits(self, max_results: int = 100) -> List[Dict]:
-        """
-        List all HITs for this requester.
-        
-        Args:
-            max_results: Maximum number of HITs to return
-            
-        Returns:
-            List of HIT dictionaries
-        """
-        try:
-            response = self.client.list_hits(MaxResults=max_results)
-            hits = response.get('HITs', [])
-            
-            # Format for easier consumption
-            formatted_hits = []
-            for hit in hits:
-                formatted_hits.append({
-                    'hit_id': hit['HITId'],
-                    'title': hit['Title'],
-                    'reward': hit['Reward'],
-                    'status': hit['HITStatus'],
-                    'max_assignments': hit['MaxAssignments'],
-                    'available': hit['NumberOfAssignmentsAvailable'],
-                    'pending': hit['NumberOfAssignmentsPending'],
-                    'completed': hit['NumberOfAssignmentsCompleted'],
-                    'creation_time': hit['CreationTime'],
-                    'expiration': hit['Expiration']
-                })
-            
-            return formatted_hits
-            
-        except ClientError as e:
-            print(f"❌ Error listing HITs: {e}")
             raise
     
     def get_assignment(self, assignment_id: str) -> Dict:
@@ -446,6 +340,225 @@ class MTurkClient:
         except ClientError as e:
             print(f"❌ Error expiring HIT {hit_id}: {e}")
             raise
+    
+    def create_worker_qualification(self, worker_id: str, qualification_name: str) -> str:
+        """
+        Create a unique qualification for a specific worker (for cashout HITs).
+        
+        Args:
+            worker_id: MTurk Worker ID
+            qualification_name: Name for the qualification
+            
+        Returns:
+            Qualification ID
+        """
+        try:
+            response = self.client.create_qualification_type(
+                Name=qualification_name,
+                Description=f"Unique qualification for worker {worker_id} to access their cashout HIT",
+                QualificationTypeStatus='Active',
+                AutoGranted=False  # We'll manually assign to specific worker
+            )
+            
+            qualification_id = response['QualificationType']['QualificationTypeId']
+            print(f"✅ Created qualification: {qualification_id}")
+            return qualification_id
+            
+        except ClientError as e:
+            print(f"❌ Error creating qualification: {e}")
+            raise
+    
+    def assign_qualification_to_worker(self, qualification_id: str, worker_id: str, value: int = 1) -> bool:
+        """
+        Assign a qualification to a specific worker.
+        
+        Args:
+            qualification_id: The qualification type ID
+            worker_id: The worker's ID
+            value: Qualification value (default: 1)
+            
+        Returns:
+            True if successful
+        """
+        try:
+            self.client.associate_qualification_with_worker(
+                QualificationTypeId=qualification_id,
+                WorkerId=worker_id,
+                IntegerValue=value,
+                SendNotification=False
+            )
+            print(f"✅ Assigned qualification {qualification_id} to worker {worker_id}")
+            return True
+            
+        except ClientError as e:
+            print(f"❌ Error assigning qualification: {e}")
+            raise
+    
+    def create_cashout_hit(
+        self,
+        amount: Decimal,
+        qualification_id: str,
+        worker_id: str,
+        external_url: str,
+        duration_seconds: int = 86400,
+        auto_approve_seconds: int = 3600
+    ) -> Dict:
+        """
+        Create a cashout HIT that only the specified worker can see and complete.
+        
+        Args:
+            amount: Payment amount in USD
+            qualification_id: Unique qualification ID (only assigned to target worker)
+            worker_id: MTurk worker ID (for display purposes)
+            external_url: URL for the cashout confirmation page
+            duration_seconds: How long HIT is available (default: 24 hours)
+            auto_approve_seconds: Auto-approval delay (default: 1 hour)
+            
+        Returns:
+            Dict with HIT details including hit_id and hit_url
+        """
+        # Build ExternalQuestion XML for cashout confirmation page
+        external_question = f"""<?xml version="1.0" encoding="UTF-8"?>
+<ExternalQuestion xmlns="http://mechanicalturk.amazonaws.com/AWSMechanicalTurkDataSchemas/2006-07-14/ExternalQuestion.xsd">
+  <ExternalURL>{external_url}</ExternalURL>
+  <FrameHeight>{self.frame_height}</FrameHeight>
+</ExternalQuestion>"""
+        
+        # Qualification requirement: worker must have the unique qualification
+        qualification_requirements = [
+            {
+                'QualificationTypeId': qualification_id,
+                'Comparator': 'EqualTo',
+                'IntegerValues': [1],
+                'RequiredToPreview': True,
+                'ActionsGuarded': 'Accept'
+            }
+        ]
+        
+        try:
+            response = self.client.create_hit(
+                Title=f"ChatGame Payout - Confirm Receipt",
+                Description=f"Confirm your payout from ChatGame. Only you can see this HIT.",
+                Keywords="payout, payment, confirmation",
+                Reward=str(amount),
+                MaxAssignments=1,
+                LifetimeInSeconds=duration_seconds,
+                AssignmentDurationInSeconds=1800,  # 30 minutes to complete once accepted
+                AutoApprovalDelayInSeconds=auto_approve_seconds,
+                Question=external_question,
+                QualificationRequirements=qualification_requirements
+            )
+            
+            hit = response['HIT']
+            hit_id = hit['HITId']
+            
+            # Build worker-facing URL
+            worker_endpoint = self.worker_endpoints[self.environment]
+            hit_url = f"{worker_endpoint}/mturk/preview?groupId={hit['HITGroupId']}"
+            
+            print(f"✅ Created cashout HIT: {hit_id} for ${amount}")
+            
+            return {
+                'hit_id': hit_id,
+                'hit_type_id': hit['HITTypeId'],
+                'hit_group_id': hit['HITGroupId'],
+                'hit_url': hit_url,
+                'amount': str(amount),
+                'expiration': hit['Expiration']
+            }
+            
+        except ClientError as e:
+            print(f"❌ Error creating cashout HIT: {e}")
+            raise
+    
+    def check_hit_status(self, hit_id: str) -> Dict:
+        """
+        Check the status of a HIT including assignment information.
+        
+        Args:
+            hit_id: The HIT ID
+            
+        Returns:
+            Dict with HIT status and assignment details
+        """
+        try:
+            # Get HIT details
+            hit = self.get_hit(hit_id)
+            
+            # Get assignments
+            assignments = self.list_assignments_for_hit(hit_id)
+            
+            return {
+                'hit_status': hit.get('HITStatus'),
+                'assignments_available': hit.get('NumberOfAssignmentsAvailable', 0),
+                'assignments_pending': hit.get('NumberOfAssignmentsPending', 0),
+                'assignments_completed': hit.get('NumberOfAssignmentsCompleted', 0),
+                'expiration': hit.get('Expiration'),
+                'assignments': assignments
+            }
+            
+        except ClientError as e:
+            print(f"❌ Error checking HIT status {hit_id}: {e}")
+            raise
+    
+    def find_and_approve_cashout_assignment(self, hit_id: str) -> Optional[str]:
+        """
+        Find a submitted assignment for a cashout HIT and approve it.
+        
+        Args:
+            hit_id: The HIT ID
+            
+        Returns:
+            Assignment ID if found and approved, None otherwise
+        """
+        try:
+            assignments = self.list_assignments_for_hit(hit_id)
+            
+            for assignment in assignments:
+                if assignment['status'] == 'Submitted':
+                    assignment_id = assignment['assignment_id']
+                    
+                    # Approve the assignment
+                    self.approve_assignment(
+                        assignment_id=assignment_id,
+                        requester_feedback="Thank you! Your payment has been processed."
+                    )
+                    
+                    print(f"✅ Approved cashout assignment: {assignment_id}")
+                    return assignment_id
+            
+            return None
+            
+        except ClientError as e:
+            print(f"❌ Error approving cashout assignment for HIT {hit_id}: {e}")
+            raise
+    
+    def expire_and_delete_hit(self, hit_id: str) -> bool:
+        """
+        Expire a HIT immediately and attempt to delete it.
+        
+        Args:
+            hit_id: The HIT ID
+            
+        Returns:
+            True if successful
+        """
+        try:
+            # First, expire the HIT
+            self.expire_hit(hit_id)
+            
+            # Try to delete (only works if no assignments submitted)
+            try:
+                self.delete_hit(hit_id)
+            except ClientError as e:
+                # If delete fails (e.g., assignments exist), that's okay
+                print(f"⚠️  Could not delete HIT {hit_id} (may have assignments): {e}")
+            
+            return True
+            
+        except ClientError as e:
+            print(f"❌ Error expiring/deleting HIT {hit_id}: {e}")
+            raise
 
 
 # Global client instance
@@ -466,39 +579,6 @@ def get_mturk_client() -> MTurkClient:
 
 
 # Convenience functions for common operations
-def create_game_hit(
-    max_workers: int = 1,
-    title: str = "Play a group chat game and identify AI players",
-    description: str = "Join a 5-minute group chat game, discuss a topic with other players, and vote for who you think is an AI. Fun and engaging!",
-    keywords: str = "chat, game, conversation, AI, discussion",
-    reward: Optional[Decimal] = None
-) -> Dict:
-    """
-    Create a HIT for the group chat game with sensible defaults.
-    
-    Args:
-        max_workers: Number of workers needed
-        title: HIT title
-        description: HIT description
-        keywords: Search keywords
-        reward: Base reward (defaults to configured base pay)
-        
-    Returns:
-        Dict with HIT details
-    """
-    client = get_mturk_client()
-    return client.create_hit(
-        title=title,
-        description=description,
-        keywords=keywords,
-        reward=reward,
-        max_assignments=max_workers,
-        assignment_duration_in_seconds=1800,  # 30 minutes to complete
-        lifetime_in_seconds=86400,  # Available for 24 hours
-        auto_approval_delay_in_seconds=259200  # Auto-approve after 3 days
-    )
-
-
 def process_payment(
     assignment_id: str,
     worker_id: str,

@@ -271,12 +271,14 @@ async def register_or_login_mturk_worker(
         Tuple of (User object, JWT access token)
     """
     import secrets
+    from sqlalchemy.exc import IntegrityError
     
     # Check if worker already exists
     existing_user = await get_user_by_user_id(db, worker_id)
     
     if existing_user:
         # Worker exists, generate new token
+        print(f"✅ MTurk worker {worker_id} already exists, logging in")
         access_token = create_access_token(
             data={"sub": str(existing_user.id), "user_id": existing_user.user_id}
         )
@@ -293,16 +295,33 @@ async def register_or_login_mturk_worker(
         role=UserRole.USER
     )
     
-    db.add(new_user)
-    await db.commit()
-    await db.refresh(new_user)
+    try:
+        db.add(new_user)
+        await db.commit()
+        await db.refresh(new_user)
+        
+        # Generate access token
+        access_token = create_access_token(
+            data={"sub": str(new_user.id), "user_id": new_user.user_id}
+        )
+        
+        print(f"✅ Auto-registered MTurk worker: {worker_id}")
+        
+        return new_user, access_token
     
-    # Generate access token
-    access_token = create_access_token(
-        data={"sub": str(new_user.id), "user_id": new_user.user_id}
-    )
-    
-    print(f"✅ Auto-registered MTurk worker: {worker_id}")
-    
-    return new_user, access_token
+    except IntegrityError:
+        # Race condition: user was created between check and insert
+        # Rollback and fetch the existing user
+        await db.rollback()
+        print(f"⚠️ Race condition detected for worker {worker_id}, fetching existing user")
+        
+        existing_user = await get_user_by_user_id(db, worker_id)
+        if existing_user:
+            access_token = create_access_token(
+                data={"sub": str(existing_user.id), "user_id": existing_user.user_id}
+            )
+            return existing_user, access_token
+        else:
+            # This shouldn't happen, but handle it anyway
+            raise Exception(f"Failed to register or find MTurk worker {worker_id}")
 

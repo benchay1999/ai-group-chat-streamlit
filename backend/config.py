@@ -87,11 +87,33 @@ JWT_COMPLETION_SECRET = os.getenv('JWT_COMPLETION_SECRET', 'completion-secret-ke
 JWT_ALGORITHM = 'HS256'
 ACCESS_TOKEN_EXPIRE_HOURS = 24
 
+# Validate JWT secrets in production
+if os.getenv('ENVIRONMENT', 'development') == 'production':
+    if JWT_SECRET_KEY == 'your-secret-key-change-this-in-production' or not JWT_SECRET_KEY:
+        raise ValueError(
+            "JWT_SECRET_KEY must be set in production! "
+            "Generate with: python -c 'import secrets; print(secrets.token_urlsafe(32))'"
+        )
+    if JWT_COMPLETION_SECRET == 'completion-secret-key-change-this' or not JWT_COMPLETION_SECRET:
+        raise ValueError(
+            "JWT_COMPLETION_SECRET must be set in production! "
+            "Generate with: python -c 'import secrets; print(secrets.token_urlsafe(32))'"
+        )
+
+# MTurk Worker ID Validation
+MTURK_WORKER_ID_PATTERN = r'^A[A-Z0-9]{13,}$'  # Must start with A, followed by 13+ alphanumeric
+MTURK_WORKER_ID_MIN_LENGTH = 14
+
 # MTurk Configuration
 MTURK_ENVIRONMENT = os.getenv('MTURK_ENVIRONMENT', 'sandbox')  # 'sandbox' or 'production'
-MTURK_BASE_PAY = os.getenv('MTURK_BASE_PAY', '0.05')  # Base payment per HIT
-MTURK_MAX_BONUS = os.getenv('MTURK_MAX_BONUS', '0.05')  # Maximum bonus per HIT (total = base + bonus)
+MTURK_BASE_PAY = float(os.getenv('MTURK_BASE_PAY', '0.05'))  # Base payment per HIT
+MTURK_MAX_BONUS = float(os.getenv('MTURK_MAX_BONUS', '0.05'))  # Maximum bonus per HIT (total = base + bonus)
 EXTERNAL_URL = os.getenv('EXTERNAL_URL', 'http://localhost:5173/lobby')  # Public URL for ExternalQuestion
-MTURK_FRAME_HEIGHT = os.getenv('MTURK_FRAME_HEIGHT', '0')  # 0 = auto-resize
+MTURK_FRAME_HEIGHT = int(os.getenv('MTURK_FRAME_HEIGHT', '0'))  # 0 = auto-resize
 AWS_ACCESS_KEY_ID = os.getenv('AWS_ACCESS_KEY_ID')  # AWS credentials for MTurk API
 AWS_SECRET_ACCESS_KEY = os.getenv('AWS_SECRET_ACCESS_KEY')
+
+# Gem Economy & Cashout Configuration (1000 gems = $1.00 USD)
+GEMS_PER_DOLLAR = 1000  # Conversion rate: 1000 gems = $1.00
+MINIMUM_CASHOUT_AMOUNT = float(os.getenv('MINIMUM_CASHOUT_AMOUNT', '2.00'))  # Minimum USD to cash out
+CASHOUT_MONITOR_INTERVAL = int(os.getenv('CASHOUT_MONITOR_INTERVAL', '3600'))  # Check for expired codes every hour

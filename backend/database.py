@@ -57,6 +57,14 @@ class PaymentStatus(str, enum.Enum):
     PAID = "paid"
 
 
+class CashoutStatus(str, enum.Enum):
+    PENDING = "pending"  # Transaction created, not yet processed
+    HIT_CREATED = "hit_created"  # HIT created on MTurk, waiting for worker
+    COMPLETED = "completed"  # Worker completed HIT, payment sent
+    FAILED = "failed"  # HIT expired or other error
+    CANCELLED = "cancelled"  # User cancelled before HIT creation
+
+
 # Models
 class User(Base):
     """User model for authentication."""
@@ -77,8 +85,15 @@ class User(Base):
     last_played_at = Column(DateTime, nullable=True)
     level = Column(Integer, default=1, nullable=False)
     
-    # Relationship to sessions
+    # Gem economy fields (1000 gems = $1.00 USD)
+    gem_balance = Column(Integer, default=0, nullable=False)  # Current gem balance
+    total_gems_earned = Column(Integer, default=0, nullable=False)  # Lifetime gems earned
+    total_gems_cashed_out = Column(Integer, default=0, nullable=False)  # Lifetime gems cashed out
+    mturk_worker_id = Column(String(255), nullable=True, index=True)  # MTurk Worker ID for cashouts
+    
+    # Relationships
     sessions = relationship("Session", back_populates="user", cascade="all, delete-orphan")
+    cashout_transactions = relationship("CashoutTransaction", back_populates="user", cascade="all, delete-orphan")
     
     def __repr__(self):
         return f"<User(id={self.id}, user_id={self.user_id}, role={self.role})>"
@@ -177,6 +192,46 @@ class SessionPlayer(Base):
     
     def __repr__(self):
         return f"<SessionPlayer(session_id={self.session_id}, player_id={self.player_id}, user_id={self.user_id})>"
+
+
+class CashoutTransaction(Base):
+    """Cashout transaction for gem-to-USD conversions via MTurk."""
+    __tablename__ = "cashout_transactions"
+    
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id = Column(UUID(as_uuid=True), ForeignKey('users.id', ondelete='CASCADE'), nullable=False, index=True)
+    amount_gems = Column(Integer, nullable=False)  # Gems being cashed out
+    amount_usd = Column(DECIMAL(10, 2), nullable=False)  # Equivalent USD amount
+    status = Column(Enum(CashoutStatus), default=CashoutStatus.PENDING, nullable=False, index=True)
+    
+    # Redemption code system (simpler than worker-specific HITs)
+    redemption_code = Column(String(64), unique=True, nullable=False, index=True)  # Unique hash for user to submit
+    
+    # MTurk assignment details (populated when user submits code)
+    mturk_worker_id = Column(String(255), nullable=True, index=True)
+    mturk_assignment_id = Column(String(255), nullable=True, index=True)
+    mturk_hit_id = Column(String(255), nullable=True, index=True)
+    
+    # Timestamps
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    completed_at = Column(DateTime, nullable=True)
+    expires_at = Column(DateTime, nullable=True)  # Code expiration time (e.g., 7 days)
+    
+    # Error tracking
+    error_message = Column(Text, nullable=True)
+    
+    # Relationship
+    user = relationship("User", back_populates="cashout_transactions")
+    
+    # Indexes for common queries
+    __table_args__ = (
+        Index('idx_user_status', 'user_id', 'status'),
+        Index('idx_status_created', 'status', 'created_at'),
+        Index('idx_redemption_code', 'redemption_code'),
+    )
+    
+    def __repr__(self):
+        return f"<CashoutTransaction(id={self.id}, user_id={self.user_id}, amount_usd={self.amount_usd}, status={self.status}, code={self.redemption_code[:8]}...)>"
 
 
 # Database helper functions

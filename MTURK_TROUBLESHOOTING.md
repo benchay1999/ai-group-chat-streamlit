@@ -49,6 +49,74 @@ MTURK_MAX_BONUS=0.05
 
 ---
 
+## ❓ "AWS Account must be linked to MTurk Account"
+
+### Error Message
+```
+{"detail":"MTurk API error: An error occurred (RequestError) when calling the CreateHIT operation: To use the MTurk API, you will need an Amazon Web Services (AWS) Account. Your AWS account must be linked to your Amazon Mechanical Turk Account. Visit https://requestersandbox.mturk.com/developer to get started."}
+```
+
+### Solution
+
+**You need to complete MTurk Requester registration!**
+
+#### Step 1: Link Your AWS Account
+
+1. **Go to:** https://requestersandbox.mturk.com/developer
+2. **Sign in** with your AWS credentials
+3. **Click "Link Account"** or "Get Started"
+4. **Complete registration:**
+   - Accept terms of service
+   - Provide business information (can use personal info for testing)
+   - Add payment method (credit card required but **not charged in sandbox**)
+   - Verify email if prompted
+
+#### Step 2: Verify It Worked
+
+**Try creating a HIT again:**
+```bash
+curl -X POST https://ai-groupchat.ngrok.io/api/admin/mturk/create-hit \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "max_workers": 1,
+    "title": "Test HIT",
+    "description": "Test",
+    "keywords": "test"
+  }'
+```
+
+**Success response:**
+```json
+{
+  "success": true,
+  "hit_id": "3EXAMPLE...",
+  "hit_type_id": "3EXAMPLE...",
+  "max_assignments": 1,
+  "reward": "0.05",
+  "external_url": "http://localhost:5173/lobby"
+}
+```
+
+#### Common Issues
+
+**"I already registered but still get the error"**
+- Make sure you registered at the **sandbox** URL: https://requestersandbox.mturk.com/developer
+- Not the production URL: https://requester.mturk.com
+- You need to register for both separately!
+
+**"Do I need to add a credit card for sandbox?"**
+- Yes, MTurk requires it even for sandbox
+- But you won't be charged in sandbox
+- Sandbox has unlimited balance
+
+**"I'm in production mode, not sandbox"**
+- Check your `.env`: `MTURK_ENVIRONMENT=sandbox`
+- For production, register at: https://requester.mturk.com
+- Production requires real funds in your account
+
+---
+
 ## ❓ "MTurk client initialization failed"
 
 ### Error Message
@@ -183,7 +251,7 @@ Admin clicks "MTurk Pay" but payment fails.
 **Fix (Production):**
 ```bash
 # Check balance via API
-curl http://localhost:8000/api/admin/mturk/balance \
+curl https://ai-groupchat.ngrok.io/api/admin/mturk/balance \
   -H "Authorization: Bearer YOUR_TOKEN"
 
 # Add funds at https://requester.mturk.com
@@ -292,7 +360,7 @@ console.log('hitId:', params.get('hitId'));
 
 ### Error
 ```
-Access to fetch at 'http://localhost:8000/api/auth/mturk-register' 
+Access to fetch at 'https://ai-groupchat.ngrok.io/api/auth/mturk-register' 
 from origin 'http://localhost:5173' has been blocked by CORS policy
 ```
 
@@ -343,7 +411,7 @@ MTURK_ENVIRONMENT=sandbox
 #### 2. Check HIT Status
 **Via API:**
 ```bash
-curl http://localhost:8000/api/admin/mturk/hits \
+curl https://ai-groupchat.ngrok.io/api/admin/mturk/hits \
   -H "Authorization: Bearer YOUR_TOKEN"
 ```
 
@@ -367,6 +435,78 @@ curl http://localhost:8000/api/admin/mturk/hits \
 - Create HIT without qualifications first
 - Test with your worker account
 - Add qualifications later
+
+---
+
+## ❓ "How do I get my admin token?"
+
+### For API Testing
+
+**Method 1: Login via API**
+```bash
+curl -X POST https://ai-groupchat.ngrok.io/api/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{
+    "user_id": "your_admin_username",
+    "password": "your_admin_password"
+  }'
+```
+
+**Copy the `access_token` from response:**
+```json
+{
+  "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ5b3VyX2FkbWluIiwidXNlcl9pZCI6InlvdXJfYWRtaW4iLCJpYXQiOjE2OTg2NzgwMDB9.abc123...",
+  "token_type": "bearer",
+  "user_id": "your_admin_username",
+  "role": "admin"
+}
+```
+
+**Method 2: Get from Browser**
+1. Login to http://localhost:5173/login
+2. Open DevTools (F12) → Console
+3. Run: `localStorage.getItem('access_token')`
+4. Copy the token
+
+**Method 3: Use Python**
+```python
+import requests
+
+response = requests.post('https://ai-groupchat.ngrok.io/api/auth/login', json={
+    'user_id': 'your_admin_username',
+    'password': 'your_admin_password'
+})
+
+token = response.json()['access_token']
+print(f"Token: {token}")
+```
+
+### Don't Have an Admin Account?
+
+**Create one:**
+```bash
+python create_admin.py
+```
+
+Or manually via Python:
+```python
+import asyncio
+from backend.database import async_session_maker
+from backend.auth import register_user
+from backend.database import UserRole
+
+async def create_admin():
+    async with async_session_maker() as db:
+        user = await register_user(
+            db, 
+            user_id="admin", 
+            password="your_secure_password",
+            role=UserRole.ADMIN
+        )
+        print(f"Admin created: {user.user_id}")
+
+asyncio.run(create_admin())
+```
 
 ---
 
@@ -399,7 +539,7 @@ python -c "from backend.mturk_api import get_account_balance; print(get_account_
 
 **2. Test worker registration:**
 ```bash
-curl -X POST http://localhost:8000/api/auth/mturk-register \
+curl -X POST https://ai-groupchat.ngrok.io/api/auth/mturk-register \
   -H "Content-Type: application/json" \
   -d '{"worker_id":"ATEST","assignment_id":"3TEST","hit_id":"3TEST"}'
 ```

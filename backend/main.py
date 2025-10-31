@@ -42,18 +42,86 @@ from .completion_keys import (
 import json
 import os
 import time as _time
+from collections import defaultdict
+from fastapi import Request
 
-load_dotenv()
+# Force load from .env file, overriding any system/conda environment variables
+load_dotenv(override=True)
 
 app = FastAPI(title="AI Group Chat API", version="2.0.0")
 
+# CORS Configuration - Production-safe
+# Get allowed origins from environment variable, default to localhost for development
+allowed_origins_str = os.getenv('CORS_ALLOWED_ORIGINS', 'http://localhost:5173,http://localhost:3000')
+allowed_origins = [origin.strip() for origin in allowed_origins_str.split(',')]
+
+# In production, MTURK_ENVIRONMENT should be set, and we should restrict CORS
+if os.getenv('MTURK_ENVIRONMENT') == 'production':
+    # In production, only allow specified domains (never use "*")
+    print(f"🔒 CORS configured for production with origins: {allowed_origins}")
+else:
+    # In development/sandbox, allow localhost origins
+    print(f"🔓 CORS configured for development with origins: {allowed_origins}")
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+# ============================================================================
+# Rate Limiting Configuration
+# ============================================================================
+
+class SimpleRateLimiter:
+    """Simple in-memory rate limiter for API endpoints."""
+    
+    def __init__(self, max_requests: int, window_seconds: int):
+        self.max_requests = max_requests
+        self.window_seconds = window_seconds
+        self.requests = defaultdict(list)
+    
+    def is_allowed(self, key: str) -> bool:
+        """Check if request is allowed based on rate limit."""
+        now = _time.time()
+        
+        # Clean old requests outside the window
+        self.requests[key] = [
+            req_time for req_time in self.requests[key]
+            if now - req_time < self.window_seconds
+        ]
+        
+        # Check if under limit
+        if len(self.requests[key]) >= self.max_requests:
+            return False
+        
+        # Add current request
+        self.requests[key].append(now)
+        return True
+    
+    def cleanup_old_entries(self):
+        """Periodically cleanup old entries to prevent memory leak."""
+        now = _time.time()
+        keys_to_delete = []
+        
+        for key, timestamps in self.requests.items():
+            # Remove timestamps outside window
+            self.requests[key] = [
+                ts for ts in timestamps
+                if now - ts < self.window_seconds
+            ]
+            # Mark empty entries for deletion
+            if not self.requests[key]:
+                keys_to_delete.append(key)
+        
+        for key in keys_to_delete:
+            del self.requests[key]
+
+# Rate limiter for MTurk registration: 10 requests per minute per IP
+mturk_rate_limiter = SimpleRateLimiter(max_requests=10, window_seconds=60)
 
 
 # ============================================================================
@@ -74,12 +142,35 @@ async def startup_event():
         print(f"⚠️  MTurk client initialization failed: {e}")
         print("   MTurk features will not be available until credentials are configured.")
     
+    # Start cashout monitor background task
+    try:
+        from .cashout_monitor import start_cashout_monitor
+        await start_cashout_monitor()
+    except Exception as e:
+        print(f"⚠️  Cashout monitor initialization failed: {e}")
+    
+    # Validate cashout configuration
+    cashout_hit_id = os.getenv('CASHOUT_HIT_ID')
+    if not cashout_hit_id:
+        print("⚠️  WARNING: CASHOUT_HIT_ID not configured!")
+        print("   Cashout feature will not work until you:")
+        print("   1. Create a standing HIT on MTurk")
+        print("   2. Set CASHOUT_HIT_ID in your .env file")
+        print("   See REDEMPTION_CODE_SYSTEM.md for setup instructions")
+    
     print("🚀 Application started successfully")
 
 
 @app.on_event("shutdown")
 async def shutdown_event():
-    """Close database connections on application shutdown."""
+    """Close database connections and stop background tasks on application shutdown."""
+    # Stop cashout monitor
+    try:
+        from .cashout_monitor import stop_cashout_monitor
+        await stop_cashout_monitor()
+    except Exception as e:
+        print(f"⚠️  Error stopping cashout monitor: {e}")
+    
     await close_db()
     print("👋 Application shut down gracefully")
 
@@ -126,10 +217,6 @@ class SessionResponse(BaseModel):
     claimed_at: Optional[str]
     stats_file_path: str
 
-class UpdatePaymentRequest(BaseModel):
-    payment_status: str
-    payment_amount: Optional[float] = None
-
 class MTurkRegisterRequest(BaseModel):
     worker_id: str
     assignment_id: str
@@ -137,13 +224,6 @@ class MTurkRegisterRequest(BaseModel):
 
 class MTurkPaymentRequest(BaseModel):
     session_id: str
-
-class CreateHITRequest(BaseModel):
-    title: str = "Play a group chat game and identify AI players"
-    description: str = "Join a 5-minute group chat game, discuss a topic with other players, and vote for who you think is an AI. Fun and engaging!"
-    keywords: str = "chat, game, conversation, AI, discussion"
-    max_workers: int = 1
-    reward: Optional[float] = None
 
 
 # Thread pool for running blocking AI operations without blocking the event loop
@@ -1070,7 +1150,27 @@ async def save_session_stats(room_code: str, state: dict, current_user: Optional
     # Save to PostgreSQL
     try:
         from .database import async_session_maker
+        from .config import GEMS_PER_DOLLAR
         async with async_session_maker() as db:
+            # Credit gems to user if they have calculated earnings
+            if current_user and calculated_earnings_value:
+                # Get the user object from this database session
+                from sqlalchemy import select as sql_select
+                user_result = await db.execute(
+                    sql_select(User).where(User.id == current_user.id)
+                )
+                db_user = user_result.scalar_one()
+                
+                # Convert USD to gems (1000 gems = $1.00)
+                gems_earned = int(float(calculated_earnings_value) * GEMS_PER_DOLLAR)
+                
+                # Credit gems to user's balance
+                db_user.gem_balance += gems_earned
+                db_user.total_gems_earned += gems_earned
+                
+                print(f"💎 Credited {gems_earned} gems to user {db_user.user_id} (${calculated_earnings_value})")
+                print(f"   New balance: {db_user.gem_balance} gems")
+            
             # Build session data dict
             session_data = {
                 "id": session_id,
@@ -1096,7 +1196,23 @@ async def save_session_stats(room_code: str, state: dict, current_user: Optional
                 session_data["calculated_earnings"] = calculated_earnings_value
             
             # Add MTurk fields if present in room data
-            mturk_context = room_data.get('mturk_context', {})
+            # MTurk context is stored per-player, so we need to find the authenticated user's context
+            mturk_context = None
+            if current_user:
+                # Find which player_id belongs to this user
+                player_user_map = room_data.get('player_user_map', {})
+                mturk_contexts = room_data.get('mturk_context', {})
+                
+                # Find the player_id for this user
+                user_id_str = str(current_user.id)
+                for player_id, mapped_user_id in player_user_map.items():
+                    if mapped_user_id == user_id_str:
+                        # Found the player_id for this user, get their MTurk context
+                        mturk_context = mturk_contexts.get(player_id)
+                        if mturk_context:
+                            print(f"💼 Found MTurk context for user {current_user.user_id} (player {player_id})")
+                        break
+            
             if mturk_context:
                 session_data["mturk_worker_id"] = mturk_context.get('worker_id')
                 session_data["mturk_assignment_id"] = mturk_context.get('assignment_id')
@@ -1351,8 +1467,9 @@ async def websocket_endpoint(websocket: WebSocket, room_code: str, player_id: st
                         authenticated_user = user
                         print(f"👤 ✅ Authenticated user '{user.user_id}' (ID: {user_id[:8]}...) as {player_id}")
                         
-                        # Check if this is an MTurk worker (username starts with 'A' and is long)
-                        if user.username and len(user.username) > 10 and user.username.startswith('A'):
+                        # Check if this is an MTurk worker (user_id starts with 'A' and is 14 chars)
+                        # MTurk worker IDs follow pattern: A[A-Z0-9]{13}
+                        if user.user_id and len(user.user_id) == 14 and user.user_id.startswith('A'):
                             # Try to get MTurk context from localStorage (passed via query params)
                             import json
                             mturk_json = websocket.query_params.get('mturk_context')
@@ -1794,6 +1911,86 @@ async def get_current_user_info(
     )
 
 
+@app.get("/api/profile")
+async def get_user_profile(
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Get detailed user profile information including wallet and MTurk data.
+    
+    Args:
+        current_user: Current authenticated user
+    
+    Returns:
+        Complete user profile
+    """
+    from .cashout_service import gems_to_usd
+    
+    return {
+        "id": str(current_user.id),
+        "user_id": current_user.user_id,
+        "role": current_user.role.value,
+        "created_at": current_user.created_at.isoformat(),
+        "mturk_worker_id": current_user.mturk_worker_id,
+        "gem_balance": current_user.gem_balance,
+        "gem_balance_usd": float(gems_to_usd(current_user.gem_balance)),
+        "total_gems_earned": current_user.total_gems_earned,
+        "total_gems_cashed_out": current_user.total_gems_cashed_out,
+        "total_games": current_user.total_games,
+        "total_wins": current_user.total_wins,
+        "total_points": current_user.total_points,
+        "level": current_user.level,
+        "current_streak": current_user.current_streak,
+        "longest_streak": current_user.longest_streak,
+        "last_played_at": current_user.last_played_at.isoformat() if current_user.last_played_at else None
+    }
+
+
+@app.put("/api/profile/mturk-worker-id")
+async def update_mturk_worker_id(
+    request: Request,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_async_session)
+):
+    """
+    Update user's MTurk Worker ID.
+    
+    Args:
+        request: Request with worker_id in body
+        current_user: Current authenticated user
+        db: Database session
+    
+    Returns:
+        Updated profile information
+    """
+    import re
+    
+    body = await request.json()
+    worker_id = body.get('worker_id', '').strip()
+    
+    # Validate MTurk Worker ID format (typically starts with 'A' and is alphanumeric)
+    if worker_id:
+        # MTurk Worker IDs are typically 14 characters starting with 'A'
+        if not re.match(r'^A[A-Z0-9]{13,}$', worker_id):
+            raise HTTPException(
+                status_code=400,
+                detail="Invalid MTurk Worker ID format. Worker IDs typically start with 'A' followed by alphanumeric characters (e.g., A12TU3EXAMPLE93)"
+            )
+    
+    # Update user's worker ID
+    current_user.mturk_worker_id = worker_id if worker_id else None
+    await db.commit()
+    await db.refresh(current_user)
+    
+    print(f"✅ Updated MTurk Worker ID for user {current_user.user_id}: {worker_id}")
+    
+    return {
+        "success": True,
+        "mturk_worker_id": current_user.mturk_worker_id,
+        "message": "MTurk Worker ID updated successfully"
+    }
+
+
 # ============================================================================
 # MTurk Integration API Endpoints
 # ============================================================================
@@ -1801,6 +1998,7 @@ async def get_current_user_info(
 @app.post("/api/auth/mturk-register")
 async def mturk_register(
     request: MTurkRegisterRequest,
+    http_request: Request,
     db: AsyncSession = Depends(get_async_session)
 ):
     """
@@ -1809,11 +2007,22 @@ async def mturk_register(
     
     Args:
         request: MTurk worker credentials (workerId, assignmentId, hitId)
+        http_request: FastAPI Request object (for rate limiting)
         db: Database session
     
     Returns:
         JWT access token and user info
     """
+    import re
+    
+    # Rate limiting check
+    client_ip = http_request.client.host
+    if not mturk_rate_limiter.is_allowed(client_ip):
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Too many registration attempts. Please wait a minute and try again."
+        )
+    
     # Check for preview mode
     if request.assignment_id == "ASSIGNMENT_ID_NOT_AVAILABLE":
         return {
@@ -1821,6 +2030,32 @@ async def mturk_register(
             "preview_mode": True,
             "message": "Preview mode - accept HIT to participate"
         }
+    
+    # Validate worker_id format (MTurk worker IDs: A followed by 13 alphanumeric chars)
+    worker_id_pattern = re.compile(r'^A[A-Z0-9]{13}$')
+    if not worker_id_pattern.match(request.worker_id):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid MTurk worker ID format. Expected format: A followed by 13 alphanumeric characters."
+        )
+    
+    # Validate assignment_id format (MTurk assignment IDs typically start with '3' and are ~30 chars)
+    assignment_id_pattern = re.compile(r'^3[A-Z0-9]{20,40}$')
+    if not assignment_id_pattern.match(request.assignment_id):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid MTurk assignment ID format."
+        )
+    
+    # Check if this assignment_id already exists in sessions (prevent duplicate registrations)
+    existing_session = await db.execute(
+        select(DBSession).where(DBSession.mturk_assignment_id == request.assignment_id)
+    )
+    if existing_session.scalar_one_or_none():
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"This assignment has already been registered. Each assignment can only be used once."
+        )
     
     # Register or login worker
     user, access_token = await register_or_login_mturk_worker(db, request.worker_id)
@@ -2049,6 +2284,236 @@ async def get_user_earnings(
 
 
 # ============================================================================
+# Wallet & Cashout API Endpoints
+# ============================================================================
+
+@app.get("/api/wallet/balance")
+async def get_wallet_balance(
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Get user's gem wallet balance and statistics.
+    
+    Args:
+        current_user: Current authenticated user
+    
+    Returns:
+        Wallet balance information
+    """
+    from .config import GEMS_PER_DOLLAR
+    from .cashout_service import gems_to_usd
+    
+    return {
+        "gem_balance": current_user.gem_balance,
+        "usd_equivalent": float(gems_to_usd(current_user.gem_balance)),
+        "total_gems_earned": current_user.total_gems_earned,
+        "total_gems_cashed_out": current_user.total_gems_cashed_out,
+        "conversion_rate": {
+            "gems_per_dollar": GEMS_PER_DOLLAR,
+            "description": f"{GEMS_PER_DOLLAR} gems = $1.00 USD"
+        },
+        "mturk_worker_id": current_user.mturk_worker_id,
+        "has_worker_id": bool(current_user.mturk_worker_id)
+    }
+
+
+@app.post("/api/wallet/cashout")
+async def request_cashout(
+    request: Request,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_async_session)
+):
+    """
+    Request a cashout of gems to USD via MTurk redemption code.
+    Generates a unique code for user to submit in the standing MTurk HIT.
+    
+    Args:
+        request: Request with amount_usd in body
+        current_user: Current authenticated user
+        db: Database session
+    
+    Returns:
+        Cashout transaction with redemption code
+    """
+    from decimal import Decimal
+    from .cashout_service import create_cashout_transaction, CashoutError
+    from .config import EXTERNAL_URL
+    
+    body = await request.json()
+    amount_usd = Decimal(str(body.get('amount_usd', 0)))
+    
+    try:
+        # Check if cashout system is configured
+        mturk_hit_id = os.getenv('CASHOUT_HIT_ID')
+        
+        if not mturk_hit_id:
+            raise HTTPException(
+                status_code=503,
+                detail="Cashout system not configured. Please contact administrator to set up the MTurk cashout HIT."
+            )
+        
+        # Create cashout transaction with redemption code
+        transaction = await create_cashout_transaction(
+            user=current_user,
+            amount_usd=amount_usd,
+            db=db
+        )
+        
+        # Get MTurk environment to provide correct HIT URL
+        from .mturk_api import get_mturk_client
+        mturk_client = get_mturk_client()
+        environment = mturk_client.environment
+        worker_endpoint = mturk_client.worker_endpoints[environment]
+        
+        # Link to the standing cashout HIT
+        hit_url = f"{worker_endpoint}/mturk/preview?groupId={mturk_hit_id}"
+        
+        return {
+            "success": True,
+            "transaction_id": str(transaction.id),
+            "amount_usd": float(transaction.amount_usd),
+            "amount_gems": transaction.amount_gems,
+            "redemption_code": transaction.redemption_code,
+            "status": transaction.status.value,
+            "hit_url": hit_url,
+            "expires_at": transaction.expires_at.isoformat() if transaction.expires_at else None,
+            "instructions": {
+                "step1": "Copy your redemption code (shown above)",
+                "step2": "Click the MTurk HIT link below",
+                "step3": "Accept the HIT and paste your redemption code",
+                "step4": "Submit the HIT - payment will be processed immediately!",
+                "note": "Your code is valid for 7 days. Don't share it with anyone!"
+            }
+        }
+        
+    except CashoutError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        print(f"❌ Error creating cashout: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to create cashout: {str(e)}")
+
+
+@app.get("/api/wallet/cashout-history")
+async def get_cashout_history(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_async_session)
+):
+    """
+    Get cashout transaction history for current user.
+    
+    Args:
+        current_user: Current authenticated user
+        db: Database session
+    
+    Returns:
+        List of cashout transactions
+    """
+    from .cashout_service import get_user_cashout_history
+    
+    try:
+        history = await get_user_cashout_history(user=current_user, db=db, limit=50)
+        
+        return {
+            "transactions": history,
+            "total_count": len(history)
+        }
+        
+    except Exception as e:
+        print(f"❌ Error getting cashout history: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to get cashout history: {str(e)}")
+
+
+@app.get("/api/wallet/cashout-status/{transaction_id}")
+async def get_cashout_status(
+    transaction_id: str,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_async_session)
+):
+    """
+    Get status of a specific cashout transaction.
+    
+    Args:
+        transaction_id: Transaction UUID
+        current_user: Current authenticated user
+        db: Database session
+    
+    Returns:
+        Transaction status information
+    """
+    import uuid as uuid_module
+    from .cashout_service import check_cashout_status, CashoutError
+    
+    try:
+        transaction_uuid = uuid_module.UUID(transaction_id)
+        status_info = await check_cashout_status(transaction_id=transaction_uuid, db=db)
+        
+        # Verify transaction belongs to current user
+        from .database import CashoutTransaction
+        result = await db.execute(
+            select(CashoutTransaction).where(CashoutTransaction.id == transaction_uuid)
+        )
+        transaction = result.scalar_one_or_none()
+        
+        if not transaction or transaction.user_id != current_user.id:
+            raise HTTPException(status_code=404, detail="Transaction not found")
+        
+        return status_info
+        
+    except CashoutError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid transaction ID")
+    except Exception as e:
+        print(f"❌ Error getting cashout status: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to get cashout status: {str(e)}")
+
+
+@app.post("/api/wallet/redeem")
+async def redeem_cashout(
+    request: Request,
+    db: AsyncSession = Depends(get_async_session)
+):
+    """
+    Redeem a cashout code (called from MTurk HIT).
+    Validates code and processes payment immediately.
+    
+    Args:
+        request: Request with redemption_code, worker_id, assignment_id, hit_id
+        db: Database session
+    
+    Returns:
+        Redemption result
+    """
+    from .cashout_service import redeem_cashout_code, CashoutError
+    
+    body = await request.json()
+    redemption_code = body.get('redemption_code', '').strip()
+    worker_id = body.get('worker_id', '').strip()
+    assignment_id = body.get('assignment_id', '').strip()
+    hit_id = body.get('hit_id', '').strip()
+    
+    if not all([redemption_code, worker_id, assignment_id, hit_id]):
+        raise HTTPException(status_code=400, detail="Missing required fields")
+    
+    try:
+        result = await redeem_cashout_code(
+            redemption_code=redemption_code,
+            worker_id=worker_id,
+            assignment_id=assignment_id,
+            hit_id=hit_id,
+            db=db
+        )
+        
+        return result
+        
+    except CashoutError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        print(f"❌ Error redeeming cashout: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to process redemption: {str(e)}")
+
+
+# ============================================================================
 # Session Management API Endpoints
 # ============================================================================
 
@@ -2247,7 +2712,15 @@ async def get_session_detail(
         "claimed_at": session.claimed_at.isoformat() if session.claimed_at else None,
         "stats": stats_data,
         "current_user_player_id": current_user_player_id,
-        "player_mappings": player_mappings
+        "player_mappings": player_mappings,
+        # MTurk information
+        "mturk_worker_id": session.mturk_worker_id,
+        "mturk_assignment_id": session.mturk_assignment_id,
+        "mturk_hit_id": session.mturk_hit_id,
+        "mturk_payment_sent": bool(session.mturk_payment_sent),
+        "mturk_bonus_sent": bool(session.mturk_bonus_sent),
+        # Gem economy information
+        "calculated_earnings": float(session.calculated_earnings) if session.calculated_earnings else None
     }
 
 
@@ -2369,74 +2842,6 @@ async def admin_dashboard(
         "pending_payments": pending_count,
         "paid_sessions": paid_count,
         "unclaimed_sessions": unclaimed_count
-    }
-
-
-@app.patch("/api/admin/sessions/{session_id}/payment")
-async def update_payment_status(
-    session_id: str,
-    request: UpdatePaymentRequest,
-    admin_user: User = Depends(require_admin),
-    db: AsyncSession = Depends(get_async_session)
-):
-    """
-    Update payment status for a session.
-    
-    Args:
-        session_id: Session UUID
-        request: Payment update data
-        admin_user: Current admin user
-        db: Database session
-    
-    Returns:
-        Updated session info
-    """
-    # Convert session_id to UUID
-    import uuid as uuid_lib
-    try:
-        session_uuid = uuid_lib.UUID(session_id)
-    except (ValueError, AttributeError):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid session ID format"
-        )
-    
-    # Get session
-    result = await db.execute(
-        select(DBSession).where(DBSession.id == session_uuid)
-    )
-    session = result.scalar_one_or_none()
-    
-    if not session:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Session not found"
-        )
-    
-    # Validate payment status
-    if request.payment_status not in ['pending', 'paid']:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid payment status. Must be 'pending' or 'paid'"
-        )
-    
-    # Update session
-    session.payment_status = PaymentStatus(request.payment_status)
-    if request.payment_amount is not None:
-        session.payment_amount = request.payment_amount
-    
-    await db.commit()
-    await db.refresh(session)
-    
-    return {
-        "success": True,
-        "message": "Payment status updated successfully",
-        "session": {
-            "id": str(session.id),
-            "room_code": session.room_code,
-            "payment_status": session.payment_status.value,
-            "payment_amount": float(session.payment_amount) if session.payment_amount else None
-        }
     }
 
 
@@ -2661,151 +3066,88 @@ async def approve_mturk_payment(
     
     try:
         # Process payment via MTurk API with max_bonus cap
-        from .config import MTURK_MAX_BONUS
-        max_bonus = Decimal(str(MTURK_MAX_BONUS))
+        from .config import MTURK_MAX_BONUS, MTURK_BASE_PAY
+        from .mturk_api import get_mturk_client
         
+        client = get_mturk_client()
+        base_pay = Decimal(str(MTURK_BASE_PAY))
+        max_bonus = Decimal(str(MTURK_MAX_BONUS))
+        calculated_earnings = Decimal(str(session.calculated_earnings))
+        
+        # Calculate bonus amount
+        raw_bonus = calculated_earnings - base_pay
+        bonus_amount = max(Decimal('0'), min(raw_bonus, max_bonus))
+        
+        # Process payment via MTurk API
         payment_result = process_payment(
             assignment_id=session.mturk_assignment_id,
             worker_id=session.mturk_worker_id,
-            calculated_earnings=Decimal(str(session.calculated_earnings)),
+            calculated_earnings=calculated_earnings,
             max_bonus=max_bonus
         )
         
-        # Update session with payment status
-        session.mturk_payment_sent = 1 if payment_result['approved'] else 0
-        session.mturk_bonus_sent = 1 if payment_result.get('bonus_sent', False) else 0
-        session.payment_status = PaymentStatus.PAID
-        session.payment_amount = session.calculated_earnings
-        
-        await db.commit()
-        await db.refresh(session)
-        
-        return {
-            "success": True,
-            "message": "MTurk payment processed successfully",
-            "payment_result": payment_result,
-            "session": {
-                "id": str(session.id),
-                "room_code": session.room_code,
-                "worker_id": session.mturk_worker_id,
-                "assignment_id": session.mturk_assignment_id,
-                "payment_amount": float(session.payment_amount),
-                "payment_status": session.payment_status.value
+        # Only update database if payment was successful
+        if payment_result['approved']:
+            # Update session with payment status
+            session.mturk_payment_sent = 1
+            session.mturk_bonus_sent = 1 if payment_result.get('bonus_sent', False) else 0
+            session.payment_status = PaymentStatus.PAID
+            session.payment_amount = session.calculated_earnings
+            
+            await db.commit()
+            await db.refresh(session)
+            
+            return {
+                "success": True,
+                "message": "MTurk payment processed successfully",
+                "base_pay": float(base_pay),
+                "bonus_amount": float(bonus_amount),
+                "total_paid": float(base_pay + bonus_amount),
+                "payment_result": payment_result,
+                "session": {
+                    "id": str(session.id),
+                    "room_code": session.room_code,
+                    "worker_id": session.mturk_worker_id,
+                    "assignment_id": session.mturk_assignment_id,
+                    "payment_amount": float(session.payment_amount),
+                    "payment_status": session.payment_status.value
+                }
             }
-        }
+        else:
+            # Payment approval failed, rollback any changes
+            await db.rollback()
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="MTurk assignment approval failed. Payment was not processed."
+            )
         
+    except HTTPException:
+        # Re-raise HTTP exceptions
+        raise
     except Exception as e:
+        # Rollback on any error
+        await db.rollback()
+        
+        # Provide more specific error messages
+        error_str = str(e)
+        if "InvalidParameterValue" in error_str:
+            detail = "Invalid MTurk parameters. Please check worker_id and assignment_id."
+        elif "RequestError" in error_str or "credentials" in error_str.lower():
+            detail = "MTurk API authentication failed. Please check AWS credentials."
+        elif "InsufficientFunds" in error_str:
+            detail = "Insufficient funds in MTurk account. Please add funds to continue."
+        elif "AssignmentAlreadyApproved" in error_str:
+            detail = "This assignment has already been approved in MTurk."
+        else:
+            detail = f"MTurk API error: {error_str}"
+        
         print(f"❌ MTurk payment error: {e}")
+        import traceback
+        traceback.print_exc()
+        
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"MTurk API error: {str(e)}"
-        )
-
-
-@app.post("/api/admin/mturk/create-hit")
-async def create_mturk_hit(
-    request: CreateHITRequest,
-    admin_user: User = Depends(require_admin)
-):
-    """
-    Create a new MTurk HIT for the group chat game.
-    
-    Args:
-        request: HIT creation parameters
-        admin_user: Current admin user
-    
-    Returns:
-        Created HIT details
-    """
-    from .mturk_api import create_game_hit
-    from decimal import Decimal
-    
-    try:
-        reward = Decimal(str(request.reward)) if request.reward else None
-        
-        hit_info = create_game_hit(
-            max_workers=request.max_workers,
-            title=request.title,
-            description=request.description,
-            keywords=request.keywords,
-            reward=reward
-        )
-        
-        return {
-            "success": True,
-            "message": "HIT created successfully",
-            "hit": hit_info
-        }
-        
-    except Exception as e:
-        print(f"❌ HIT creation error: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"MTurk API error: {str(e)}"
-        )
-
-
-@app.get("/api/admin/mturk/hits")
-async def list_mturk_hits(
-    admin_user: User = Depends(require_admin)
-):
-    """
-    List all MTurk HITs.
-    
-    Args:
-        admin_user: Current admin user
-    
-    Returns:
-        List of HITs
-    """
-    from .mturk_api import get_mturk_client
-    
-    try:
-        client = get_mturk_client()
-        hits = client.list_hits(max_results=100)
-        
-        return {
-            "success": True,
-            "hits": hits
-        }
-        
-    except Exception as e:
-        print(f"❌ List HITs error: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"MTurk API error: {str(e)}"
-        )
-
-
-@app.get("/api/admin/mturk/balance")
-async def get_mturk_balance(
-    admin_user: User = Depends(require_admin)
-):
-    """
-    Get MTurk account balance.
-    
-    Args:
-        admin_user: Current admin user
-    
-    Returns:
-        Account balance information
-    """
-    from .mturk_api import get_mturk_client
-    
-    try:
-        client = get_mturk_client()
-        balance = client.get_account_balance()
-        
-        return {
-            "success": True,
-            "balance": balance
-        }
-        
-    except Exception as e:
-        print(f"❌ Get balance error: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"MTurk API error: {str(e)}"
+            detail=detail
         )
 
 

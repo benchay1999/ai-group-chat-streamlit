@@ -111,18 +111,74 @@ Secret access key: wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY
 
 ## 🧪 MTurk Sandbox Setup
 
+**⚠️ CRITICAL:** You must complete this step before the API will work!
+
 The MTurk Sandbox is a free testing environment that mirrors production.
 
-### Step 1: Register for MTurk
+### Step 1: Link AWS Account to MTurk
 
-1. Go to https://requester.mturk.com
-2. Click "Sign in" and use your AWS credentials
-3. Complete the MTurk Requester registration:
-   - Agree to terms of service
-   - Provide business information (can be personal for testing)
-   - Add payment method (required but not charged in sandbox)
+**This is the step you're currently missing!**
 
-### Step 2: Access Sandbox
+1. Go to **https://requestersandbox.mturk.com/developer**
+2. Click "Sign in" and use your AWS credentials (the same account where you created IAM user)
+3. You'll see: "Link your AWS Account to your Amazon Mechanical Turk Account"
+4. Click "Link Account" or "Get Started"
+5. Complete the MTurk Requester registration:
+   - ✅ Agree to terms of service
+   - ✅ Provide business information (can be personal for testing)
+   - ✅ Add payment method (required but **not charged in sandbox**)
+   - ✅ Verify email if prompted
+
+**Expected result:** You should see "Your AWS Account is now linked to MTurk"
+
+### Step 2: Verify Registration
+
+**First, get your admin token:**
+```bash
+# Login to get your token
+curl -X POST https://ai-groupchat.ngrok.io/api/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{
+    "user_id": "your_admin_username",
+    "password": "your_admin_password"
+  }'
+
+# Copy the "access_token" from the response
+```
+
+**Then test your registration:**
+```bash
+# Replace YOUR_TOKEN with the access_token from above
+curl -X POST https://ai-groupchat.ngrok.io/api/admin/mturk/create-hit \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "max_workers": 1,
+    "title": "Test HIT",
+    "description": "Test",
+    "keywords": "test"
+  }'
+```
+
+**💡 Tip:** See `GET_ADMIN_TOKEN.md` for detailed instructions on getting your token.
+
+**If successful, you'll see:**
+```json
+{
+  "success": true,
+  "hit_id": "3EXAMPLE...",
+  "hit_type_id": "3EXAMPLE...",
+  ...
+}
+```
+
+**If you still see the error**, make sure you:
+- Used the **sandbox** URL: https://requestersandbox.mturk.com/developer
+- Completed ALL registration steps
+- Verified your email
+- Added a payment method (even for sandbox)
+
+### Step 3: Access Sandbox
 
 1. Go to https://requester.mturk.com/developer/sandbox
 2. Or use the sandbox URL directly: https://workersandbox.mturk.com
@@ -178,7 +234,8 @@ MTURK_MAX_BONUS=0.05
 
 # Public URL where your game is hosted (for MTurk ExternalQuestion)
 # Must be HTTPS in production, can be HTTP in sandbox
-EXTERNAL_URL=http://localhost:5173/lobby
+# Use your ngrok URL for testing
+EXTERNAL_URL=https://ai-groupchat.ngrok.io/lobby
 
 # Frame height for MTurk iframe (0 = auto-resize)
 MTURK_FRAME_HEIGHT=0
@@ -236,14 +293,35 @@ Balance: $10000.00  # Sandbox has unlimited balance
 
 ### Test 2: Create a Test HIT
 
-1. Log in to your app as admin
-2. Navigate to Admin Panel
-3. (Future feature) Click "Create MTurk HIT"
-4. Or use the API directly:
+#### Option A: Get Your Admin Token
 
+**Step 1: Login via API**
 ```bash
-curl -X POST http://localhost:8000/api/admin/mturk/create-hit \
-  -H "Authorization: Bearer YOUR_ADMIN_TOKEN" \
+curl -X POST https://ai-groupchat.ngrok.io/api/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{
+    "user_id": "your_admin_username",
+    "password": "your_admin_password"
+  }'
+```
+
+**Response:**
+```json
+{
+  "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "token_type": "bearer",
+  "user_id": "your_admin_username",
+  "role": "admin"
+}
+```
+
+**Step 2: Copy the `access_token`** - This is your `YOUR_ADMIN_TOKEN`
+
+**Step 3: Use it to create HIT:**
+```bash
+# Replace YOUR_ADMIN_TOKEN with the actual token from above
+curl -X POST https://ai-groupchat.ngrok.io/api/admin/mturk/create-hit \
+  -H "Authorization: Bearer YOUR_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
     "max_workers": 1,
@@ -252,6 +330,41 @@ curl -X POST http://localhost:8000/api/admin/mturk/create-hit \
     "keywords": "game, chat, AI, conversation"
   }'
 ```
+
+#### Option B: Get Token from Browser
+
+**Step 1: Login to your app**
+1. Go to http://localhost:5173/login
+2. Login with your admin credentials
+
+**Step 2: Get token from browser**
+1. Open DevTools (F12)
+2. Go to Console tab
+3. Type: `localStorage.getItem('access_token')`
+4. Copy the token (without quotes)
+
+**Step 3: Use the token in curl:**
+```bash
+curl -X POST https://ai-groupchat.ngrok.io/api/admin/mturk/create-hit \
+  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIwNWQzNjc4Yi00ODMzLTQyZjctOTk5OS0wZjk1OTMyNzU1ZTEiLCJleHAiOjE3NjE5OTQxMjQsImlhdCI6MTc2MTkwNzcyNH0.0oFk3Kzm9-aTyBxLYRtUth7efvm-FnbB0w3OzlOcj04" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "max_workers": 1,
+    "title": "Test: Identify AI in Group Chat",
+    "description": "Play a game and identify which player is AI",
+    "keywords": "game, chat, AI, conversation"
+  }'
+```
+
+#### Don't Have an Admin Account?
+
+**Create one:**
+```bash
+cd /path/to/project
+python create_admin.py
+```
+
+Follow the prompts to create an admin account.
 
 ### Test 3: Complete Worker Flow
 

@@ -5,16 +5,32 @@ This is a web-based game where human players compete against multiple AI agents 
 
 **Architecture**: Built with LangGraph for advanced multi-agent orchestration, providing a graph-based state machine for game flow management.
 
-## 🎯 NEW: Mechanical Turk Data Collection System
+## 🎯 NEW: Gem Economy & MTurk Payment Processor
 
-The system now includes a comprehensive data collection platform for MTurk studies:
+The game features an internal gem-based economy where MTurk serves as a payment processor:
 
+- **💎 Gem Economy**: Players earn gems by playing games (1000 gems = $1.00 USD)
+- **🎮 Performance-Based Rewards**: Earnings based on participation, voting, and correctly identifying AI
+- **💰 Flexible Cash-Outs**: Cash out via MTurk when you reach minimum threshold (default: $2.00)
+- **🔐 Worker-Specific HITs**: Automated, qualification-based HITs only you can see
+- **📊 Wallet Dashboard**: Track your gem balance, earnings history, and cashout status
+- **👥 MTurk Integration**: Link your MTurk Worker ID to enable cashouts
+
+### Payment System Features
 - **🔐 Authentication System**: User registration and login with JWT tokens
 - **🎫 Completion Keys**: Cryptographically-signed proof of participation
-- **💰 Payment Management**: Track and manage compensation for participants
-- **📊 Admin Dashboard**: View all sessions, update payment status, manage users
-- **📈 Visualizations**: Chat history timelines and voting result charts
+- **💎 Internal Currency**: Gems credited immediately after each game
+- **📈 Gamification**: XP, levels, achievements, and streaks (separate from gems)
+- **📊 Admin Dashboard**: View all sessions, manage users, monitor cashouts
 - **👥 Role-Based Access**: Separate views for participants and researchers
+
+### Future Enhancements (Planned)
+- **Level-Based Bonuses**: Higher-level players earn more gems per game
+- **Achievement Rewards**: Bonus gems for unlocking achievements
+- **Rogue-like Features**: Buy power-ups and multipliers with gems
+- **Daily Bonuses**: Login streaks reward extra gems
+- **Referral System**: Earn bonus gems for referring new players
+- **Leaderboards**: Compete for top earner spots
 
 ### Quick Links
 - **Setup Guide**: See [MTURK_SETUP.md](MTURK_SETUP.md) for detailed installation

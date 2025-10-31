@@ -45,21 +45,6 @@ export const sessionsAPI = {
     const response = await api.get('/api/admin/dashboard');
     return response.data;
   },
-
-  /**
-   * Update payment status for a session (admin only)
-   * @param {string} sessionId - Session UUID
-   * @param {string} paymentStatus - 'pending' or 'paid'
-   * @param {number} paymentAmount - Optional payment amount
-   * @returns {Promise} Update result
-   */
-  updatePaymentStatus: async (sessionId, paymentStatus, paymentAmount = null) => {
-    const response = await api.patch(`/api/admin/sessions/${sessionId}/payment`, {
-      payment_status: paymentStatus,
-      payment_amount: paymentAmount,
-    });
-    return response.data;
-  },
 };
 
 export default sessionsAPI;

@@ -40,37 +40,6 @@ const AdminPage = () => {
     }
   };
 
-  const handleUpdatePayment = async (sessionId, newStatus, amount = null) => {
-    try {
-      setUpdatingSession(sessionId);
-      await sessionsAPI.updatePaymentStatus(sessionId, newStatus, amount);
-      toast.success('Payment status updated successfully');
-      loadData(); // Reload data
-    } catch (error) {
-      toast.error('Failed to update payment status');
-      console.error(error);
-    } finally {
-      setUpdatingSession(null);
-    }
-  };
-
-  const promptPaymentAmount = (sessionId, currentStatus, suggestedAmount = null) => {
-    const defaultValue = suggestedAmount ? suggestedAmount.toFixed(2) : '';
-    const amount = prompt(`Enter payment amount:${suggestedAmount ? ` (Suggested: $${suggestedAmount.toFixed(2)})` : ''}`, defaultValue);
-    if (amount !== null) {
-      const parsedAmount = parseFloat(amount);
-      if (!isNaN(parsedAmount) && parsedAmount >= 0) {
-        handleUpdatePayment(sessionId, currentStatus, parsedAmount);
-      } else {
-        toast.error('Invalid amount');
-      }
-    }
-  };
-
-  const acceptSuggestedAmount = (sessionId, currentStatus, suggestedAmount) => {
-    handleUpdatePayment(sessionId, currentStatus, suggestedAmount);
-  };
-
   const handleMTurkPayment = async (sessionId) => {
     if (!confirm('This will trigger the MTurk API to approve the assignment and send bonus. Continue?')) {
       return;
@@ -297,7 +266,7 @@ const AdminPage = () => {
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm space-y-1">
                         <div className="flex gap-2 flex-wrap">
-                          {/* MTurk Auto-Payment Button (Priority) */}
+                          {/* MTurk Auto-Payment Button (Legacy - for sessions with MTurk integration) */}
                           {session.mturk_worker_id && !session.mturk_payment_sent && session.calculated_earnings && (
                             <button
                               onClick={() => handleMTurkPayment(session.id)}
@@ -309,44 +278,9 @@ const AdminPage = () => {
                             </button>
                           )}
                           
-                          {/* Regular Payment Buttons */}
-                          {!session.mturk_worker_id && (
-                            <>
-                              {session.payment_status === 'pending' ? (
-                                <button
-                                  onClick={() => handleUpdatePayment(session.id, 'paid')}
-                                  disabled={updatingSession === session.id}
-                                  className="px-3 py-1 bg-green-600 text-white rounded text-xs font-medium hover:bg-green-700 disabled:opacity-50"
-                                >
-                                  {updatingSession === session.id ? 'Updating...' : 'Mark Paid'}
-                                </button>
-                              ) : (
-                                <button
-                                  onClick={() => handleUpdatePayment(session.id, 'pending')}
-                                  disabled={updatingSession === session.id}
-                                  className="px-3 py-1 bg-yellow-600 text-white rounded text-xs font-medium hover:bg-yellow-700 disabled:opacity-50"
-                                >
-                                  {updatingSession === session.id ? 'Updating...' : 'Mark Pending'}
-                                </button>
-                              )}
-                              {session.calculated_earnings && !session.payment_amount && (
-                                <button
-                                  onClick={() => acceptSuggestedAmount(session.id, session.payment_status, session.calculated_earnings)}
-                                  disabled={updatingSession === session.id}
-                                  className="px-3 py-1 bg-cyan-600 text-white rounded text-xs font-medium hover:bg-cyan-700 disabled:opacity-50"
-                                >
-                                  Accept ${session.calculated_earnings}
-                                </button>
-                              )}
-                              <button
-                                onClick={() => promptPaymentAmount(session.id, session.payment_status, session.calculated_earnings)}
-                                disabled={updatingSession === session.id}
-                                className="px-3 py-1 bg-blue-600 text-white rounded text-xs font-medium hover:bg-blue-700 disabled:opacity-50"
-                              >
-                                Set Amount
-                              </button>
-                            </>
-                          )}
+                          {/* Note: "Mark Paid" and "Set Amount" buttons removed */}
+                          {/* Payments are now handled through the gem economy system */}
+                          {/* See /wallet for cashout functionality */}
                         </div>
                         <div>
                           <Link

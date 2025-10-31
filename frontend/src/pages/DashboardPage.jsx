@@ -10,12 +10,13 @@ import { sessionsAPI } from '../services/sessionsAPI';
 import { format } from 'date-fns';
 import { 
   Copy, Check, ExternalLink, Key, DollarSign, Clock, 
-  TrendingUp, Zap, Star, Sparkles, Award
+  TrendingUp, Zap, Star, Sparkles, Award, Gem, Wallet, AlertCircle, ArrowRight
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import axios from '../services/api';
 import EarningsCounter from '../components/EarningsCounter';
 import EarningsChart from '../components/EarningsChart';
+import { getWalletBalance } from '../services/walletAPI';
 
 const DashboardPage = () => {
   const { user, logout } = useAuth();
@@ -26,10 +27,13 @@ const DashboardPage = () => {
   const [claimKey, setClaimKey] = useState('');
   const [claiming, setClaiming] = useState(false);
   const [copiedKey, setCopiedKey] = useState(null);
+  const [walletData, setWalletData] = useState(null);
+  const [walletLoading, setWalletLoading] = useState(true);
 
   useEffect(() => {
     loadSessions();
     loadEarnings();
+    loadWallet();
   }, []);
 
   const loadSessions = async () => {
@@ -54,6 +58,18 @@ const DashboardPage = () => {
       console.error('Failed to load earnings:', error);
     } finally {
       setEarningsLoading(false);
+    }
+  };
+
+  const loadWallet = async () => {
+    try {
+      setWalletLoading(true);
+      const data = await getWalletBalance();
+      setWalletData(data);
+    } catch (error) {
+      console.error('Failed to load wallet:', error);
+    } finally {
+      setWalletLoading(false);
     }
   };
 
@@ -258,6 +274,152 @@ const DashboardPage = () => {
       )}
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Gem Wallet & MTurk Setup Section */}
+        {!walletLoading && walletData && (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+            {/* Gem Wallet Balance */}
+            <div className="bg-gradient-to-br from-purple-900 via-purple-800 to-indigo-900 rounded-xl shadow-2xl p-6 border border-purple-700">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-2xl font-bold text-white flex items-center gap-2">
+                  <Gem className="w-7 h-7 text-purple-300" />
+                  Gem Wallet
+                </h2>
+                <Link
+                  to="/wallet"
+                  className="text-purple-300 hover:text-purple-100 transition-colors"
+                >
+                  <Wallet className="w-6 h-6" />
+                </Link>
+              </div>
+              
+              <div className="mb-4">
+                <div className="text-5xl font-black text-white mb-2">
+                  {walletData.gem_balance.toLocaleString()}
+                </div>
+                <div className="text-purple-300 text-lg">gems</div>
+              </div>
+              
+              <div className="flex items-center justify-between p-3 bg-purple-950 bg-opacity-50 rounded-lg mb-4">
+                <span className="text-purple-200 text-sm">USD Value</span>
+                <span className="text-white font-bold text-xl">
+                  ${walletData.usd_equivalent.toFixed(2)}
+                </span>
+              </div>
+              
+              <Link
+                to="/wallet"
+                className="w-full py-3 bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-lg font-semibold hover:from-purple-500 hover:to-indigo-500 transition-all flex items-center justify-center gap-2 group"
+              >
+                <DollarSign className="w-5 h-5" />
+                Cash Out Gems
+                <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+              </Link>
+              
+              <div className="mt-3 text-center text-purple-300 text-xs">
+                1000 gems = $1.00 USD
+              </div>
+            </div>
+
+            {/* MTurk Worker ID Setup */}
+            <div className={`rounded-xl shadow-2xl p-6 border ${
+              walletData.has_worker_id 
+                ? 'bg-gradient-to-br from-green-900 via-green-800 to-emerald-900 border-green-700' 
+                : 'bg-gradient-to-br from-yellow-900 via-yellow-800 to-orange-900 border-yellow-700'
+            }`}>
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-2xl font-bold text-white flex items-center gap-2">
+                  {walletData.has_worker_id ? (
+                    <>
+                      <Check className="w-7 h-7 text-green-300" />
+                      MTurk Connected
+                    </>
+                  ) : (
+                    <>
+                      <AlertCircle className="w-7 h-7 text-yellow-300" />
+                      Setup Required
+                    </>
+                  )}
+                </h2>
+              </div>
+              
+              {walletData.has_worker_id ? (
+                <>
+                  <div className="mb-4">
+                    <div className="text-green-100 text-lg mb-2">
+                      ✓ Ready to cash out
+                    </div>
+                    <div className="text-green-200 text-sm">
+                      Your MTurk Worker ID is configured and you can cash out your gems anytime.
+                    </div>
+                  </div>
+                  
+                  <div className="p-3 bg-green-950 bg-opacity-50 rounded-lg mb-4">
+                    <div className="text-green-300 text-xs mb-1">Total Gems Earned</div>
+                    <div className="text-white font-bold text-2xl">
+                      {walletData.total_gems_earned.toLocaleString()}
+                    </div>
+                  </div>
+                  
+                  <div className="p-3 bg-green-950 bg-opacity-50 rounded-lg mb-4">
+                    <div className="text-green-300 text-xs mb-1">Total Cashed Out</div>
+                    <div className="text-white font-bold text-2xl">
+                      {walletData.total_gems_cashed_out.toLocaleString()} gems
+                    </div>
+                    <div className="text-green-200 text-sm">
+                      (${(walletData.total_gems_cashed_out / 1000).toFixed(2)} USD)
+                    </div>
+                  </div>
+
+                  <Link
+                    to="/profile"
+                    className="w-full py-3 bg-green-700 text-white rounded-lg font-semibold hover:bg-green-600 transition-all flex items-center justify-center gap-2"
+                  >
+                    View Profile
+                  </Link>
+                </>
+              ) : (
+                <>
+                  <div className="mb-4">
+                    <div className="text-yellow-100 text-lg mb-2 font-semibold">
+                      💳 Add Your MTurk Worker ID
+                    </div>
+                    <div className="text-yellow-200 text-sm leading-relaxed">
+                      To cash out your gems as real money, you need to connect your Amazon MTurk Worker ID. 
+                      This is required for payment processing.
+                    </div>
+                  </div>
+                  
+                  <div className="bg-yellow-950 bg-opacity-50 rounded-lg p-4 mb-4">
+                    <div className="flex items-start gap-3">
+                      <AlertCircle className="w-5 h-5 text-yellow-300 mt-0.5 flex-shrink-0" />
+                      <div className="text-yellow-100 text-sm">
+                        <div className="font-semibold mb-1">How to find your Worker ID:</div>
+                        <ol className="list-decimal list-inside space-y-1 text-yellow-200">
+                          <li>Go to <a href="https://worker.mturk.com/dashboard" target="_blank" rel="noopener noreferrer" className="underline hover:text-yellow-100">worker.mturk.com</a></li>
+                          <li>Your Worker ID starts with "A" (e.g., A1BCDEFG2HIJK)</li>
+                          <li>Copy it and paste in your profile</li>
+                        </ol>
+                      </div>
+                    </div>
+                  </div>
+
+                  <Link
+                    to="/profile"
+                    className="w-full py-3 bg-gradient-to-r from-yellow-600 to-orange-600 text-white rounded-lg font-bold hover:from-yellow-500 hover:to-orange-500 transition-all flex items-center justify-center gap-2 group animate-pulse-glow"
+                  >
+                    Add Worker ID Now
+                    <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+                  </Link>
+                  
+                  <div className="mt-3 text-center text-yellow-300 text-xs">
+                    Takes less than 1 minute • Free & secure
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        )}
+
         {/* Claim Completion Key Section */}
         <div className="bg-gray-800 rounded-xl shadow-2xl p-6 mb-8 border border-gray-700">
           <h2 className="text-2xl font-bold text-white mb-4 flex items-center gap-2">

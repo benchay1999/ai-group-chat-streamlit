@@ -18,6 +18,9 @@ import DashboardPage from './pages/DashboardPage';
 import SessionDetailPage from './pages/SessionDetailPage';
 import AdminPage from './pages/AdminPage';
 import AdminAnalyticsPage from './pages/AdminAnalyticsPage';
+import ProfilePage from './pages/ProfilePage';
+import Wallet from './components/Wallet';
+import CashoutConfirm from './pages/CashoutConfirm';
 
 function App() {
   return (
@@ -34,6 +37,9 @@ function App() {
               <Route path="/game" element={<GamePage />} />
               <Route path="/login" element={<LoginPage />} />
               
+              {/* MTurk cashout redemption page (public - accessed from MTurk HIT) */}
+              <Route path="/cashout-confirm" element={<CashoutConfirm />} />
+              
               {/* Protected routes (require authentication) */}
               <Route
                 path="/dashboard"
@@ -48,6 +54,22 @@ function App() {
                 element={
                   <ProtectedRoute>
                     <SessionDetailPage />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/profile"
+                element={
+                  <ProtectedRoute>
+                    <ProfilePage />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/wallet"
+                element={
+                  <ProtectedRoute>
+                    <Wallet />
                   </ProtectedRoute>
                 }
               />

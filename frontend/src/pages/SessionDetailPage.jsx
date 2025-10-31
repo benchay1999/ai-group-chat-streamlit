@@ -234,6 +234,97 @@ const SessionDetailPage = () => {
           </p>
         </div>
 
+        {/* MTurk Information Card */}
+        {(session.mturk_worker_id || session.mturk_assignment_id || session.calculated_earnings) && (
+          <div className="bg-gradient-to-r from-orange-50 to-yellow-50 border-2 border-orange-200 rounded-lg shadow p-6 mb-8">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="bg-orange-500 rounded-full p-2">
+                <DollarSign className="w-6 h-6 text-white" />
+              </div>
+              <h2 className="text-lg font-semibold text-gray-900">MTurk Payment Information</h2>
+            </div>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* Worker ID */}
+              {session.mturk_worker_id && (
+                <div className="bg-white rounded-lg p-4">
+                  <p className="text-xs font-semibold text-gray-600 mb-1">Worker ID</p>
+                  <p className="text-sm font-mono text-gray-900">{session.mturk_worker_id}</p>
+                </div>
+              )}
+              
+              {/* Assignment ID */}
+              {session.mturk_assignment_id && (
+                <div className="bg-white rounded-lg p-4">
+                  <p className="text-xs font-semibold text-gray-600 mb-1">Assignment ID</p>
+                  <p className="text-sm font-mono text-gray-900 truncate" title={session.mturk_assignment_id}>
+                    {session.mturk_assignment_id}
+                  </p>
+                </div>
+              )}
+              
+              {/* HIT ID */}
+              {session.mturk_hit_id && (
+                <div className="bg-white rounded-lg p-4">
+                  <p className="text-xs font-semibold text-gray-600 mb-1">HIT ID</p>
+                  <p className="text-sm font-mono text-gray-900 truncate" title={session.mturk_hit_id}>
+                    {session.mturk_hit_id}
+                  </p>
+                </div>
+              )}
+              
+              {/* Calculated Earnings */}
+              {session.calculated_earnings && (
+                <div className="bg-white rounded-lg p-4">
+                  <p className="text-xs font-semibold text-gray-600 mb-1">Calculated Earnings (Gems)</p>
+                  <p className="text-lg font-bold text-green-600">
+                    {(session.calculated_earnings * 1000).toLocaleString()} gems
+                  </p>
+                  <p className="text-xs text-gray-500">≈ ${session.calculated_earnings.toFixed(2)} USD</p>
+                </div>
+              )}
+              
+              {/* Payment Status */}
+              <div className="bg-white rounded-lg p-4">
+                <p className="text-xs font-semibold text-gray-600 mb-2">Payment Status</p>
+                <div className="flex flex-col gap-1">
+                  <div className="flex items-center gap-2">
+                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                      session.mturk_payment_sent 
+                        ? 'bg-green-100 text-green-800' 
+                        : 'bg-gray-100 text-gray-600'
+                    }`}>
+                      {session.mturk_payment_sent ? '✓ Payment Sent' : '○ Payment Pending'}
+                    </span>
+                  </div>
+                  {session.mturk_bonus_sent && (
+                    <div className="flex items-center gap-2">
+                      <span className="px-2 py-1 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
+                        ✓ Bonus Sent
+                      </span>
+                    </div>
+                  )}
+                </div>
+              </div>
+              
+              {/* Payment Amount */}
+              {session.payment_amount && (
+                <div className="bg-white rounded-lg p-4">
+                  <p className="text-xs font-semibold text-gray-600 mb-1">Payment Amount</p>
+                  <p className="text-lg font-bold text-blue-600">${session.payment_amount.toFixed(2)}</p>
+                  <p className={`text-xs font-medium ${
+                    session.payment_status === 'paid' 
+                      ? 'text-green-600' 
+                      : 'text-yellow-600'
+                  }`}>
+                    Status: {session.payment_status}
+                  </p>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
           {/* Player List */}
           <div className="bg-white rounded-lg shadow p-6">
