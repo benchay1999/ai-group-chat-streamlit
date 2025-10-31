@@ -2705,6 +2705,23 @@ async def cashout_v2(
     return await request_cashout_v2(request, current_user, db)
 
 
+@app.get("/api/wallet/cashout/{transaction_id}/hit-ready")
+async def check_cashout_hit_ready(
+    transaction_id: str,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_async_session)
+):
+    """
+    Check if MTurk HIT is ready for the worker to access.
+    
+    Returns:
+        - ready: boolean indicating if HIT is accessible
+        - message: status message
+    """
+    from .check_hit_ready import check_hit_ready
+    return await check_hit_ready(transaction_id, current_user, db)
+
+
 @app.get("/api/wallet/cashout-status/{transaction_id}")
 async def get_cashout_status(
     transaction_id: str,

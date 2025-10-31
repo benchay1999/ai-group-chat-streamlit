@@ -28,6 +28,16 @@ export const requestCashout = async (amountUsd) => {
 };
 
 /**
+ * Check if MTurk HIT is ready for a transaction
+ * @param {string} transactionId - Transaction UUID
+ * @returns {Promise<Object>} Ready status {ready: boolean, message: string}
+ */
+export const checkHitReady = async (transactionId) => {
+  const response = await api.get(`/api/wallet/cashout/${transactionId}/hit-ready`);
+  return response.data;
+};
+
+/**
  * Get cashout transaction history
  * @returns {Promise<Object>} Transaction history
  */
@@ -80,6 +90,7 @@ export const cancelCashout = async (transactionId) => {
 export default {
   getWalletBalance,
   requestCashout,
+  checkHitReady,
   getCashoutHistory,
   getCashoutStatus,
   updateMTurkWorkerId,

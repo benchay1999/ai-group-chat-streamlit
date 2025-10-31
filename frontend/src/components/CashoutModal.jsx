@@ -4,8 +4,8 @@
  */
 
 import React, { useState } from 'react';
-import { X, DollarSign, ExternalLink, AlertCircle, CheckCircle } from 'lucide-react';
-import { requestCashout } from '../services/walletAPI';
+import { X, DollarSign, ExternalLink, AlertCircle, CheckCircle, Loader } from 'lucide-react';
+import { requestCashout, checkHitReady, getCashoutStatus } from '../services/walletAPI';
 import toast from 'react-hot-toast';
 
 const CashoutModal = ({ walletData, onClose, onSuccess }) => {
@@ -13,7 +13,9 @@ const CashoutModal = ({ walletData, onClose, onSuccess }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [cashoutResult, setCashoutResult] = useState(null);
-  const [countdown, setCountdown] = useState(5);
+  const [hitReady, setHitReady] = useState(false);
+  const [checkingHit, setCheckingHit] = useState(false);
+  const [hitStatusMessage, setHitStatusMessage] = useState('Preparing MTurk HIT...');
 
   const maxAmount = (walletData.gem_balance / 1000).toFixed(2);
   const gemsNeeded = Math.ceil(parseFloat(amountUsd || 0) * 1000);
@@ -59,7 +61,8 @@ const CashoutModal = ({ walletData, onClose, onSuccess }) => {
       }
       
       setCashoutResult(result);
-      setCountdown(10); // Start 10-second countdown
+      setCheckingHit(true);
+      setHitReady(false);
       
     } catch (err) {
       console.error('Cashout error:', err);
@@ -70,15 +73,94 @@ const CashoutModal = ({ walletData, onClose, onSuccess }) => {
     }
   };
 
-  // Countdown effect
+  // Poll HIT readiness
   React.useEffect(() => {
-    if (cashoutResult && countdown > 0) {
-      const timer = setTimeout(() => {
-        setCountdown(countdown - 1);
-      }, 1000);
-      return () => clearTimeout(timer);
-    }
-  }, [cashoutResult, countdown]);
+    if (!cashoutResult || hitReady) return;
+
+    let pollInterval;
+    let attempts = 0;
+    const maxAttempts = 20; // Poll for up to 20 seconds
+
+    const pollHitStatus = async () => {
+      attempts++;
+      
+      try {
+        const status = await checkHitReady(cashoutResult.transaction_id);
+        
+        if (status.ready) {
+          setHitReady(true);
+          setCheckingHit(false);
+          setHitStatusMessage('✅ HIT is ready!');
+          clearInterval(pollInterval);
+          toast.success('MTurk HIT is ready! You can now access it.');
+        } else {
+          setHitStatusMessage(status.message || 'Checking...');
+          
+          if (attempts >= maxAttempts) {
+            // After 20 seconds, stop polling and let user try anyway
+            setHitReady(true);
+            setCheckingHit(false);
+            setHitStatusMessage('⚠️ Taking longer than expected. You can try accessing the HIT now.');
+            clearInterval(pollInterval);
+          }
+        }
+      } catch (err) {
+        console.error('Error checking HIT status:', err);
+        setHitStatusMessage('Checking HIT status...');
+        
+        if (attempts >= maxAttempts) {
+          setHitReady(true);
+          setCheckingHit(false);
+          clearInterval(pollInterval);
+        }
+      }
+    };
+
+    // Start polling immediately, then every second
+    pollHitStatus();
+    pollInterval = setInterval(pollHitStatus, 1000);
+
+    return () => clearInterval(pollInterval);
+  }, [cashoutResult, hitReady]);
+
+  // Poll transaction status to detect completion and auto-close
+  React.useEffect(() => {
+    if (!cashoutResult) return;
+
+    let statusInterval;
+
+    const checkTransactionStatus = async () => {
+      try {
+        const status = await getCashoutStatus(cashoutResult.transaction_id);
+        
+        // Check if transaction is completed
+        if (status.status === 'COMPLETED') {
+          toast.success('💰 Cashout completed! Payment has been processed.');
+          clearInterval(statusInterval);
+          
+          // Auto-close modal after 2 seconds
+          setTimeout(() => {
+            onSuccess(); // This will refresh wallet data and close modal
+          }, 2000);
+        } else if (status.status === 'FAILED' || status.status === 'CANCELLED') {
+          toast.error('Cashout was cancelled or failed. Please try again.');
+          clearInterval(statusInterval);
+          
+          // Auto-close after 2 seconds
+          setTimeout(() => {
+            onSuccess();
+          }, 2000);
+        }
+      } catch (err) {
+        console.error('Error checking transaction status:', err);
+      }
+    };
+
+    // Check every 5 seconds
+    statusInterval = setInterval(checkTransactionStatus, 5000);
+
+    return () => clearInterval(statusInterval);
+  }, [cashoutResult, onSuccess]);
 
   if (cashoutResult) {
     return (
@@ -151,13 +233,13 @@ const CashoutModal = ({ walletData, onClose, onSuccess }) => {
 
           {/* Redemption Buttons */}
           <div className="space-y-3 mb-4">
-            {/* MTurk HIT Button (Primary) - Disabled for 5 seconds */}
-            {countdown > 0 ? (
+            {/* MTurk HIT Button (Primary) - Disabled while checking */}
+            {!hitReady ? (
               <div className="block w-full py-4 bg-gray-400 text-white rounded-lg font-bold text-lg cursor-not-allowed flex items-center justify-center gap-3 relative">
                 <div className="absolute inset-0 flex items-center justify-center bg-blue-600 bg-opacity-20 rounded-lg">
-                  <div className="text-center">
-                    <div className="text-3xl font-bold mb-1">{countdown}</div>
-                    <div className="text-sm">Preparing MTurk HIT...</div>
+                  <div className="text-center px-4">
+                    <Loader className="w-8 h-8 mx-auto mb-2 animate-spin" />
+                    <div className="text-sm">{hitStatusMessage}</div>
                   </div>
                 </div>
                 <ExternalLink className="w-6 h-6 opacity-30" />
@@ -200,6 +282,14 @@ const CashoutModal = ({ walletData, onClose, onSuccess }) => {
           <div className="text-xs text-gray-600 space-y-1 mb-4">
             <div>Transaction ID: {cashoutResult.transaction_id}</div>
             <div>Expires: {new Date(cashoutResult.expires_at).toLocaleString()}</div>
+          </div>
+
+          {/* Auto-close notification */}
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4 text-sm text-blue-800">
+            <div className="flex items-center gap-2">
+              <Loader className="w-4 h-4 animate-spin" />
+              <span>Monitoring transaction status... This panel will auto-close when cashout is completed.</span>
+            </div>
           </div>
 
           {/* Close Button */}
