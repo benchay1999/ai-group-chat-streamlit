@@ -59,7 +59,7 @@ const CashoutModal = ({ walletData, onClose, onSuccess }) => {
       }
       
       setCashoutResult(result);
-      setCountdown(5); // Start 5-second countdown
+      setCountdown(10); // Start 10-second countdown
       
     } catch (err) {
       console.error('Cashout error:', err);
