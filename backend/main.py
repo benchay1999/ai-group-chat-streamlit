@@ -2470,23 +2470,20 @@ async def request_cashout(
         print(f"   ✅ Environment: {environment}")
         print(f"   ✅ Worker endpoint: {worker_endpoint}")
         
-        # Generate cashout redemption URLs
-        # For sandbox/testing: Use dev mode (no MTurk HIT needed)
-        # For production: Use MTurk HIT workflow
+        # Generate MTurk HIT URL and testing URL
         
         print(f"🔍 Step 4: Generating redemption URLs...")
         
-        # Direct redemption URL (dev mode - for testing)
-        direct_redemption_url = f"{EXTERNAL_URL.replace('/lobby', '')}/cashout-confirm?dev=true"
+        # MTurk HIT preview URL (for production use)
+        mturk_hit_url = f"{worker_endpoint}/mturk/preview?groupId={mturk_hit_id}"
         
-        # MTurk HIT preview URL (production mode)
-        mturk_preview_url = f"{worker_endpoint}/mturk/preview?groupId={mturk_hit_id}"
+        # Dev/Testing URL (for testing without accepting HIT)
+        # This allows testing the redemption flow without MTurk API calls
+        dev_test_url = f"{EXTERNAL_URL.replace('/lobby', '')}/cashout-confirm?dev=true&code={transaction.redemption_code}"
         
-        # Determine which workflow to show based on environment
-        is_sandbox = environment == 'sandbox'
-        print(f"   ✅ Is sandbox: {is_sandbox}")
-        print(f"   ✅ Direct URL: {direct_redemption_url}")
-        print(f"   ✅ MTurk URL: {mturk_preview_url}")
+        print(f"   ✅ Environment: {environment}")
+        print(f"   ✅ MTurk HIT URL: {mturk_hit_url}")
+        print(f"   ✅ Dev Test URL: {dev_test_url}")
         
         response_data = {
             "success": True,
@@ -2496,39 +2493,18 @@ async def request_cashout(
             "redemption_code": transaction.redemption_code,
             "status": transaction.status.value,
             "expires_at": transaction.expires_at.isoformat() if transaction.expires_at else None,
-            "environment": environment
-        }
-        
-        # Add appropriate URLs and instructions based on environment
-        if is_sandbox:
-            # SANDBOX: Provide dev mode link (easier testing, no MTurk complexity)
-            response_data["redemption_url"] = direct_redemption_url
-            response_data["mturk_preview_url"] = mturk_preview_url  # Optional, for full flow testing
-            response_data["instructions"] = {
-                "mode": "sandbox_testing",
-                "step1": "✅ EASY METHOD (Recommended for Testing):",
-                "step1a": "1. Copy your redemption code above",
-                "step1b": "2. Click the 'Redeem Code' button below",
-                "step1c": "3. Paste code and submit - Done!",
-                "step1d": "(No MTurk HIT needed for sandbox testing)",
-                "step2": "🔧 OR Test Full MTurk Flow (Advanced):",
-                "step2a": "1. Go to MTurk HIT link",
-                "step2b": "2. Accept HIT (or return previous one first)",
-                "step2c": "3. Paste code in HIT interface",
-                "note": "⚠️ If you get 'No HITs available', return your current assignment first!"
-            }
-        else:
-            # PRODUCTION: Use MTurk HIT workflow
-            response_data["hit_url"] = mturk_preview_url
-            response_data["instructions"] = {
-                "mode": "production",
+            "environment": environment,
+            "hit_url": mturk_hit_url,  # MTurk HIT URL (official)
+            "dev_test_url": dev_test_url if environment == 'sandbox' else None,  # Testing URL (sandbox only)
+            "instructions": {
                 "step1": "Copy your redemption code (shown above)",
-                "step2": "Click the MTurk HIT link below",
-                "step3": "Accept the HIT and paste your redemption code",
-                "step4": "Submit the HIT - payment will be processed immediately!",
-                "note": "Your code is valid for 7 days. Don't share it with anyone!",
+                "step2": "Choose redemption method below",
+                "step3": "MTurk HIT: For real MTurk workers (requires accepting HIT)",
+                "step4": "Test Mode: For testing without MTurk (sandbox only)",
+                "note": "Your code is valid for 7 days. Payment processes immediately after redemption.",
                 "troubleshooting": "If you see 'No HITs available', you may have already accepted one. Return it first from your MTurk dashboard."
             }
+        }
         
         print(f"✅ CASHOUT REQUEST SUCCESSFUL")
         print(f"   Transaction ID: {response_data['transaction_id']}")

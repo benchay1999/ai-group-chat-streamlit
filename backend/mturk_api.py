@@ -8,7 +8,7 @@ from typing import Dict, List, Optional
 from decimal import Decimal
 import boto3
 from botocore.exceptions import ClientError
-d
+
 # Use robust environment configuration
 try:
     from . import env_config

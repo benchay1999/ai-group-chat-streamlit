@@ -45,18 +45,17 @@ const CashoutModal = ({ walletData, onClose, onSuccess }) => {
         return;
       }
       
-      // Get the appropriate URL based on environment
-      // Sandbox: redemption_url or mturk_preview_url
-      // Production: hit_url
-      const redemptionLink = result.redemption_url || result.hit_url || result.mturk_preview_url;
-      
-      if (!redemptionLink) {
-        setError('Cashout system not properly configured. Please contact support.');
+      // Validate MTurk HIT URL
+      if (!result.hit_url) {
+        setError('MTurk HIT URL not provided. Please contact support.');
         return;
       }
       
-      // Add the redemption link to result for display
-      result.hit_url = redemptionLink;
+      // Ensure it's a valid MTurk URL (not localhost)
+      if (result.hit_url.includes('localhost') || result.hit_url.includes('127.0.0.1')) {
+        setError('Invalid redemption URL. MTurk HIT URL required.');
+        return;
+      }
       
       setCashoutResult(result);
       
@@ -138,16 +137,39 @@ const CashoutModal = ({ walletData, onClose, onSuccess }) => {
             </div>
           </div>
 
-          {/* MTurk HIT Button */}
-          <a
-            href={cashoutResult.hit_url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="block w-full py-4 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-lg font-bold text-lg hover:from-green-600 hover:to-emerald-700 transition-all shadow-lg hover:shadow-xl flex items-center justify-center gap-3 mb-4"
-          >
-            <ExternalLink className="w-6 h-6" />
-            {cashoutResult.redemption_url ? 'Redeem Code Now' : 'Go to MTurk HIT'}
-          </a>
+          {/* Redemption Buttons */}
+          <div className="space-y-3 mb-4">
+            {/* MTurk HIT Button (Primary) */}
+            <a
+              href={cashoutResult.hit_url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="block w-full py-4 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-lg font-bold text-lg hover:from-green-600 hover:to-emerald-700 transition-all shadow-lg hover:shadow-xl flex items-center justify-center gap-3"
+            >
+              <ExternalLink className="w-6 h-6" />
+              Go to MTurk HIT
+            </a>
+
+            {/* Dev/Test Mode Button (Sandbox only) */}
+            {cashoutResult.dev_test_url && (
+              <>
+                <div className="text-center text-sm text-gray-500 py-2">
+                  — OR (for testing only) —
+                </div>
+                <a
+                  href={cashoutResult.dev_test_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="block w-full py-3 bg-yellow-500 text-white rounded-lg font-semibold hover:bg-yellow-600 transition-all flex items-center justify-center gap-2 border-2 border-yellow-600"
+                >
+                  🧪 Test Mode (Skip MTurk)
+                </a>
+                <div className="bg-yellow-50 border border-yellow-200 rounded p-2 text-xs text-yellow-800">
+                  <strong>Test Mode:</strong> Use this to test redemption without MTurk API. For development/testing only.
+                </div>
+              </>
+            )}
+          </div>
 
           {/* Secondary Info */}
           <div className="text-xs text-gray-600 space-y-1 mb-4">

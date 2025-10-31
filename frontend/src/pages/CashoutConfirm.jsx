@@ -23,6 +23,13 @@ const CashoutConfirm = () => {
     const wid = params.get('workerId');
     const aid = params.get('assignmentId');
     const hid = params.get('hitId');
+    const code = params.get('code'); // Redemption code from URL (dev mode)
+    
+    // Auto-fill redemption code if provided in URL
+    if (code) {
+      setRedemptionCode(code);
+      console.log('✅ Auto-filled redemption code from URL');
+    }
     
     // DEV MODE: Check if we're in development (no real MTurk params)
     const isDevMode = params.get('dev') === 'true' || window.location.hostname === 'localhost';

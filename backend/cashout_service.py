@@ -253,19 +253,39 @@ async def redeem_cashout_code(
         )
         user = user_result.scalar_one()
         
-        print(f"💳 Redeeming code for user {user.user_id}")
-        print(f"   Transaction ID: {transaction.id}")
-        print(f"   Amount: {transaction.amount_gems} gems = ${transaction.amount_usd}")
-        print(f"   Current gem balance: {user.gem_balance}")
-        print(f"   Worker ID: {worker_id}")
-        print(f"   Assignment ID: {assignment_id}")
+        print(f"\n{'='*70}")
+        print(f"💳 PROCESSING REDEMPTION")
+        print(f"{'='*70}")
+        print(f"User: {user.user_id}")
+        print(f"Transaction ID: {transaction.id}")
+        print(f"Amount: {transaction.amount_gems} gems = ${transaction.amount_usd}")
+        print(f"Current gem balance: {user.gem_balance}")
+        print(f"Worker ID: {worker_id}")
+        print(f"Assignment ID: {assignment_id}")
+        print(f"HIT ID: {hit_id}")
         
         # DEVELOPMENT MODE: Check if we're in testing/development
         import os
         mturk_environment = os.getenv('MTURK_ENVIRONMENT', 'sandbox')
-        is_dev_mode = (mturk_environment == 'sandbox' and 
-                      (not assignment_id or assignment_id.startswith('DEV_') or 
-                       assignment_id == 'ASSIGNMENT_ID_NOT_AVAILABLE'))
+        
+        # Dev mode triggers:
+        # 1. Assignment ID is empty or None
+        # 2. Assignment ID starts with DEV_
+        # 3. Assignment ID is the MTurk preview placeholder
+        # 4. Assignment ID contains localhost
+        is_dev_mode = (
+            not assignment_id or 
+            assignment_id.strip() == '' or
+            assignment_id.startswith('DEV_') or 
+            assignment_id == 'ASSIGNMENT_ID_NOT_AVAILABLE' or
+            'localhost' in assignment_id.lower() or
+            assignment_id == 'undefined'
+        )
+        
+        print(f"\n🔍 Payment Processing Mode:")
+        print(f"   MTURK_ENVIRONMENT: {mturk_environment}")
+        print(f"   Assignment ID valid: {bool(assignment_id and assignment_id.strip())}")
+        print(f"   Is dev mode: {is_dev_mode}")
         
         # Approve the assignment on MTurk (skip in dev mode for testing)
         if not is_dev_mode:
@@ -298,8 +318,12 @@ async def redeem_cashout_code(
             
             except Exception as mturk_error:
                 # MTurk API failed - cancel transaction and return gems
-                print(f"❌ MTurk API error: {mturk_error}")
-                print(f"   Cancelling transaction and returning gems...")
+                print(f"\n❌ MTurk API ERROR:")
+                print(f"   Error type: {type(mturk_error).__name__}")
+                print(f"   Error message: {str(mturk_error)}")
+                import traceback
+                print(f"   Stack trace:\n{traceback.format_exc()}")
+                print(f"\n🔄 Cancelling transaction and returning gems...")
                 
                 # Use cancel_cashout_transaction which handles gem return properly
                 await cancel_cashout_transaction(
@@ -308,11 +332,16 @@ async def redeem_cashout_code(
                     reason=f"MTurk payment processing failed: {str(mturk_error)}"
                 )
                 
-                raise CashoutError("Payment processing failed. Your gems have been returned to your wallet. Please try again or contact support.")
+                print(f"{'='*70}\n")
+                raise CashoutError(f"Payment processing failed: {str(mturk_error)}. Your gems have been returned to your wallet. Please try again or contact support.")
         else:
-            print(f"🧪 DEV MODE: Skipping MTurk API call for testing")
+            print(f"\n🧪 DEV MODE ACTIVE")
+            print(f"   Skipping MTurk API calls for testing")
             print(f"   Assignment ID: {assignment_id}")
-            print(f"   In production, this would approve assignment and send payment")
+            print(f"   In production, this would:")
+            print(f"     1. Approve MTurk assignment")
+            print(f"     2. Send payment: ${transaction.amount_usd}")
+            print(f"   ✅ Simulating successful payment...")
         
         # Update transaction to completed
         transaction.status = CashoutStatus.COMPLETED
@@ -330,18 +359,21 @@ async def redeem_cashout_code(
         await db.refresh(transaction)
         await db.refresh(user)
         
-        print(f"✅ Cashout completed successfully!")
+        print(f"\n✅ CASHOUT COMPLETED SUCCESSFULLY!")
         print(f"   User: {user.user_id}")
         print(f"   Amount: ${transaction.amount_usd} ({transaction.amount_gems} gems)")
         print(f"   Total cashed out: {old_total_cashed_out} → {user.total_gems_cashed_out} gems")
         print(f"   Current balance: {user.gem_balance} gems")
         print(f"   Worker: {worker_id}")
+        print(f"   Mode: {'DEV MODE' if is_dev_mode else 'PRODUCTION MTurk'}")
+        print(f"{'='*70}\n")
         
         return {
             "success": True,
             "amount_usd": float(transaction.amount_usd),
             "amount_gems": transaction.amount_gems,
-            "message": f"Payment of ${transaction.amount_usd} approved! Funds will appear in your MTurk account."
+            "message": f"Payment of ${transaction.amount_usd} approved! Funds will appear in your MTurk account.",
+            "dev_mode": is_dev_mode
         }
         
     except CashoutError:
