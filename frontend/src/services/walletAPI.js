@@ -10,7 +10,7 @@ import api from './api';
  * @returns {Promise<Object>} Wallet data
  */
 export const getWalletBalance = async () => {
-  const response = await api.get('/wallet/balance');
+  const response = await api.get('/api/wallet/balance');
   return response.data;
 };
 
@@ -20,7 +20,7 @@ export const getWalletBalance = async () => {
  * @returns {Promise<Object>} Cashout transaction details
  */
 export const requestCashout = async (amountUsd) => {
-  const response = await api.post('/wallet/cashout', {
+  const response = await api.post('/api/wallet/cashout', {
     amount_usd: amountUsd
   });
   return response.data;
@@ -31,7 +31,7 @@ export const requestCashout = async (amountUsd) => {
  * @returns {Promise<Object>} Transaction history
  */
 export const getCashoutHistory = async () => {
-  const response = await api.get('/wallet/cashout-history');
+  const response = await api.get('/api/wallet/cashout-history');
   return response.data;
 };
 
@@ -41,7 +41,7 @@ export const getCashoutHistory = async () => {
  * @returns {Promise<Object>} Transaction status
  */
 export const getCashoutStatus = async (transactionId) => {
-  const response = await api.get(`/wallet/cashout-status/${transactionId}`);
+  const response = await api.get(`/api/wallet/cashout-status/${transactionId}`);
   return response.data;
 };
 
@@ -51,7 +51,7 @@ export const getCashoutStatus = async (transactionId) => {
  * @returns {Promise<Object>} Update result
  */
 export const updateMTurkWorkerId = async (workerId) => {
-  const response = await api.put('/profile/mturk-worker-id', {
+  const response = await api.put('/api/profile/mturk-worker-id', {
     worker_id: workerId
   });
   return response.data;
@@ -62,7 +62,7 @@ export const updateMTurkWorkerId = async (workerId) => {
  * @returns {Promise<Object>} User profile
  */
 export const getUserProfile = async () => {
-  const response = await api.get('/profile');
+  const response = await api.get('/api/profile');
   return response.data;
 };
 

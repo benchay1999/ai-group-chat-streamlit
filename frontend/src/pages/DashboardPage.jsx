@@ -13,7 +13,7 @@ import {
   TrendingUp, Zap, Star, Sparkles, Award, Gem, Wallet, AlertCircle, ArrowRight
 } from 'lucide-react';
 import toast from 'react-hot-toast';
-import axios from '../services/api';
+import api from '../services/api';
 import EarningsCounter from '../components/EarningsCounter';
 import EarningsChart from '../components/EarningsChart';
 import { getWalletBalance } from '../services/walletAPI';
@@ -52,7 +52,7 @@ const DashboardPage = () => {
   const loadEarnings = async () => {
     try {
       setEarningsLoading(true);
-      const response = await axios.get('/api/users/earnings');
+      const response = await api.get('/api/users/earnings');
       setEarnings(response.data);
     } catch (error) {
       console.error('Failed to load earnings:', error);

@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { format } from 'date-fns';
 import { TrendingUp, DollarSign, Activity, Database } from 'lucide-react';
-import axios from '../services/api';
+import api from '../services/api';
 
 const AdminAnalyticsPage = () => {
   const [timeRange, setTimeRange] = useState('7d');
@@ -18,7 +18,7 @@ const AdminAnalyticsPage = () => {
     try {
       setLoading(true);
       setError(null);
-      const response = await axios.get(`/api/admin/analytics?time_range=${timeRange}`);
+      const response = await api.get(`/api/admin/analytics?time_range=${timeRange}`);
       setAnalytics(response.data);
     } catch (err) {
       setError(err.response?.data?.detail || 'Failed to load analytics');

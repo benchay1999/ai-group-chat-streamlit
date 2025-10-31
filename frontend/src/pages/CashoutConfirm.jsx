@@ -47,7 +47,7 @@ const CashoutConfirm = () => {
     setError(null);
     
     try {
-      const response = await api.post('/wallet/redeem', {
+      const response = await api.post('/api/wallet/redeem', {
         redemption_code: redemptionCode,
         worker_id: workerId,
         assignment_id: assignmentId,
