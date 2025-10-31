@@ -16,8 +16,7 @@ from backend.database import User, CashoutTransaction, CashoutStatus
 from backend.mturk_api import get_mturk_client
 from backend.config import (
     GEMS_PER_DOLLAR,
-    MINIMUM_CASHOUT_AMOUNT,
-    CASHOUT_HIT_DURATION
+    MINIMUM_CASHOUT_AMOUNT
 )
 
 
@@ -236,38 +235,49 @@ async def redeem_cashout_code(
         )
         user = user_result.scalar_one()
         
-        # Approve the assignment on MTurk
-        try:
-            mturk_client = get_mturk_client()
-            
-            # Calculate if we need to send a bonus (if amount > base pay)
-            base_pay = mturk_client.base_pay
-            bonus_amount = max(Decimal('0'), transaction.amount_usd - base_pay)
-            
-            # Approve assignment
-            mturk_client.approve_assignment(
-                assignment_id=assignment_id,
-                requester_feedback=f"ChatGame payout of ${transaction.amount_usd} approved. Thank you!"
-            )
-            
-            # Send bonus if needed
-            if bonus_amount > 0:
-                mturk_client.send_bonus(
-                    worker_id=worker_id,
-                    assignment_id=assignment_id,
-                    bonus_amount=bonus_amount,
-                    reason=f"ChatGame payout bonus (total: ${transaction.amount_usd})"
-                )
+        # DEVELOPMENT MODE: Check if we're in testing/development
+        import os
+        mturk_environment = os.getenv('MTURK_ENVIRONMENT', 'sandbox')
+        is_dev_mode = (mturk_environment == 'sandbox' and 
+                      (not assignment_id or assignment_id.startswith('DEV_') or 
+                       assignment_id == 'ASSIGNMENT_ID_NOT_AVAILABLE'))
         
-        except Exception as mturk_error:
-            # MTurk API failed - return gems to user
-            print(f"❌ MTurk API error: {mturk_error}")
-            await cancel_cashout_transaction(
-                transaction=transaction,
-                db=db,
-                reason=f"MTurk payment processing failed: {str(mturk_error)}"
-            )
-            raise CashoutError("Payment processing failed. Your gems have been returned to your wallet. Please try again or contact support.")
+        # Approve the assignment on MTurk (skip in dev mode for testing)
+        if not is_dev_mode:
+            try:
+                mturk_client = get_mturk_client()
+                
+                # Calculate if we need to send a bonus (if amount > base pay)
+                base_pay = mturk_client.base_pay
+                bonus_amount = max(Decimal('0'), transaction.amount_usd - base_pay)
+                
+                # Approve assignment
+                mturk_client.approve_assignment(
+                    assignment_id=assignment_id,
+                    requester_feedback=f"ChatGame payout of ${transaction.amount_usd} approved. Thank you!"
+                )
+                
+                # Send bonus if needed
+                if bonus_amount > 0:
+                    mturk_client.send_bonus(
+                        worker_id=worker_id,
+                        assignment_id=assignment_id,
+                        bonus_amount=bonus_amount,
+                        reason=f"ChatGame payout bonus (total: ${transaction.amount_usd})"
+                    )
+            
+            except Exception as mturk_error:
+                # MTurk API failed - return gems to user
+                print(f"❌ MTurk API error: {mturk_error}")
+                await cancel_cashout_transaction(
+                    transaction=transaction,
+                    db=db,
+                    reason=f"MTurk payment processing failed: {str(mturk_error)}"
+                )
+                raise CashoutError("Payment processing failed. Your gems have been returned to your wallet. Please try again or contact support.")
+        else:
+            print(f"🧪 DEV MODE: Skipping MTurk API call for testing (assignment_id: {assignment_id})")
+            print(f"   In production, this would approve assignment and send payment")
         
         # Update transaction
         transaction.status = CashoutStatus.COMPLETED

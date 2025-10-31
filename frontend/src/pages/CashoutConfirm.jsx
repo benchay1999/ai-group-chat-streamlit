@@ -24,12 +24,24 @@ const CashoutConfirm = () => {
     const aid = params.get('assignmentId');
     const hid = params.get('hitId');
     
-    setWorkerId(wid || '');
-    setAssignmentId(aid || '');
-    setHitId(hid || '');
+    // DEV MODE: Check if we're in development (no real MTurk params)
+    const isDevMode = params.get('dev') === 'true' || window.location.hostname === 'localhost';
     
-    // Check if this is preview mode
-    setIsPreview(aid === 'ASSIGNMENT_ID_NOT_AVAILABLE' || !aid);
+    if (isDevMode && !aid) {
+      // Use fake dev IDs for testing
+      setWorkerId(wid || 'DEV_WORKER_TEST');
+      setAssignmentId('DEV_ASSIGNMENT_TEST');
+      setHitId(hid || 'DEV_HIT_TEST');
+      setIsPreview(false); // Allow submission in dev mode
+      console.log('🧪 DEV MODE: Using test MTurk IDs');
+    } else {
+      setWorkerId(wid || '');
+      setAssignmentId(aid || '');
+      setHitId(hid || '');
+      
+      // Check if this is preview mode
+      setIsPreview(aid === 'ASSIGNMENT_ID_NOT_AVAILABLE' || !aid);
+    }
   }, []);
 
   const handleSubmit = async () => {
@@ -56,10 +68,15 @@ const CashoutConfirm = () => {
       
       setSuccess(response.data);
       
-      // Auto-submit to MTurk after 3 seconds
-      setTimeout(() => {
-        submitToMTurk();
-      }, 3000);
+      // Auto-submit to MTurk after 3 seconds (skip in dev mode)
+      const isDevMode = assignmentId.startsWith('DEV_') || window.location.hostname === 'localhost';
+      if (!isDevMode) {
+        setTimeout(() => {
+          submitToMTurk();
+        }, 3000);
+      } else {
+        console.log('🧪 DEV MODE: Skipping MTurk submission');
+      }
       
     } catch (err) {
       console.error('Redemption error:', err);
@@ -98,6 +115,8 @@ const CashoutConfirm = () => {
   };
 
   if (success) {
+    const isDevMode = assignmentId.startsWith('DEV_') || window.location.hostname === 'localhost';
+    
     return (
       <div className="min-h-screen bg-gradient-to-br from-green-50 to-emerald-50 p-4 flex items-center justify-center">
         <div className="bg-white rounded-xl p-8 max-w-md w-full shadow-lg">
@@ -106,14 +125,26 @@ const CashoutConfirm = () => {
               <CheckCircle className="w-16 h-16 text-white" />
             </div>
             <h1 className="text-3xl font-bold text-green-800 mb-3">
-              Payment Approved! 🎉
+              {isDevMode ? 'Redemption Successful! 🧪' : 'Payment Approved! 🎉'}
             </h1>
             <p className="text-lg text-green-700 mb-4">
-              ${success.amount_usd} has been approved
+              ${success.amount_usd} {isDevMode ? 'redeemed (dev mode)' : 'has been approved'}
             </p>
-            <p className="text-sm text-gray-600 mb-6">
-              Submitting HIT to MTurk... You can close this page once redirected.
-            </p>
+            {!isDevMode && (
+              <p className="text-sm text-gray-600 mb-6">
+                Submitting HIT to MTurk... You can close this page once redirected.
+              </p>
+            )}
+            {isDevMode && (
+              <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 mb-4 w-full">
+                <p className="text-sm text-yellow-800 font-semibold">
+                  🧪 Development Mode
+                </p>
+                <p className="text-xs text-yellow-700 mt-1">
+                  No actual MTurk payment processed. This is for testing only.
+                </p>
+              </div>
+            )}
             <div className="bg-green-50 rounded-lg p-4 w-full">
               <p className="text-sm text-green-800">
                 {success.message}

@@ -69,6 +69,7 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["*"],  # Allow all headers to be exposed
 )
 
 
@@ -739,7 +740,7 @@ async def process_single_ai_message(room_code: str, ai_id: str):
         rooms[room_code]['state'] = current_state
         
         # Define typing speed (300 chars/minute = 5 chars/sec)
-        typing_speed_chars_per_sec = 255 / 60  # 5 characters per second
+        typing_speed_chars_per_sec = 290 / 60  # 5 characters per second
         
         # DEFENSE: Check phase before starting
         current_state = rooms[room_code]['state']
@@ -1104,72 +1105,157 @@ async def save_session_stats(room_code: str, state: dict, current_user: Optional
     # Calculate earnings based on performance
     from .earnings import calculate_earnings
     
-    # Get player-specific performance data if user is authenticated
+    # Will be set if current_user is in the game (for legacy session data compatibility)
     calculated_earnings_value = None
-    if current_user:
-        # Find the human player's data
-        human_player = None
-        player_user_map = room_data.get('player_user_map', {})
-        for player in state.get('players', []):
-            if player.get('role') == 'human':
-                # Check if this human player is the current user
-                mapped_user_id = player_user_map.get(player['id'])
-                if mapped_user_id and str(current_user.id) == mapped_user_id:
-                    human_player = player
-                    break
-        
-        if human_player:
-            # Count messages from this player
-            num_messages = sum(1 for msg in state.get('chat_history', []) if msg.get('sender') == human_player['id'])
-            
-            # Check if player voted
-            voted = human_player['id'] in state.get('votes', {})
-            
-            # Check if player won (correctly identified AI)
-            won_game = False
-            if state.get('selected_suspect') and state.get('suspect_role') == 'ai':
-                # Player wins if they voted for an AI
-                player_vote = state.get('votes', {}).get(human_player['id'])
-                if player_vote:
-                    for p in state.get('players', []):
-                        if p['id'] == player_vote and p.get('role') == 'ai':
-                            won_game = True
-                            break
-            
-            calculated_earnings_value, earnings_breakdown = calculate_earnings(
-                game_completed=True,
-                won_game=won_game,
-                num_messages=num_messages,
-                discussion_duration=discussion_duration,
-                voted=voted
-            )
-            
-            print(f"💵 Calculated earnings for {human_player['id']}: ${calculated_earnings_value}")
-            print(f"💡 Breakdown: {earnings_breakdown}")
     
     # Save to PostgreSQL
     try:
         from .database import async_session_maker
         from .config import GEMS_PER_DOLLAR
+        from sqlalchemy import select as sql_select
+        import traceback
+        
         async with async_session_maker() as db:
-            # Credit gems to user if they have calculated earnings
-            if current_user and calculated_earnings_value:
-                # Get the user object from this database session
-                from sqlalchemy import select as sql_select
-                user_result = await db.execute(
-                    sql_select(User).where(User.id == current_user.id)
+            # IDEMPOTENCY CHECK: Check if this session already exists
+            # Use room_code + completion timestamp as unique identifier
+            timestamp = int(payload['ended_at'])
+            existing_check = await db.execute(
+                sql_select(DBSession).where(
+                    DBSession.room_code == room_code,
+                    DBSession.stats_file_path == path
                 )
-                db_user = user_result.scalar_one()
+            )
+            existing_session = existing_check.scalar_one_or_none()
+            
+            if existing_session:
+                print(f"⚠️ Session for room {room_code} already exists (ID: {existing_session.id}), skipping duplicate save")
+                return {
+                    'session_id': str(existing_session.id),
+                    'completion_key': existing_session.completion_key,
+                    'already_existed': True
+                }
+            
+            # Credit gems to ALL authenticated human players in the game
+            player_user_map = room_data.get('player_user_map', {})
+            print(f"💎 Starting gem credit process for {len(player_user_map)} mapped players")
+            
+            # Track successfully credited players for session data
+            credited_players = []
+            
+            # Process each human player
+            for player in state.get('players', []):
+                if player.get('role') != 'human':
+                    continue
                 
-                # Convert USD to gems (1000 gems = $1.00)
-                gems_earned = int(float(calculated_earnings_value) * GEMS_PER_DOLLAR)
+                player_id = player['id']
+                mapped_user_id_str = player_user_map.get(player_id)
                 
-                # Credit gems to user's balance
-                db_user.gem_balance += gems_earned
-                db_user.total_gems_earned += gems_earned
+                # Skip unauthenticated players
+                if not mapped_user_id_str:
+                    print(f"⚠️ Player {player_id} is not authenticated, skipping gem credit")
+                    continue
                 
-                print(f"💎 Credited {gems_earned} gems to user {db_user.user_id} (${calculated_earnings_value})")
-                print(f"   New balance: {db_user.gem_balance} gems")
+                # Calculate this player's earnings
+                num_messages = sum(1 for msg in state.get('chat_history', []) if msg.get('sender') == player_id)
+                voted = player_id in state.get('votes', {})
+                
+                # Check if player won
+                won_game = False
+                if num_humans == 1:
+                    # Single-player game: check if they voted for an AI
+                    player_vote = state.get('votes', {}).get(player_id)
+                    if player_vote:
+                        for p in state.get('players', []):
+                            if p['id'] == player_vote and p.get('role') == 'ai':
+                                won_game = True
+                                break
+                else:
+                    # Multi-player game: use original logic
+                    if state.get('selected_suspect') and state.get('suspect_role') == 'ai':
+                        player_vote = state.get('votes', {}).get(player_id)
+                        if player_vote:
+                            for p in state.get('players', []):
+                                if p['id'] == player_vote and p.get('role') == 'ai':
+                                    won_game = True
+                                    break
+                
+                player_earnings_value, earnings_breakdown = calculate_earnings(
+                    game_completed=True,
+                    won_game=won_game,
+                    num_messages=num_messages,
+                    discussion_duration=discussion_duration,
+                    voted=voted
+                )
+                
+                print(f"💵 Calculated earnings for {player_id}: ${player_earnings_value}")
+                print(f"💡 Breakdown: {earnings_breakdown}")
+                
+                # Get the user object and credit gems
+                try:
+                    # CRITICAL FIX: Convert string UUID to UUID object for SQL comparison
+                    try:
+                        mapped_user_uuid = uuid_lib.UUID(mapped_user_id_str)
+                    except (ValueError, AttributeError) as uuid_err:
+                        print(f"❌ Invalid UUID format for player {player_id}: {mapped_user_id_str}, error: {uuid_err}")
+                        continue
+                    
+                    user_result = await db.execute(
+                        sql_select(User).where(User.id == mapped_user_uuid)
+                    )
+                    db_user = user_result.scalar_one_or_none()
+                    
+                    if not db_user:
+                        print(f"❌ User with UUID {mapped_user_uuid} not found in database")
+                        continue
+                    
+                    # Convert USD to gems (1000 gems = $1.00)
+                    gems_earned = int(float(player_earnings_value) * GEMS_PER_DOLLAR)
+                    
+                    # VALIDATION: Ensure gems_earned is reasonable
+                    if gems_earned < 0:
+                        print(f"⚠️ Negative gems calculated ({gems_earned}), setting to 0")
+                        gems_earned = 0
+                    elif gems_earned > 100000:  # Sanity check: max 100,000 gems per game ($100)
+                        print(f"⚠️ Suspiciously high gems ({gems_earned}), capping at 100,000")
+                        gems_earned = 100000
+                    
+                    # TEMPORARY: Add 2000 gems bonus for single-player games (for MTurk testing)
+                    # TODO: Remove this temporary bonus after MTurk payment system is verified
+                    if num_humans == 1:
+                        gems_earned += 2000
+                        print(f"🎁 BONUS: Added 2000 gems for single-player game (temporary for MTurk testing)")
+                    
+                    # Validate final amount
+                    if gems_earned <= 0:
+                        print(f"⚠️ No gems to credit for player {player_id} (amount: {gems_earned})")
+                        continue
+                    
+                    # Credit gems to user's balance (ATOMIC OPERATION)
+                    old_balance = db_user.gem_balance
+                    db_user.gem_balance += gems_earned
+                    db_user.total_gems_earned += gems_earned
+                    
+                    print(f"💎 Credited {gems_earned} gems to user {db_user.user_id} (${player_earnings_value})")
+                    print(f"   Balance: {old_balance} → {db_user.gem_balance} gems")
+                    
+                    # Track for session data (use first authenticated player's earnings for legacy)
+                    credited_players.append({
+                        'player_id': player_id,
+                        'user_id': str(mapped_user_uuid),
+                        'gems_earned': gems_earned,
+                        'earnings_usd': float(player_earnings_value)
+                    })
+                    
+                    # Store for legacy session.calculated_earnings field
+                    if not calculated_earnings_value and current_user and str(current_user.id) == str(mapped_user_uuid):
+                        calculated_earnings_value = player_earnings_value
+                        
+                except Exception as e:
+                    print(f"❌ Error crediting gems to player {player_id} (user {mapped_user_id_str}): {e}")
+                    print(f"   Stack trace: {traceback.format_exc()}")
+                    continue
+            
+            print(f"✅ Gem credit complete: {len(credited_players)}/{len(player_user_map)} players credited")
             
             # Build session data dict
             session_data = {
