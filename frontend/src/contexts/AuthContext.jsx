@@ -49,6 +49,37 @@ export const AuthProvider = ({ children }) => {
     loadUser();
   }, []);
 
+  // Listen for logout events from other tabs
+  useEffect(() => {
+    const handleStorageChange = (e) => {
+      // Only use the explicit logout_event for cross-tab synchronization
+      // This prevents duplicate processing when multiple storage events fire
+      if (e.key === 'logout_event' && e.newValue) {
+        console.log('Logout detected from another tab');
+        
+        // Clear all auth and session data from localStorage
+        localStorage.removeItem('access_token');
+        localStorage.removeItem('user');
+        localStorage.removeItem('mturk_context');
+        localStorage.removeItem('ai-group-chat-active-session'); // Clear active game session
+        
+        // Update authentication state
+        setUser(null);
+        setIsAuthenticated(false);
+        
+        // Notify user
+        toast.info('You have been logged out from another tab');
+      }
+    };
+
+    // Add storage event listener (only fires for changes from other tabs)
+    window.addEventListener('storage', handleStorageChange);
+
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+    };
+  }, []);
+
   const login = async (userId, password) => {
     try {
       const data = await authAPI.login(userId, password);
@@ -88,9 +119,18 @@ export const AuthProvider = ({ children }) => {
   };
 
   const logout = () => {
+    // Clear all auth and session data
     localStorage.removeItem('access_token');
     localStorage.removeItem('user');
     localStorage.removeItem('mturk_context');
+    localStorage.removeItem('ai-group-chat-active-session'); // Clear active game session
+    
+    // Trigger logout event for other tabs
+    // Use timestamp to ensure the event always fires (different value each time)
+    localStorage.setItem('logout_event', Date.now().toString());
+    localStorage.removeItem('logout_event');
+    
+    // Update state in current tab
     setUser(null);
     setIsAuthenticated(false);
     toast.success('Logged out successfully');

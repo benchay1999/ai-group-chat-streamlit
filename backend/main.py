@@ -153,7 +153,178 @@ async def startup_event():
     if not config_status['cashout_hit_id_configured']:
         print("⚠️  CASHOUT SYSTEM NOT CONFIGURED - Cashout requests will fail!")
     
+    # Start periodic room cleanup task
+    asyncio.create_task(periodic_room_cleanup())
+    print("🧹 Started periodic room cleanup task")
+    
+    # Start room health monitoring task
+    asyncio.create_task(monitor_room_health())
+    print("🏥 Started room health monitoring task")
+    
     print("🚀 Application started successfully")
+
+
+async def periodic_room_cleanup():
+    """
+    Background task to clean up abandoned rooms.
+    Runs every 10 minutes.
+    """
+    while True:
+        try:
+            await asyncio.sleep(600)  # 10 minutes
+            
+            print("\n🧹 Running periodic room cleanup...")
+            current_time = time.time()
+            rooms_to_delete = []
+            
+            for room_code, room_data in list(rooms.items()):
+                room_status = room_data.get('room_status', '')
+                created_at = room_data.get('created_at', 0)
+                age_minutes = (current_time - created_at) / 60
+                
+                assigned_humans = get_assigned_humans(room_data)
+                connections = room_data.get('connections', {})
+                
+                # Rule 1: Waiting rooms with no assigned humans for >60 minutes
+                if room_status == 'waiting':
+                    if len(assigned_humans) == 0 and age_minutes > 60:
+                        print(f"🗑️  Cleanup: Waiting room {room_code} abandoned for {age_minutes:.1f}m (no players)")
+                        rooms_to_delete.append(room_code)
+                        continue
+                    # Rule 1b: Waiting rooms with assigned humans but no connections for >30 minutes
+                    if len(connections) == 0 and age_minutes > 30:
+                        print(f"🗑️  Cleanup: Waiting room {room_code} abandoned for {age_minutes:.1f}m (no connections)")
+                        rooms_to_delete.append(room_code)
+                        continue
+                
+                # Rule 2: In-progress rooms with no active connections for >30 minutes
+                if room_status == 'in_progress':
+                    if len(connections) == 0 and age_minutes > 30:
+                        print(f"🗑️  Cleanup: In-progress room {room_code} abandoned for {age_minutes:.1f}m")
+                        rooms_to_delete.append(room_code)
+                        continue
+                
+                # Rule 3: Abandoned rooms with no activity for >30 minutes
+                if room_status == 'abandoned':
+                    if len(connections) == 0 and age_minutes > 30:
+                        print(f"🗑️  Cleanup: Abandoned room {room_code} aged {age_minutes:.1f}m")
+                        rooms_to_delete.append(room_code)
+                        continue
+                
+                # Rule 4: Completed rooms older than 2 hours
+                if room_status == 'completed' and age_minutes > 120:
+                    print(f"🗑️  Cleanup: Completed room {room_code} aged {age_minutes:.1f}m")
+                    rooms_to_delete.append(room_code)
+                    continue
+            
+            # Delete identified rooms (with lock protection to avoid race conditions)
+            for room_code in rooms_to_delete:
+                # Try to acquire lock before deleting (with timeout to avoid deadlock)
+                try:
+                    # Initialize lock if it doesn't exist (shouldn't happen but be defensive)
+                    if room_code not in room_locks:
+                        room_locks[room_code] = asyncio.Lock()
+                    
+                    # Try to acquire lock with timeout (using wait_for for Python 3.7+ compatibility)
+                    lock = room_locks[room_code]
+                    acquired = await asyncio.wait_for(lock.acquire(), timeout=5.0)
+                    try:
+                        if room_code in rooms:
+                            # Clean up player_user_map entries
+                            player_user_map = rooms[room_code].get('player_user_map', {})
+                            if player_user_map:
+                                print(f"🗑️  Cleaning up {len(player_user_map)} player_user_map entries from {room_code}")
+                            
+                            del rooms[room_code]
+                        if room_code in room_locks:
+                            # Note: We can't delete the lock while holding it, so we'll leave it
+                            # It will be cleaned up on next iteration or eventually garbage collected
+                            pass
+                        print(f"✅ Cleaned up room {room_code}")
+                    finally:
+                        lock.release()
+                except asyncio.TimeoutError:
+                    print(f"⚠️  Timeout acquiring lock for room {room_code}, will retry next cleanup cycle")
+                except Exception as e:
+                    print(f"❌ Error cleaning up room {room_code}: {e}")
+            
+            if rooms_to_delete:
+                print(f"🧹 Cleanup complete: Removed {len(rooms_to_delete)} rooms")
+            else:
+                print("🧹 Cleanup complete: No rooms to remove")
+                
+        except Exception as e:
+            print(f"❌ Error in periodic cleanup: {e}")
+            import traceback
+            traceback.print_exc()
+
+
+async def monitor_room_health():
+    """
+    Background task to monitor room health and detect inconsistencies.
+    Runs every 1 minute.
+    """
+    while True:
+        try:
+            await asyncio.sleep(60)  # 1 minute
+            
+            print("\n🏥 Running room health check...")
+            current_time = time.time()
+            issues_found = 0
+            
+            for room_code, room_data in list(rooms.items()):
+                room_status = room_data.get('room_status', '')
+                
+                # Get all relevant lists
+                assigned_humans = get_assigned_humans(room_data)
+                connected_humans = get_connected_humans(room_data)
+                connections = room_data.get('connections', {})
+                player_user_map = room_data.get('player_user_map', {})
+                player_heartbeat = room_data.get('player_heartbeat', {})
+                
+                # Check 1: Inactive players (no heartbeat for >5 minutes)
+                inactive_players = []
+                for player_id in assigned_humans:
+                    last_heartbeat = player_heartbeat.get(player_id, 0)
+                    if current_time - last_heartbeat > 300:  # 5 minutes
+                        inactive_players.append(player_id)
+                
+                if inactive_players and room_status == 'in_progress':
+                    print(f"⚠️  Room {room_code}: {len(inactive_players)} inactive players (no heartbeat >5min)")
+                    
+                    # If ALL players are inactive, transition to abandoned state
+                    if len(inactive_players) == len(assigned_humans) and len(connections) == 0:
+                        print(f"🚨 Room {room_code}: All players inactive, transitioning to 'abandoned'")
+                        room_data['room_status'] = 'abandoned'
+                        issues_found += 1
+                
+                # Check 2: Duplicate player IDs in assigned_humans
+                if len(assigned_humans) != len(set(assigned_humans)):
+                    duplicates = [p for p in assigned_humans if assigned_humans.count(p) > 1]
+                    print(f"🚨 Room {room_code}: DUPLICATE players in assigned_humans: {duplicates}")
+                    issues_found += 1
+                
+                # Check 3: player_user_map inconsistency
+                for player_id in player_user_map.keys():
+                    if player_id not in assigned_humans:
+                        print(f"⚠️  Room {room_code}: Player {player_id} in player_user_map but not in assigned_humans")
+                        issues_found += 1
+                
+                # Check 4: Connections without assigned slots
+                for player_id in connections.keys():
+                    if player_id not in assigned_humans:
+                        print(f"⚠️  Room {room_code}: Player {player_id} connected but not in assigned_humans")
+                        issues_found += 1
+            
+            if issues_found == 0:
+                print("🏥 Health check complete: All rooms healthy")
+            else:
+                print(f"🏥 Health check complete: {issues_found} issues detected")
+                
+        except Exception as e:
+            print(f"❌ Error in room health monitoring: {e}")
+            import traceback
+            traceback.print_exc()
 
 
 @app.on_event("shutdown")
@@ -230,18 +401,108 @@ rooms: Dict[str, Dict] = {}
 #     'tasks': [],
 #     'ai_processing_agents': set(),
 #     'ai_lock': asyncio.Lock(),
-#     'room_name': str,          # Display name for the room
-#     'max_humans': int,          # Maximum human players (1-4)
-#     'total_players': int,       # Total players including AI (default 5)
-#     'room_status': str,         # 'waiting' | 'in_progress' | 'completed'
-#     'created_at': float,        # Timestamp
-#     'creator_id': str,          # Creator's player ID
-#     'current_humans': List[str] # List of joined human player IDs
+#     'room_name': str,                  # Display name for the room
+#     'max_humans': int,                  # Maximum human players (1-4)
+#     'total_players': int,               # Total players including AI (default 5)
+#     'room_status': str,                 # 'waiting' | 'in_progress' | 'abandoned' | 'resuming' | 'completed'
+#     'created_at': float,                # Timestamp
+#     'creator_id': str,                  # Creator's player ID
+#     'assigned_humans': List[str],       # Players with permanent slots (formerly current_humans)
+#     'current_humans': List[str],        # DEPRECATED - use assigned_humans (kept for backward compat)
+#     'connected_humans': List[str],      # Currently connected players (internal use only, never expose to clients)
+#     'player_user_map': Dict[str, str],  # Maps player_id -> user_id for authenticated users
+#     'permanently_left': Set[str],       # Players who explicitly left (cannot rejoin)
+#     'player_last_activity': Dict[str, float],  # Maps player_id -> last activity timestamp
+#     'player_heartbeat': Dict[str, float],      # Maps player_id -> last heartbeat timestamp
+#     'available_numbers': List[int],     # Player numbers not yet assigned
+#     'human_overflow_counter': int,      # Counter for H1, H2, etc. fallback numbering
+#     'language': str,                    # Room language ('english' or 'korean')
+#     'discussion_duration': int,         # Discussion phase duration in seconds
+#     'voting_duration': int              # Voting phase duration in seconds
 #   }
 # }
 
 # Room locks for preventing race conditions in AI processing
 room_locks: Dict[str, asyncio.Lock] = {}
+
+
+# ============================================================================
+# Room Helper Functions for Backward Compatibility
+# ============================================================================
+
+def get_assigned_humans(room: Dict) -> List[str]:
+    """
+    Get the list of assigned human players with backward compatibility.
+    Tries 'assigned_humans' first, falls back to 'current_humans' for old rooms.
+    
+    Args:
+        room: Room dictionary
+    
+    Returns:
+        List of player IDs with permanent room slots
+    """
+    # New field takes precedence
+    if 'assigned_humans' in room and room['assigned_humans']:
+        return room['assigned_humans']
+    # Fall back to deprecated field
+    return room.get('current_humans', [])
+
+
+def get_connected_humans(room: Dict) -> List[str]:
+    """
+    Get the list of currently connected human players (internal use only).
+    This should NEVER be exposed to clients to maintain player anonymity.
+    
+    Args:
+        room: Room dictionary
+    
+    Returns:
+        List of currently connected player IDs
+    """
+    return room.get('connected_humans', [])
+
+
+def sync_assigned_and_current_humans(room: Dict):
+    """
+    Synchronize assigned_humans and current_humans for backward compatibility.
+    Call this after modifying assigned_humans to keep current_humans in sync.
+    
+    Args:
+        room: Room dictionary
+    """
+    room['current_humans'] = room.get('assigned_humans', []).copy()
+
+
+def update_player_activity(room: Dict, player_id: str):
+    """
+    Update the last activity timestamp for a player.
+    Call this when a player sends a message, votes, or performs any action.
+    
+    Args:
+        room: Room dictionary
+        player_id: Player identifier
+    """
+    current_time = time.time()
+    if 'player_last_activity' not in room:
+        room['player_last_activity'] = {}
+    room['player_last_activity'][player_id] = current_time
+
+
+def update_player_heartbeat(room: Dict, player_id: str):
+    """
+    Update the heartbeat timestamp for a player.
+    Call this when receiving a heartbeat ping from the client.
+    
+    Args:
+        room: Room dictionary
+        player_id: Player identifier
+    """
+    current_time = time.time()
+    if 'player_heartbeat' not in room:
+        room['player_heartbeat'] = {}
+    room['player_heartbeat'][player_id] = current_time
+    # Heartbeat also counts as activity
+    update_player_activity(room, player_id)
 
 
 def generate_room_code() -> str:
@@ -1596,8 +1857,14 @@ async def websocket_endpoint(websocket: WebSocket, room_code: str, player_id: st
             'created_at': time.time(),
             'creator_id': player_id,
             'player_user_map': {},  # Maps player_id -> user_id (for authenticated users)
-            'current_humans': [],
+            'current_humans': [],  # DEPRECATED - kept for backward compatibility
+            'assigned_humans': [],  # Players with permanent slots
+            'connected_humans': [],  # Currently connected (internal use only)
+            'permanently_left': set(),  # Players who explicitly left
+            'player_last_activity': {},  # player_id -> timestamp
+            'player_heartbeat': {},  # player_id -> timestamp
             'available_numbers': available_numbers,
+            'human_overflow_counter': 0,  # Counter for H1, H2 fallback numbering
             'discussion_duration': DISCUSSION_TIME,  # Use default config
             'voting_duration': VOTING_TIME  # Use default config
         }
@@ -1614,6 +1881,10 @@ async def websocket_endpoint(websocket: WebSocket, room_code: str, player_id: st
     # Add connection BEFORE broadcasting
     rooms[room_code]['connections'][player_id] = websocket
     print(f"✅ Connection added. Total connections: {len(rooms[room_code]['connections'])}")
+    
+    # Add to connected_humans (internal tracking - never exposed to clients)
+    # Note: player_id here might not be the numbered ID yet, that's added later in the flow
+    # We'll update connected_humans with the actual numbered player ID after it's assigned
     
     # Store player-user mapping if user is authenticated
     if user_id:
@@ -1670,11 +1941,33 @@ async def websocket_endpoint(websocket: WebSocket, room_code: str, player_id: st
         
         rooms[room_code]['state'] = state
         print(f"✅ Added human player {numbered_player_id} to game state")
+        
+        # Add to connected_humans (internal tracking)
+        connected_humans = get_connected_humans(rooms[room_code])
+        if numbered_player_id not in connected_humans:
+            connected_humans.append(numbered_player_id)
+            rooms[room_code]['connected_humans'] = connected_humans
+            print(f"🔗 Added {numbered_player_id} to connected_humans")
+        
+        # Track initial activity and heartbeat for WebSocket connection
+        update_player_activity(rooms[room_code], numbered_player_id)
+        update_player_heartbeat(rooms[room_code], numbered_player_id)
     else:
         # Player already exists (joined via API), just store the connection mapping
         numbered_player_id = existing_player['id']
         rooms[room_code]['player_id_map'] = rooms[room_code].get('player_id_map', {})
         rooms[room_code]['player_id_map'][player_id] = numbered_player_id
+        
+        # Add to connected_humans (internal tracking)
+        connected_humans = get_connected_humans(rooms[room_code])
+        if numbered_player_id not in connected_humans:
+            connected_humans.append(numbered_player_id)
+            rooms[room_code]['connected_humans'] = connected_humans
+            print(f"🔗 Added existing player {numbered_player_id} to connected_humans")
+        
+        # Track activity and heartbeat for existing player reconnecting via WebSocket
+        update_player_activity(rooms[room_code], numbered_player_id)
+        update_player_heartbeat(rooms[room_code], numbered_player_id)
         
         # Check if mapping already exists (set via API join)
         existing_mapping = rooms[room_code]['player_user_map'].get(numbered_player_id)
@@ -1813,20 +2106,43 @@ async def websocket_endpoint(websocket: WebSocket, room_code: str, player_id: st
                     await complete_voting(room_code)
     
     except WebSocketDisconnect:
-        # Remove connection but keep room alive
+        # Remove connection but keep room alive for rejoin
         if room_code in rooms:
-            rooms[room_code]['connections'].pop(player_id, None)
+            room = rooms[room_code]
+            
+            # Remove from connections
+            room['connections'].pop(player_id, None)
             print(f"🔌 Player {player_id} disconnected from room {room_code}")
-            print(f"📊 Remaining connections: {len(rooms[room_code]['connections'])}")
+            print(f"📊 Remaining connections: {len(room['connections'])}")
+            
+            # Get the actual player ID (might be mapped)
+            player_id_map = room.get('player_id_map', {})
+            actual_player_id = player_id_map.get(player_id, player_id)
+            
+            # Remove from connected_humans (internal tracking only)
+            connected_humans = get_connected_humans(room)
+            if actual_player_id in connected_humans:
+                connected_humans.remove(actual_player_id)
+                room['connected_humans'] = connected_humans
+                print(f"🔌 Removed {actual_player_id} from connected_humans")
+            
+            # Update last activity timestamp
+            if 'player_last_activity' not in room:
+                room['player_last_activity'] = {}
+            room['player_last_activity'][actual_player_id] = time.time()
+            
+            # DO NOT remove from assigned_humans (allow rejoin)
+            # DO NOT remove from player_user_map (allow rejoin)
+            # DO NOT broadcast disconnection to other players (maintain anonymity)
             
             # DO NOT delete room when connections become empty
             # In multi-player games, players can rejoin
             # Room will be cleaned up when:
             # 1. Game ends naturally (game_over)
             # 2. Player explicitly leaves (calls leave endpoint)
-            # 3. Periodic cleanup for abandoned rooms (future enhancement)
+            # 3. Periodic cleanup for abandoned rooms
             
-            if not rooms[room_code]['connections']:
+            if not room['connections']:
                 print(f"⚠️ Room {room_code} has no active connections but keeping it alive for potential rejoin")
 
 
@@ -2504,7 +2820,8 @@ async def get_active_session(
         for player_id, mapped_user_id in player_user_map.items():
             if mapped_user_id == user_id:
                 # Found active session for this user
-                current_humans = room_data.get('current_humans', [])
+                # Use assigned_humans, never expose connection status
+                assigned_humans = get_assigned_humans(room_data)
                 max_humans = room_data.get('max_humans', 1)
                 
                 print(f"✅ Found active session: room={room_code}, player={player_id}, status={room_status}")
@@ -2515,8 +2832,8 @@ async def get_active_session(
                     "player_id": player_id,
                     "room_status": room_status,
                     "max_humans": max_humans,
-                    "current_humans_count": len(current_humans),
-                    "is_connected": player_id in room_data.get('connections', {})
+                    "current_humans_count": len(assigned_humans)
+                    # NOTE: Do NOT expose is_connected - maintains player anonymity
                 }
     
     print(f"❌ No active session found for user {current_user.user_id}")
@@ -3613,8 +3930,14 @@ async def create_room(room_data: dict):
         'created_at': time.time(),
         'creator_id': '',  # No longer used, auto-assigned on join
         'player_user_map': {},  # Maps player_id -> user_id (for authenticated users)
-        'current_humans': [],
+        'current_humans': [],  # DEPRECATED - kept for backward compatibility
+        'assigned_humans': [],  # Players with permanent slots
+        'connected_humans': [],  # Currently connected (internal use only)
+        'permanently_left': set(),  # Players who explicitly left
+        'player_last_activity': {},  # player_id -> timestamp
+        'player_heartbeat': {},  # player_id -> timestamp
         'available_numbers': available_numbers,  # Numbers reserved for human players
+        'human_overflow_counter': 0,  # Counter for H1, H2 fallback numbering
         'language': language,  # Store room language
         'discussion_duration': discussion_duration,  # Store discussion duration
         'voting_duration': voting_duration  # Store voting duration
@@ -3657,11 +3980,12 @@ async def list_rooms(page: int = 0, per_page: int = 10):
         Paginated list of rooms with metadata
     """
     # Filter rooms with 'waiting' status
+    # Use assigned_humans to show slots, never expose who's actually connected
     waiting_rooms = [
         {
             'room_code': code,
             'room_name': data['room_name'],
-            'current_humans': len(data['current_humans']),
+            'current_humans': len(get_assigned_humans(data)),  # Use assigned slots, not connections
             'max_humans': data['max_humans'],
             'total_players': data['total_players'],
             'room_status': data['room_status'],
@@ -3708,11 +4032,14 @@ async def get_room_info(room_code: str):
     
     room = rooms[room_code]
     
+    # Use assigned_humans for display (never expose connected_humans to maintain anonymity)
+    assigned_humans = get_assigned_humans(room)
+    
     return {
         "exists": True,
         "room_code": room_code,
         "room_name": room['room_name'],
-        "current_humans": room['current_humans'],
+        "current_humans": assigned_humans,  # Shows assigned slots, not actual connections
         "max_humans": room['max_humans'],
         "total_players": room['total_players'],
         "room_status": room['room_status'],
@@ -3795,22 +4122,44 @@ async def leave_room_endpoint(room_code: str, player_data: dict):
             "message": "Room terminated (waiting status)"
         }
     
-    # CASE 3: Multi-player game in progress - Keep room alive, remove player from current_humans
-    # Player might rejoin, so keep them in game state
-    if player_id in current_humans:
-        current_humans.remove(player_id)
-        print(f"👋 Removed {player_id} from current_humans in room {room_code}. Remaining: {current_humans}")
+    # CASE 3: Multi-player game in progress - Keep room alive, remove player from assigned_humans
+    # This is an EXPLICIT leave (not a temporary disconnect)
     
-    # DO NOT remove from game state - they can rejoin
-    # DO NOT add back their number to available_numbers - it's still assigned to them
+    # Get assigned_humans list (with backward compatibility)
+    # Work with a copy to avoid modifying the original list directly
+    current_assigned = get_assigned_humans(room)
+    assigned_humans = current_assigned.copy() if current_assigned else []
     
-    # Note: We keep the room alive even if current_humans is empty
+    if player_id in assigned_humans:
+        assigned_humans.remove(player_id)
+        print(f"👋 Removed {player_id} from assigned_humans in room {room_code}. Remaining: {assigned_humans}")
+    
+    # Update assigned_humans in room (sync will update current_humans automatically)
+    room['assigned_humans'] = assigned_humans
+    sync_assigned_and_current_humans(room)
+    
+    # IMPORTANT: Remove from player_user_map to allow user to join other games
+    player_user_map = room.get('player_user_map', {})
+    if player_id in player_user_map:
+        removed_user_id = player_user_map.pop(player_id)
+        print(f"🗑️  Removed {player_id} from player_user_map (user_id: {removed_user_id[:8] if removed_user_id else 'N/A'}...)")
+    
+    # Add to permanently_left set to prevent rejoin
+    if 'permanently_left' not in room:
+        room['permanently_left'] = set()
+    room['permanently_left'].add(player_id)
+    print(f"🚫 Added {player_id} to permanently_left - cannot rejoin this room")
+    
+    # DO NOT remove from game state - they stay in the game as eliminated/absent
+    # DO NOT add back their number to available_numbers - it's permanently assigned
+    
+    # Note: We keep the room alive even if assigned_humans is empty
     # The room will be cleaned up by the periodic cleanup task or when the game ends
     
     return {
         "success": True,
-        "action": "disconnected",
-        "message": f"Player disconnected from room. Can rejoin anytime. {len(current_humans)} players currently connected"
+        "action": "left_permanently",
+        "message": f"Player left the room permanently. {len(assigned_humans)} players remaining"
     }
 
 
@@ -3894,230 +4243,305 @@ async def join_room(
     else:
         print(f"🔓 Anonymous user joining room {room_code} via API")
     
-    # VALIDATE: Check if user already has an active session in another room
-    if current_user:
-        user_id = str(current_user.id)
+    # Initialize lock for this room if needed (before any room operations)
+    if room_code not in room_locks:
+        room_locks[room_code] = asyncio.Lock()
+    
+    # CRITICAL: Use lock to prevent race conditions during join
+    async with room_locks[room_code]:
+        # VALIDATE: Check if user already has an active session in another room
+        if current_user:
+            user_id = str(current_user.id)
+            
+            for other_room_code, other_room_data in rooms.items():
+                # Skip the room they're trying to join (allow rejoin)
+                if other_room_code == room_code:
+                    continue
+            
+                other_room_status = other_room_data.get('room_status', '')
+            
+                # Only check rooms that are waiting or in_progress
+                if other_room_status not in ['waiting', 'in_progress']:
+                    continue
+            
+                # Check player_user_map for this user
+                player_user_map = other_room_data.get('player_user_map', {})
+            
+                for player_id, mapped_user_id in player_user_map.items():
+                    if mapped_user_id == user_id:
+                        # User already in another active room
+                        print(f"❌ User {current_user.user_id} already in active room {other_room_code} (player={player_id}, status={other_room_status})")
+                        return {
+                            "success": False, 
+                            "error": "You are already in an active game. Please leave that game first.",
+                            "active_room_code": other_room_code,
+                            "active_player_id": player_id
+                        }
+    
+        # HANDLE REJOIN: Check if user is already in THIS room (disconnected and rejoining)
+        if current_user and room_code in rooms:
+            user_id = str(current_user.id)
+            room = rooms[room_code]
+            room_status = room.get('room_status', '')
+            
+            # VALIDATION: Don't allow rejoin to completed games
+            if room_status == 'completed':
+                return {
+                    "success": False,
+                    "error": "This game has already been completed. You cannot rejoin."
+                }
+            
+            player_user_map = room.get('player_user_map', {})
         
-        for other_room_code, other_room_data in rooms.items():
-            # Skip the room they're trying to join (allow rejoin)
-            if other_room_code == room_code:
-                continue
-            
-            other_room_status = other_room_data.get('room_status', '')
-            
-            # Only check rooms that are waiting or in_progress
-            if other_room_status not in ['waiting', 'in_progress']:
-                continue
-            
-            # Check player_user_map for this user
-            player_user_map = other_room_data.get('player_user_map', {})
-            
             for player_id, mapped_user_id in player_user_map.items():
                 if mapped_user_id == user_id:
-                    # User already in another active room
-                    print(f"❌ User {current_user.user_id} already in active room {other_room_code} (player={player_id}, status={other_room_status})")
+                    # Check if player explicitly left (permanently)
+                    permanently_left = room.get('permanently_left', set())
+                    if player_id in permanently_left:
+                        return {
+                            "success": False,
+                            "error": "You have left this room permanently and cannot rejoin."
+                        }
+                    
+                    # User is rejoining their existing session
+                    print(f"🔄 User {current_user.user_id} rejoining room {room_code} as {player_id}")
+                
+                    # Get assigned_humans list (with backward compatibility)
+                    # Get a copy to avoid modifying the original list directly
+                    current_assigned = get_assigned_humans(room)
+                    assigned_humans = current_assigned.copy() if current_assigned else []
+                
+                    # Add back to assigned_humans if not there (CHECK FOR DUPLICATES)
+                    if player_id not in assigned_humans:
+                        assigned_humans.append(player_id)
+                        room['assigned_humans'] = assigned_humans
+                        sync_assigned_and_current_humans(room)
+                        print(f"✅ Added {player_id} back to assigned_humans. Total: {len(assigned_humans)}")
+                    else:
+                        print(f"ℹ️  {player_id} already in assigned_humans (duplicate avoided)")
+                        # Even if already there, update the room's assigned_humans to use our copy
+                        room['assigned_humans'] = assigned_humans
+                    
+                    # Track player activity (rejoining counts as activity)
+                    update_player_activity(room, player_id)
+                    update_player_heartbeat(room, player_id)  # Update heartbeat on rejoin
+                
+                    # Check if room can/should start or resume
+                    max_humans = room.get('max_humans', 4)
+                    can_start = len(assigned_humans) >= max_humans
+                    room_status = room.get('room_status', '')
+                
+                    # STATE MACHINE: Handle different room states
+                    # waiting -> in_progress (when enough players join)
+                    if can_start and room_status == 'waiting':
+                        room['room_status'] = 'in_progress'
+                        print(f"🎮 Starting game in room {room_code} after rejoin")
+                    
+                        # Initialize game if needed
+                        state = room['state']
+                        if 'initialized' not in room or not room['initialized']:
+                            result = game_graph.initialize_game_node(state)
+                            state.update(result)
+                            rooms[room_code]['state'] = state
+                            rooms[room_code]['initialized'] = True
+                        
+                            # Start phases
+                            asyncio.create_task(run_discussion_phase(room_code))
+                            await asyncio.sleep(0.75)
+                            asyncio.create_task(trigger_agent_decisions(room_code))
+                    
+                    # resuming -> in_progress (when enough players rejoin an abandoned game)
+                    elif room_status == 'resuming' and can_start:
+                        room['room_status'] = 'in_progress'
+                        print(f"🔄 Resuming game in room {room_code} after players rejoined ({len(assigned_humans)}/{max_humans})")
+                        # Game was already initialized, just continue where it left off
+                    
+                    # abandoned -> resuming (handled by heartbeat endpoint, but ensure consistency)
+                    elif room_status == 'abandoned' and len(assigned_humans) >= 1:
+                        room['room_status'] = 'resuming'
+                        print(f"🔄 Room {room_code} transitioning from abandoned to resuming ({len(assigned_humans)} players back)")
+                
                     return {
-                        "success": False, 
-                        "error": "You are already in an active game. Please leave that game first.",
-                        "active_room_code": other_room_code,
-                        "active_player_id": player_id
+                        "success": True,
+                        "player_id": player_id,
+                        "room_code": room_code,
+                        "room_name": room.get('room_name', room_code),
+                        "can_start": room.get('room_status') == 'in_progress',
+                        "rejoined": True,
+                        "room_status": room.get('room_status', 'waiting')
                     }
     
-    # HANDLE REJOIN: Check if user is already in THIS room (disconnected and rejoining)
-    if current_user and room_code in rooms:
-        user_id = str(current_user.id)
-        room = rooms[room_code]
-        player_user_map = room.get('player_user_map', {})
+        # Check if room exists
+        if room_code not in rooms:
+            print(f"⚠️ Room {room_code} does NOT exist, creating legacy room")
+            # Legacy behavior: Create room if doesn't exist (for old room codes)
+            # For legacy rooms, assign random player numbers too
+            total_players = NUM_AI_PLAYERS + 1
+            all_numbers = list(range(1, total_players + 1))
+            random.shuffle(all_numbers)
+            human_number = all_numbers[0]
+            player_id = f"Player {human_number}"
         
-        for player_id, mapped_user_id in player_user_map.items():
-            if mapped_user_id == user_id:
-                # User is rejoining their existing session
-                print(f"🔄 User {current_user.user_id} rejoining room {room_code} as {player_id}")
-                
-                current_humans = room.get('current_humans', [])
-                
-                # Add back to current_humans if not there
-                if player_id not in current_humans:
-                    current_humans.append(player_id)
-                    print(f"✅ Added {player_id} back to current_humans. Total: {len(current_humans)}")
-                
-                # Check if room can/should start
-                max_humans = room.get('max_humans', 4)
-                can_start = len(current_humans) >= max_humans
-                room_status = room.get('room_status', '')
-                
-                # If room is ready and still in waiting, start it
-                if can_start and room_status == 'waiting':
-                    room['room_status'] = 'in_progress'
-                    print(f"🎮 Starting game in room {room_code} after rejoin")
-                    
-                    # Initialize game if needed
-                    state = room['state']
-                    if 'initialized' not in room or not room['initialized']:
-                        result = game_graph.initialize_game_node(state)
-                        state.update(result)
-                        rooms[room_code]['state'] = state
-                        rooms[room_code]['initialized'] = True
-                        
-                        # Start phases
-                        asyncio.create_task(run_discussion_phase(room_code))
-                        await asyncio.sleep(0.75)
-                        asyncio.create_task(trigger_agent_decisions(room_code))
-                
-                return {
-                    "success": True,
-                    "player_id": player_id,
-                    "room_code": room_code,
-                    "room_name": room.get('room_name', room_code),
-                    "can_start": room.get('room_status') == 'in_progress',
-                    "rejoined": True,
-                    "room_status": room.get('room_status', 'waiting')
-                }
-    
-    # Check if room exists
-    if room_code not in rooms:
-        print(f"⚠️ Room {room_code} does NOT exist, creating legacy room")
-        # Legacy behavior: Create room if doesn't exist (for old room codes)
-        # For legacy rooms, assign random player numbers too
-        total_players = NUM_AI_PLAYERS + 1
-        all_numbers = list(range(1, total_players + 1))
-        random.shuffle(all_numbers)
-        human_number = all_numbers[0]
-        player_id = f"Player {human_number}"
+            # Assign remaining numbers to AI players
+            ai_numbers = all_numbers[1:]
+            ai_player_ids = [f"Player {num}" for num in ai_numbers]
         
-        # Assign remaining numbers to AI players
-        ai_numbers = all_numbers[1:]
-        ai_player_ids = [f"Player {num}" for num in ai_numbers]
+            # Create game state with properly numbered AI players
+            state = create_game_for_room(room_code, NUM_AI_PLAYERS, ai_player_ids)
         
-        # Create game state with properly numbered AI players
-        state = create_game_for_room(room_code, NUM_AI_PLAYERS, ai_player_ids)
+            rooms[room_code] = {
+                'state': state,
+                'connections': {},
+                'tasks': [],
+                'ai_processing_agents': set(),
+                'room_name': f"Room {room_code}",
+                'max_humans': 4,
+                'total_players': total_players,
+                'room_status': 'waiting',
+                'created_at': time.time(),
+                'creator_id': player_id,
+                'player_user_map': {},  # Maps player_id -> user_id (for authenticated users)
+                'current_humans': [],  # DEPRECATED - kept for backward compatibility
+                'assigned_humans': [],  # Players with permanent slots
+                'connected_humans': [],  # Currently connected (internal use only)
+                'permanently_left': set(),  # Players who explicitly left
+                'player_last_activity': {},  # player_id -> timestamp
+                'player_heartbeat': {},  # player_id -> timestamp
+                'available_numbers': [],  # All assigned for legacy rooms
+                'human_overflow_counter': 0,  # Counter for H1, H2 fallback numbering
+                'discussion_duration': DISCUSSION_TIME,  # Use default config for legacy rooms
+                'voting_duration': VOTING_TIME  # Use default config for legacy rooms
+            }
+            # Initialize lock for this room to prevent race conditions
+            if room_code not in room_locks:
+                room_locks[room_code] = asyncio.Lock()
         
-        rooms[room_code] = {
-            'state': state,
-            'connections': {},
-            'tasks': [],
-            'ai_processing_agents': set(),
-            'room_name': f"Room {room_code}",
-            'max_humans': 4,
-            'total_players': total_players,
-            'room_status': 'waiting',
-            'created_at': time.time(),
-            'creator_id': player_id,
-            'player_user_map': {},  # Maps player_id -> user_id (for authenticated users)
-            'current_humans': [],
-            'available_numbers': [],  # All assigned for legacy rooms
-            'discussion_duration': DISCUSSION_TIME,  # Use default config for legacy rooms
-            'voting_duration': VOTING_TIME  # Use default config for legacy rooms
-        }
-        # Initialize lock for this room to prevent race conditions
-        if room_code not in room_locks:
-            room_locks[room_code] = asyncio.Lock()
-        
-        # Initialize game
-        result = game_graph.initialize_game_node(state)
-        state.update(result)
-        rooms[room_code]['state'] = state
-        
-        # Start phases
-        asyncio.create_task(run_discussion_phase(room_code))
-        # Trigger active decision-making for AI responses
-        await asyncio.sleep(0.75)  # Small delay
-        asyncio.create_task(trigger_agent_decisions(room_code))
-    
-    room = rooms[room_code]
-    print(f"🔍 Room {room_code} exists - discussion_duration: {room.get('discussion_duration', 'NOT SET')}, voting_duration: {room.get('voting_duration', 'NOT SET')}")
-    
-    # Check if room is in waiting status (for matching rooms)
-    if room.get('room_status') == 'in_progress':
-        return {"success": False, "error": "Room already in progress"}
-    
-    if room.get('room_status') == 'completed':
-        return {"success": False, "error": "Room game completed"}
-    
-    # Check capacity
-    max_humans = room.get('max_humans', 4)
-    current_humans = room.get('current_humans', [])
-    
-    if len(current_humans) >= max_humans:
-        return {"success": False, "error": f"Room full ({max_humans} humans max)"}
-    
-    # Get state
-    state = room['state']
-    
-    # Assign a random player number from available numbers
-    available_numbers = room.get('available_numbers', [])
-    if not available_numbers:
-        # Fallback: generate a random number if somehow we run out
-        player_number = random.randint(100, 999)
-        player_id = f"Player {player_number}"
-    else:
-        # Pop a random number from available
-        player_number = available_numbers.pop(0)
-        player_id = f"Player {player_number}"
-    
-    # Add player to current_humans list
-    room['current_humans'].append(player_id)
-    
-    # If this is the first human to join, mark as creator
-    if len(room['current_humans']) == 1:
-        room['creator_id'] = player_id
-        print(f"👑 {player_id} is the creator of room {room_code}")
-    
-    # Add player to game state
-    state['players'].append({
-        'id': player_id,
-        'role': 'human',
-        'eliminated': False,
-        'personality': None
-    })
-    rooms[room_code]['state'] = state
-    
-    # Store user mapping if authenticated
-    if current_user:
-        user_id_str = str(current_user.id)
-        room['player_user_map'][player_id] = user_id_str
-        print(f"👤 ✅ Player {player_id} joined room {room_code} ({len(room['current_humans'])}/{max_humans}) - Mapped to user {user_id_str[:8]}...")
-        print(f"📋 Current player_user_map: {room['player_user_map']}")
-    else:
-        print(f"👤 Player {player_id} joined room {room_code} ({len(room['current_humans'])}/{max_humans}) - Anonymous")
-    
-    # Check if room is ready to start
-    can_start = len(room['current_humans']) >= max_humans
-    
-    if can_start:
-        # Update room status to in_progress
-        room['room_status'] = 'in_progress'
-        
-        print(f"🎮 Starting game in room {room_code} with {len(room['current_humans'])} humans")
-        
-        # Initialize game if not already initialized
-        if 'initialized' not in room:
+            # Initialize game
             result = game_graph.initialize_game_node(state)
             state.update(result)
             rooms[room_code]['state'] = state
-            rooms[room_code]['initialized'] = True
-            
-            # Broadcast initial state to any connected clients
-            if 'broadcast_queue' in result:
-                for msg in result['broadcast_queue']:
-                    await broadcast_to_room(room_code, msg)
-            
+        
             # Start phases
-            print(f"🚀 Starting game phases - discussion_duration: {room.get('discussion_duration', 'NOT SET')}, voting_duration: {room.get('voting_duration', 'NOT SET')}")
             asyncio.create_task(run_discussion_phase(room_code))
             # Trigger active decision-making for AI responses
             await asyncio.sleep(0.75)  # Small delay
             asyncio.create_task(trigger_agent_decisions(room_code))
     
-    return {
-        "success": True,
-        "message": f"Joined room {room_code}",
-        "player_id": player_id,
-        "can_start": can_start,
-        "waiting": not can_start,
-        "current_humans": len(room['current_humans']),
-        "max_humans": max_humans
-    }
+        room = rooms[room_code]
+        print(f"🔍 Room {room_code} exists - discussion_duration: {room.get('discussion_duration', 'NOT SET')}, voting_duration: {room.get('voting_duration', 'NOT SET')}")
+    
+        # Check room status - only allow new joins to "waiting" rooms
+        room_status = room.get('room_status', '')
+        
+        if room_status == 'in_progress':
+            return {"success": False, "error": "Room already in progress"}
+        
+        if room_status == 'completed':
+            return {"success": False, "error": "Room game completed"}
+        
+        if room_status in ['abandoned', 'resuming']:
+            return {"success": False, "error": "Room is not accepting new players. Only rejoins allowed."}
+    
+        # Check capacity (use assigned_humans for accurate count)
+        max_humans = room.get('max_humans', 4)
+        assigned_humans = get_assigned_humans(room)
+    
+        if len(assigned_humans) >= max_humans:
+            return {"success": False, "error": f"Room full ({max_humans} humans max)"}
+    
+        # Get state
+        state = room['state']
+    
+        # Assign a random player number from available numbers
+        available_numbers = room.get('available_numbers', [])
+        if not available_numbers:
+            # Fallback: use deterministic numbering (Player H1, H2, etc.)
+            # This should NEVER happen in normal operation
+            human_overflow_counter = room.get('human_overflow_counter', 0)
+            human_overflow_counter += 1
+            room['human_overflow_counter'] = human_overflow_counter
+            player_id = f"Player H{human_overflow_counter}"
+            print(f"⚠️  WARNING: available_numbers exhausted! Using overflow numbering: {player_id}")
+        else:
+            # Pop a number from available
+            player_number = available_numbers.pop(0)
+            player_id = f"Player {player_number}"
+    
+        # Add player to assigned_humans list (and sync with current_humans)
+        # Get a copy to avoid modifying the original list directly
+        current_assigned = get_assigned_humans(room)
+        assigned_humans = current_assigned.copy() if current_assigned else []
+        assigned_humans.append(player_id)
+        room['assigned_humans'] = assigned_humans
+        sync_assigned_and_current_humans(room)
+    
+        # Track player activity (joining counts as activity)
+        update_player_activity(room, player_id)
+        update_player_heartbeat(room, player_id)  # Initial heartbeat
+    
+        # If this is the first human to join, mark as creator
+        if len(room['current_humans']) == 1:
+            room['creator_id'] = player_id
+            print(f"👑 {player_id} is the creator of room {room_code}")
+    
+        # Add player to game state
+        state['players'].append({
+            'id': player_id,
+            'role': 'human',
+            'eliminated': False,
+            'personality': None
+        })
+        rooms[room_code]['state'] = state
+    
+        # Store user mapping if authenticated
+        if current_user:
+            user_id_str = str(current_user.id)
+            room['player_user_map'][player_id] = user_id_str
+            print(f"👤 ✅ Player {player_id} joined room {room_code} ({len(room['current_humans'])}/{max_humans}) - Mapped to user {user_id_str[:8]}...")
+            print(f"📋 Current player_user_map: {room['player_user_map']}")
+        else:
+            print(f"👤 Player {player_id} joined room {room_code} ({len(room['current_humans'])}/{max_humans}) - Anonymous")
+    
+        # Check if room is ready to start
+        can_start = len(room['current_humans']) >= max_humans
+    
+        if can_start:
+            # Update room status to in_progress
+            room['room_status'] = 'in_progress'
+        
+            print(f"🎮 Starting game in room {room_code} with {len(room['current_humans'])} humans")
+        
+            # Initialize game if not already initialized
+            if 'initialized' not in room:
+                result = game_graph.initialize_game_node(state)
+                state.update(result)
+                rooms[room_code]['state'] = state
+                rooms[room_code]['initialized'] = True
+            
+                # Broadcast initial state to any connected clients
+                if 'broadcast_queue' in result:
+                    for msg in result['broadcast_queue']:
+                        await broadcast_to_room(room_code, msg)
+            
+                # Start phases
+                print(f"🚀 Starting game phases - discussion_duration: {room.get('discussion_duration', 'NOT SET')}, voting_duration: {room.get('voting_duration', 'NOT SET')}")
+                asyncio.create_task(run_discussion_phase(room_code))
+                # Trigger active decision-making for AI responses
+                await asyncio.sleep(0.75)  # Small delay
+                asyncio.create_task(trigger_agent_decisions(room_code))
+    
+        # Use assigned_humans count for display (never expose connected_humans)
+        assigned_humans_count = len(get_assigned_humans(room))
+        
+        return {
+            "success": True,
+            "message": f"Joined room {room_code}",
+            "player_id": player_id,
+            "can_start": can_start,
+            "waiting": not can_start,
+            "current_humans": assigned_humans_count,  # Shows assigned slots, not actual connections
+            "max_humans": max_humans
+        }
 
 
 @app.post("/api/rooms/{room_code}/message")
@@ -4141,7 +4565,11 @@ async def send_message(room_code: str, message_data: dict):
     if not message.strip():
         return {"error": "Empty message"}
     
-    state = rooms[room_code]['state']
+    room = rooms[room_code]
+    state = room['state']
+    
+    # Track player activity
+    update_player_activity(room, player_id)
     
     # Check if in discussion phase
     if state['phase'] != Phase.DISCUSSION:
@@ -4191,6 +4619,9 @@ async def cast_vote(room_code: str, vote_data: dict):
     # Check if already voted (enforce single vote per player)
     if player_id in state.get('votes', {}):
         return {"error": "Already voted"}
+    
+    # Track player activity
+    update_player_activity(rooms[room_code], player_id)
     
     # Process human vote - directly update votes dict to avoid race conditions with AI voting
     state['votes'][player_id] = voted_for
@@ -4250,3 +4681,56 @@ async def send_typing_status(room_code: str, typing_data: dict):
     })
     
     return {"success": True}
+
+
+@app.post("/api/rooms/{room_code}/heartbeat")
+async def player_heartbeat(room_code: str, heartbeat_data: dict):
+    """
+    Receive heartbeat ping from a player.
+    This is used to track player activity and detect disconnections.
+    
+    IMPORTANT: This endpoint does NOT expose any information about other players
+    to maintain anonymity about who is connected vs disconnected.
+    
+    Args:
+        room_code: Room identifier
+        heartbeat_data: Dict with 'player_id' field
+    
+    Returns:
+        Minimal success response (no room state info)
+    """
+    if room_code not in rooms:
+        return {"success": False, "error": "Room not found"}
+    
+    player_id = heartbeat_data.get('player_id', '')
+    if not player_id:
+        return {"success": False, "error": "player_id required"}
+    
+    room = rooms[room_code]
+    
+    # Update heartbeat and activity timestamps
+    update_player_heartbeat(room, player_id)
+    
+    # If room was abandoned and players are coming back, transition to resuming
+    room_status = room.get('room_status', '')
+    if room_status == 'abandoned':
+        # Check if enough players are back
+        assigned_humans = get_assigned_humans(room)
+        active_count = 0
+        current_time = time.time()
+        player_heartbeat = room.get('player_heartbeat', {})
+        
+        for pid in assigned_humans:
+            last_hb = player_heartbeat.get(pid, 0)
+            if current_time - last_hb < 60:  # Active in last minute
+                active_count += 1
+        
+        if active_count >= 1:  # At least one player is back
+            room['room_status'] = 'resuming'
+            print(f"🔄 Room {room_code} transitioning from abandoned to resuming ({active_count} players active)")
+    
+    # Return minimal response (no room state information)
+    return {
+        "success": True,
+        "timestamp": time.time()
+    }
