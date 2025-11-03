@@ -159,7 +159,7 @@ const Wallet = () => {
             <div className="mt-3 pt-3 border-t border-purple-500">
               <div className="flex items-center text-sm">
                 <DollarSign className="w-4 h-4 mr-1" />
-                ${walletData?.usd_equivalent?.toFixed(2)} USD
+                {walletData?.usd_equivalent?.toFixed(2)} USD
               </div>
             </div>
           </div>
@@ -175,7 +175,7 @@ const Wallet = () => {
             <div className="mt-3 pt-3 border-t border-gray-200">
               <div className="flex items-center text-sm text-gray-700">
                 <DollarSign className="w-4 h-4 mr-1" />
-                ${(walletData?.total_gems_earned / 1000).toFixed(2)} USD
+                {(walletData?.total_gems_earned / 1000).toFixed(2)} USD
               </div>
             </div>
           </div>
@@ -191,7 +191,7 @@ const Wallet = () => {
             <div className="mt-3 pt-3 border-t border-gray-200">
               <div className="flex items-center text-sm text-gray-700">
                 <DollarSign className="w-4 h-4 mr-1" />
-                ${(walletData?.total_gems_cashed_out / 1000).toFixed(2)} USD
+                {(walletData?.total_gems_cashed_out / 1000).toFixed(2)} USD
               </div>
             </div>
           </div>
