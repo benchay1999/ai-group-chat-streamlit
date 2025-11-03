@@ -1,11 +1,10 @@
 /**
  * GameOver Component
- * Displays game over screen with results, completion key, and gamification rewards
+ * Displays game over screen with results and gamification rewards
  */
 
 import { useState, useEffect } from 'react';
 import { roomAPI } from '../services/api';
-import CompletionKeyModal from './CompletionKeyModal';
 import PointsAnimation from './PointsAnimation';
 import AchievementUnlock from './AchievementUnlock';
 import { useAuth } from '../contexts/AuthContext';
@@ -15,24 +14,15 @@ import { TrendingUp, Award, Zap } from 'lucide-react';
 const GameOver = ({ winner, suspect, suspectRole, voteCountsDisplay, onLeave, roomCode }) => {
   const { user } = useAuth();
   const isHumanWin = winner === 'human';
-  const [showCompletionModal, setShowCompletionModal] = useState(false);
-  const [completionKey, setCompletionKey] = useState(null);
-  const [sessionId, setSessionId] = useState(null);
   const [gamificationData, setGamificationData] = useState(null);
   const [showPoints, setShowPoints] = useState(false);
   const [showAchievements, setShowAchievements] = useState(false);
 
   useEffect(() => {
-    // Fetch session stats which includes completion key and gamification data
+    // Fetch session stats which includes gamification data
     const fetchStats = async () => {
       try {
         const stats = await roomAPI.getGameState(roomCode, 'Player1');
-        
-        // Completion key
-        if (stats.completion_key) {
-          setCompletionKey(stats.completion_key);
-          setSessionId(stats.session_id);
-        }
         
         // Gamification data (only for logged-in users)
         if (stats.gamification && user) {
@@ -50,21 +40,11 @@ const GameOver = ({ winner, suspect, suspectRole, voteCountsDisplay, onLeave, ro
               setShowAchievements(true);
             }, 4000);
           } else {
-            // If no achievements, show completion key modal
+            // Hide points animation after showing
             setTimeout(() => {
               setShowPoints(false);
-              if (completionKey) {
-                setShowCompletionModal(true);
-              }
             }, 4000);
           }
-        } else {
-          // No gamification data, show completion key modal after 2 seconds
-          setTimeout(() => {
-            if (stats.completion_key) {
-              setShowCompletionModal(true);
-            }
-          }, 2000);
         }
       } catch (error) {
         console.error('Failed to fetch stats:', error);
@@ -72,16 +52,10 @@ const GameOver = ({ winner, suspect, suspectRole, voteCountsDisplay, onLeave, ro
     };
 
     fetchStats();
-  }, [roomCode, user, completionKey]);
+  }, [roomCode, user]);
 
   const handleAchievementsClose = () => {
     setShowAchievements(false);
-    // Show completion key modal after achievements
-    if (completionKey) {
-      setTimeout(() => {
-        setShowCompletionModal(true);
-      }, 500);
-    }
   };
 
   const handlePointsComplete = () => {
@@ -186,15 +160,6 @@ const GameOver = ({ winner, suspect, suspectRole, voteCountsDisplay, onLeave, ro
 
           {/* Action Buttons */}
           <div className="space-y-3">
-            {completionKey && (
-              <button
-                onClick={() => setShowCompletionModal(true)}
-                className="w-full px-6 py-3 bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-lg font-semibold hover:from-purple-700 hover:to-blue-700 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 transition-all shadow-lg"
-              >
-                🔑 View Completion Key
-              </button>
-            )}
-            
             {user && (
               <button
                 onClick={() => window.location.href = '/dashboard'}
@@ -213,15 +178,6 @@ const GameOver = ({ winner, suspect, suspectRole, voteCountsDisplay, onLeave, ro
           </div>
         </div>
       </div>
-
-      {/* Completion Key Modal */}
-      {showCompletionModal && completionKey && (
-        <CompletionKeyModal
-          completionKey={completionKey}
-          sessionId={sessionId}
-          onClose={() => setShowCompletionModal(false)}
-        />
-      )}
 
       {/* Points Animation */}
       {showPoints && gamificationData && (
