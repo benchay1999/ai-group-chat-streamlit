@@ -11,7 +11,7 @@ import toast from 'react-hot-toast';
 
 const JoinPage = () => {
   const navigate = useNavigate();
-  const { selectedRoom, joinRoom } = useGame();
+  const { selectedRoom, joinRoom, getActiveSession } = useGame();
   const [joining, setJoining] = useState(false);
 
   if (!selectedRoom) {
@@ -21,6 +21,14 @@ const JoinPage = () => {
   }
 
   const handleJoin = async () => {
+    // Client-side validation: Check for active session
+    const activeSession = getActiveSession();
+    if (activeSession && activeSession.roomCode !== selectedRoom.room_code) {
+      toast.error('You already have an active game. Please leave it first.');
+      console.log('❌ Blocked join attempt - active session exists:', activeSession);
+      return;
+    }
+
     setJoining(true);
     try {
       const result = await roomAPI.joinRoom(selectedRoom.room_code, {});

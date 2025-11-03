@@ -18,7 +18,7 @@ import toast from 'react-hot-toast';
 
 const GamePage = () => {
   const navigate = useNavigate();
-  const { roomCode, playerId, leaveRoom } = useGame();
+  const { roomCode, playerId, leaveRoom, saveActiveSession, clearActiveSession } = useGame();
   
   const [gameState, setGameState] = useState({
     phase: 'Discussion',
@@ -32,6 +32,13 @@ const GamePage = () => {
     suspect_role: null,
   });
   const [typing, setTyping] = useState([]);
+
+  // Save active session when component mounts (user is in game)
+  useEffect(() => {
+    if (roomCode && playerId) {
+      saveActiveSession(roomCode, playerId, 'in_progress');
+    }
+  }, [roomCode, playerId, saveActiveSession]);
 
   // Redirect if no room/player
   useEffect(() => {
@@ -129,6 +136,8 @@ const GamePage = () => {
           winner: data.winner,
           phase: 'Game Over',
         }));
+        // Clear active session when game ends
+        clearActiveSession();
         break;
 
       case 'new_round':
@@ -144,13 +153,15 @@ const GamePage = () => {
 
       case 'room_terminated':
         toast.error('Room was terminated');
+        // Clear active session when room is terminated
+        clearActiveSession();
         handleLeave();
         break;
 
       default:
         console.log('Unknown message type:', type);
     }
-  }, []);
+  }, [clearActiveSession]);
 
   // Initialize WebSocket
   const { status: wsStatus } = useWebSocket(roomCode, playerId, handleWebSocketMessage);
@@ -210,6 +221,8 @@ const GamePage = () => {
       console.error('Error leaving room:', error);
     }
     
+    // Clear active session when explicitly leaving
+    clearActiveSession();
     leaveRoom();
     navigate('/');
   };

@@ -26,18 +26,6 @@ export const sessionsAPI = {
   },
 
   /**
-   * Claim a completion key
-   * @param {string} completionKey - JWT completion key
-   * @returns {Promise} Claim result
-   */
-  claimKey: async (completionKey) => {
-    const response = await api.post('/api/sessions/claim', {
-      completion_key: completionKey,
-    });
-    return response.data;
-  },
-
-  /**
    * Get admin dashboard statistics
    * @returns {Promise} Dashboard stats
    */

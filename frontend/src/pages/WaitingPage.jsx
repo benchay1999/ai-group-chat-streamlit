@@ -12,8 +12,15 @@ import toast from 'react-hot-toast';
 
 const WaitingPage = () => {
   const navigate = useNavigate();
-  const { roomCode, playerId, leaveRoom } = useGame();
+  const { roomCode, playerId, leaveRoom, saveActiveSession, clearActiveSession } = useGame();
   const { roomInfo, loading, error } = useRoomPolling(roomCode, 2000, !!roomCode);
+
+  // Save active session when component mounts (user is waiting in room)
+  useEffect(() => {
+    if (roomCode && playerId) {
+      saveActiveSession(roomCode, playerId, 'waiting');
+    }
+  }, [roomCode, playerId, saveActiveSession]);
 
   // Redirect if no room code
   useEffect(() => {
@@ -22,31 +29,40 @@ const WaitingPage = () => {
     }
   }, [roomCode, navigate]);
 
-  // Auto-navigate when game starts
+  // Auto-navigate when game starts (update session status to in_progress)
   useEffect(() => {
     if (roomInfo && roomInfo.room_status === 'in_progress') {
       toast.success('Game starting!');
+      // Update session status to in_progress
+      if (roomCode && playerId) {
+        saveActiveSession(roomCode, playerId, 'in_progress');
+      }
       navigate('/game');
     }
-  }, [roomInfo, navigate]);
+  }, [roomInfo, navigate, roomCode, playerId, saveActiveSession]);
 
   // Check if room no longer exists
   useEffect(() => {
     if (error || (roomInfo && !roomInfo.exists)) {
       toast.error('Room no longer exists');
+      // Clear active session when room no longer exists
+      clearActiveSession();
       leaveRoom();
       navigate('/');
     }
-  }, [error, roomInfo, leaveRoom, navigate]);
+  }, [error, roomInfo, leaveRoom, navigate, clearActiveSession]);
 
   const handleLeave = async () => {
     try {
       await roomAPI.leaveRoom(roomCode, playerId);
+      // Clear active session when explicitly leaving
+      clearActiveSession();
       leaveRoom();
       toast.success('Left room');
       navigate('/');
     } catch (error) {
       console.error('Error leaving room:', error);
+      clearActiveSession();
       leaveRoom();
       navigate('/');
     }

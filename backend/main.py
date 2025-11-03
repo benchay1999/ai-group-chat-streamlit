@@ -35,9 +35,6 @@ from .auth import (
     get_current_user, get_current_user_optional, require_admin,
     register_or_login_mturk_worker
 )
-from .completion_keys import (
-    generate_completion_key, decode_completion_key, extract_session_info
-)
 import json
 import os
 import time as _time
@@ -196,9 +193,6 @@ class UserResponse(BaseModel):
     user_id: str
     role: str
     created_at: str
-
-class ClaimKeyRequest(BaseModel):
-    completion_key: str
 
 class SessionResponse(BaseModel):
     id: str
@@ -1073,17 +1067,9 @@ async def save_session_stats(room_code: str, state: dict, current_user: Optional
     # Generate session UUID
     session_id = uuid_lib.uuid4()
     
-    # Generate completion key
-    completion_key = generate_completion_key(
-        session_id=str(session_id),
-        room_code=room_code,
-        language=language,
-        total_players=total_players,
-        num_humans=num_humans,
-        discussion_duration=discussion_duration,
-        voting_duration=voting_duration,
-        completed_at=completed_at
-    )
+    # Generate a placeholder completion key for backward compatibility with database schema
+    # This is no longer used for verification - MTurk uses worker_id/assignment_id instead
+    completion_key = f"DEPRECATED_{session_id}"
     
     # Calculate token usage and costs
     from .pricing import calculate_cost
@@ -1827,14 +1813,21 @@ async def websocket_endpoint(websocket: WebSocket, room_code: str, player_id: st
                     await complete_voting(room_code)
     
     except WebSocketDisconnect:
-        # Remove connection
+        # Remove connection but keep room alive
         if room_code in rooms:
             rooms[room_code]['connections'].pop(player_id, None)
+            print(f"🔌 Player {player_id} disconnected from room {room_code}")
+            print(f"📊 Remaining connections: {len(rooms[room_code]['connections'])}")
             
-            # Clean up empty rooms
+            # DO NOT delete room when connections become empty
+            # In multi-player games, players can rejoin
+            # Room will be cleaned up when:
+            # 1. Game ends naturally (game_over)
+            # 2. Player explicitly leaves (calls leave endpoint)
+            # 3. Periodic cleanup for abandoned rooms (future enhancement)
+            
             if not rooms[room_code]['connections']:
-                del rooms[room_code]
-                print(f"🗑️ Deleted room {room_code} - no connections left")
+                print(f"⚠️ Room {room_code} has no active connections but keeping it alive for potential rejoin")
 
 
 @app.get("/start/{room_code}")
@@ -2469,6 +2462,73 @@ async def get_user_earnings(
     }
 
 
+@app.get("/api/users/active-session")
+async def get_active_session(
+    current_user: User = Depends(get_current_user_optional)
+):
+    """
+    Check if the current user has an active game session.
+    Returns session info if user is currently in a game (waiting or in_progress).
+    
+    Args:
+        current_user: Current authenticated user (optional)
+    
+    Returns:
+        Active session info or indication that no active session exists
+    """
+    if not current_user:
+        # Anonymous users - check by player_id in all rooms would require tracking
+        # For now, anonymous users rely on client-side localStorage only
+        return {
+            "has_active_session": False,
+            "room_code": None,
+            "player_id": None,
+            "room_status": None,
+            "max_humans": None
+        }
+    
+    user_id = str(current_user.id)
+    print(f"🔍 Checking active session for user {current_user.user_id} (ID: {user_id[:8]}...)")
+    
+    # Search all rooms for this user's active session
+    for room_code, room_data in rooms.items():
+        room_status = room_data.get('room_status', '')
+        
+        # Only check rooms that are waiting or in_progress
+        if room_status not in ['waiting', 'in_progress']:
+            continue
+        
+        # Check player_user_map for this user
+        player_user_map = room_data.get('player_user_map', {})
+        
+        for player_id, mapped_user_id in player_user_map.items():
+            if mapped_user_id == user_id:
+                # Found active session for this user
+                current_humans = room_data.get('current_humans', [])
+                max_humans = room_data.get('max_humans', 1)
+                
+                print(f"✅ Found active session: room={room_code}, player={player_id}, status={room_status}")
+                
+                return {
+                    "has_active_session": True,
+                    "room_code": room_code,
+                    "player_id": player_id,
+                    "room_status": room_status,
+                    "max_humans": max_humans,
+                    "current_humans_count": len(current_humans),
+                    "is_connected": player_id in room_data.get('connections', {})
+                }
+    
+    print(f"❌ No active session found for user {current_user.user_id}")
+    return {
+        "has_active_session": False,
+        "room_code": None,
+        "player_id": None,
+        "room_status": None,
+        "max_humans": None
+    }
+
+
 # ============================================================================
 # Wallet & Cashout API Endpoints
 # ============================================================================
@@ -3071,76 +3131,6 @@ async def get_session_detail(
     }
 
 
-@app.post("/api/sessions/claim")
-async def claim_completion_key(
-    request: ClaimKeyRequest,
-    current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_async_session)
-):
-    """
-    Manually claim a completion key by entering it.
-    Prevents duplicate claims.
-    
-    Args:
-        request: Completion key to claim
-        current_user: Current authenticated user
-        db: Database session
-    
-    Returns:
-        Success message and session info
-    """
-    # Verify completion key
-    try:
-        key_data = decode_completion_key(request.completion_key)
-        session_id = key_data['session_id']
-    except HTTPException as e:
-        raise e
-    
-    # Find session in database (convert string to UUID)
-    import uuid as uuid_lib
-    try:
-        session_uuid = uuid_lib.UUID(session_id)
-    except (ValueError, AttributeError):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid session ID format"
-        )
-    
-    result = await db.execute(
-        select(DBSession).where(DBSession.id == session_uuid)
-    )
-    session = result.scalar_one_or_none()
-    
-    if not session:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Session not found"
-        )
-    
-    # Check if already claimed
-    if session.user_id is not None:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="This completion key has already been claimed"
-        )
-    
-    # Claim the session
-    session.user_id = current_user.id
-    session.claimed_at = _time.time()
-    await db.commit()
-    await db.refresh(session)
-    
-    return {
-        "success": True,
-        "message": "Completion key claimed successfully",
-        "session": {
-            "id": str(session.id),
-            "room_code": session.room_code,
-            "language": session.language,
-            "completed_at": session.completed_at.isoformat(),
-            "payment_status": session.payment_status.value
-        }
-    }
 
 
 # ============================================================================
@@ -3737,8 +3727,9 @@ async def get_room_info(room_code: str):
 async def leave_room_endpoint(room_code: str, player_data: dict):
     """
     Handle a player leaving a room.
-    - If creator leaves: Terminate the entire room
-    - If joiner leaves: Remove them from the room
+    - Single-player (max_humans=1): Terminate room immediately
+    - Multi-player in waiting: Terminate room
+    - Multi-player in progress: Keep room alive, remove player from current_humans
     
     Args:
         room_code: Room identifier
@@ -3756,19 +3747,18 @@ async def leave_room_endpoint(room_code: str, player_data: dict):
     # Get room metadata
     current_humans = room.get('current_humans', [])
     room_status = room.get('room_status', '')
-    creator_id = room.get('creator_id', '')
-    is_creator = (player_id == creator_id) or (len(current_humans) > 0 and player_id == current_humans[0])
+    max_humans = room.get('max_humans', 1)
     
-    print(f"🚪 Player {player_id} leaving room {room_code} (creator: {is_creator})")
+    print(f"🚪 Player {player_id} leaving room {room_code} (max_humans={max_humans}, status={room_status})")
     
-    # If creator leaves or room is still in waiting status, terminate the room
-    if is_creator or room_status == 'waiting':
-        print(f"🗑️ Terminating room {room_code} (creator left or in waiting status)")
+    # CASE 1: Single-player game (max_humans == 1) - Always terminate
+    if max_humans == 1:
+        print(f"🗑️ Terminating single-player room {room_code}")
         
         # Broadcast to any connected clients
         await broadcast_to_room(room_code, {
             "type": "room_terminated",
-            "message": "Room has been terminated" if is_creator else "Room was cancelled"
+            "message": "Room has been terminated"
         })
         
         # Clean up room
@@ -3780,32 +3770,20 @@ async def leave_room_endpoint(room_code: str, player_data: dict):
         return {
             "success": True,
             "action": "terminated",
-            "message": "Room terminated"
+            "message": "Single-player room terminated"
         }
     
-    # Joiner leaving: Remove from room
-    if player_id in current_humans:
-        current_humans.remove(player_id)
-        print(f"👋 Removed {player_id} from room {room_code}. Remaining: {current_humans}")
+    # CASE 2: Multi-player game in waiting status - Terminate
+    if max_humans > 1 and room_status == 'waiting':
+        print(f"🗑️ Terminating room {room_code} (in waiting status)")
     
-    # Remove from game state
-    state = room['state']
-    state['players'] = [p for p in state['players'] if p['id'] != player_id]
-    
-    # Update available numbers (add back the player's number)
-    if 'Player ' in player_id:
-        try:
-            player_num = int(player_id.split('Player ')[1])
-            available_nums = room.get('available_numbers', [])
-            if player_num not in available_nums:
-                available_nums.append(player_num)
-                room['available_numbers'] = available_nums
-        except:
-            pass
-    
-    # If room becomes empty, delete it
-    if len(current_humans) == 0:
-        print(f"🗑️ Room {room_code} now empty, deleting")
+        # Broadcast to any connected clients
+        await broadcast_to_room(room_code, {
+            "type": "room_terminated",
+            "message": "Room was cancelled"
+        })
+        
+        # Clean up room
         if room_code in rooms:
             del rooms[room_code]
         if room_code in room_locks:
@@ -3813,14 +3791,26 @@ async def leave_room_endpoint(room_code: str, player_data: dict):
         
         return {
             "success": True,
-            "action": "deleted",
-            "message": "Room deleted (empty)"
+            "action": "terminated",
+            "message": "Room terminated (waiting status)"
         }
+    
+    # CASE 3: Multi-player game in progress - Keep room alive, remove player from current_humans
+    # Player might rejoin, so keep them in game state
+    if player_id in current_humans:
+        current_humans.remove(player_id)
+        print(f"👋 Removed {player_id} from current_humans in room {room_code}. Remaining: {current_humans}")
+    
+    # DO NOT remove from game state - they can rejoin
+    # DO NOT add back their number to available_numbers - it's still assigned to them
+    
+    # Note: We keep the room alive even if current_humans is empty
+    # The room will be cleaned up by the periodic cleanup task or when the game ends
     
     return {
         "success": True,
-        "action": "removed",
-        "message": f"Player removed from room. {len(current_humans)} players remaining"
+        "action": "disconnected",
+        "message": f"Player disconnected from room. Can rejoin anytime. {len(current_humans)} players currently connected"
     }
 
 
@@ -3903,6 +3893,86 @@ async def join_room(
         print(f"🔐 User '{current_user.user_id}' (ID: {str(current_user.id)[:8]}...) joining room {room_code} via API")
     else:
         print(f"🔓 Anonymous user joining room {room_code} via API")
+    
+    # VALIDATE: Check if user already has an active session in another room
+    if current_user:
+        user_id = str(current_user.id)
+        
+        for other_room_code, other_room_data in rooms.items():
+            # Skip the room they're trying to join (allow rejoin)
+            if other_room_code == room_code:
+                continue
+            
+            other_room_status = other_room_data.get('room_status', '')
+            
+            # Only check rooms that are waiting or in_progress
+            if other_room_status not in ['waiting', 'in_progress']:
+                continue
+            
+            # Check player_user_map for this user
+            player_user_map = other_room_data.get('player_user_map', {})
+            
+            for player_id, mapped_user_id in player_user_map.items():
+                if mapped_user_id == user_id:
+                    # User already in another active room
+                    print(f"❌ User {current_user.user_id} already in active room {other_room_code} (player={player_id}, status={other_room_status})")
+                    return {
+                        "success": False, 
+                        "error": "You are already in an active game. Please leave that game first.",
+                        "active_room_code": other_room_code,
+                        "active_player_id": player_id
+                    }
+    
+    # HANDLE REJOIN: Check if user is already in THIS room (disconnected and rejoining)
+    if current_user and room_code in rooms:
+        user_id = str(current_user.id)
+        room = rooms[room_code]
+        player_user_map = room.get('player_user_map', {})
+        
+        for player_id, mapped_user_id in player_user_map.items():
+            if mapped_user_id == user_id:
+                # User is rejoining their existing session
+                print(f"🔄 User {current_user.user_id} rejoining room {room_code} as {player_id}")
+                
+                current_humans = room.get('current_humans', [])
+                
+                # Add back to current_humans if not there
+                if player_id not in current_humans:
+                    current_humans.append(player_id)
+                    print(f"✅ Added {player_id} back to current_humans. Total: {len(current_humans)}")
+                
+                # Check if room can/should start
+                max_humans = room.get('max_humans', 4)
+                can_start = len(current_humans) >= max_humans
+                room_status = room.get('room_status', '')
+                
+                # If room is ready and still in waiting, start it
+                if can_start and room_status == 'waiting':
+                    room['room_status'] = 'in_progress'
+                    print(f"🎮 Starting game in room {room_code} after rejoin")
+                    
+                    # Initialize game if needed
+                    state = room['state']
+                    if 'initialized' not in room or not room['initialized']:
+                        result = game_graph.initialize_game_node(state)
+                        state.update(result)
+                        rooms[room_code]['state'] = state
+                        rooms[room_code]['initialized'] = True
+                        
+                        # Start phases
+                        asyncio.create_task(run_discussion_phase(room_code))
+                        await asyncio.sleep(0.75)
+                        asyncio.create_task(trigger_agent_decisions(room_code))
+                
+                return {
+                    "success": True,
+                    "player_id": player_id,
+                    "room_code": room_code,
+                    "room_name": room.get('room_name', room_code),
+                    "can_start": room.get('room_status') == 'in_progress',
+                    "rejoined": True,
+                    "room_status": room.get('room_status', 'waiting')
+                }
     
     # Check if room exists
     if room_code not in rooms:

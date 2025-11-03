@@ -10,6 +10,7 @@ import { LanguageProvider } from './context/LanguageContext';
 import { AuthProvider } from './contexts/AuthContext';
 import ProtectedRoute from './components/ProtectedRoute';
 import ErrorBoundary from './components/ErrorBoundary';
+import ActiveSessionGuard from './components/ActiveSessionGuard';
 import LobbyPage from './pages/LobbyPage';
 import JoinPage from './pages/JoinPage';
 import WaitingPage from './pages/WaitingPage';
@@ -29,6 +30,7 @@ function App() {
       <LanguageProvider>
         <GameProvider>
           <Router>
+            <ActiveSessionGuard>
             <Routes>
               {/* Public routes */}
               <Route path="/" element={<Navigate to="/lobby" replace />} />
@@ -95,6 +97,7 @@ function App() {
                 }
               />
             </Routes>
+            </ActiveSessionGuard>
           </Router>
           
           {/* Toast Notifications */}

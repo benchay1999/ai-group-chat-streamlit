@@ -9,7 +9,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { sessionsAPI } from '../services/sessionsAPI';
 import { format } from 'date-fns';
 import { 
-  Copy, Check, ExternalLink, Key, DollarSign, 
+  ExternalLink, DollarSign, 
   TrendingUp, Zap, Star, Sparkles, Award, Gem, Wallet, AlertCircle, ArrowRight, Clock
 } from 'lucide-react';
 import toast from 'react-hot-toast';
@@ -24,9 +24,6 @@ const DashboardPage = () => {
   const [earnings, setEarnings] = useState(null);
   const [loading, setLoading] = useState(true);
   const [earningsLoading, setEarningsLoading] = useState(true);
-  const [claimKey, setClaimKey] = useState('');
-  const [claiming, setClaiming] = useState(false);
-  const [copiedKey, setCopiedKey] = useState(null);
   const [walletData, setWalletData] = useState(null);
   const [walletLoading, setWalletLoading] = useState(true);
 
@@ -104,31 +101,6 @@ const DashboardPage = () => {
     }
   };
 
-  const handleClaimKey = async (e) => {
-    e.preventDefault();
-    if (!claimKey.trim()) return;
-
-    try {
-      setClaiming(true);
-      await sessionsAPI.claimKey(claimKey);
-      toast.success('Completion key claimed successfully!');
-      setClaimKey('');
-      loadSessions();
-      loadEarnings();
-    } catch (error) {
-      const message = error.response?.data?.detail || 'Failed to claim key';
-      toast.error(message);
-    } finally {
-      setClaiming(false);
-    }
-  };
-
-  const copyToClipboard = (text, sessionId) => {
-    navigator.clipboard.writeText(text);
-    setCopiedKey(sessionId);
-    toast.success('Copied to clipboard!');
-    setTimeout(() => setCopiedKey(null), 2000);
-  };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-black">
@@ -470,32 +442,6 @@ const DashboardPage = () => {
           </div>
         )}
 
-        {/* Claim Completion Key Section */}
-        <div className="bg-gray-800 rounded-xl shadow-2xl p-6 mb-8 border border-gray-700">
-          <h2 className="text-2xl font-bold text-white mb-4 flex items-center gap-2">
-            <Key className="text-yellow-500" />
-            Claim Completion Key
-          </h2>
-          <p className="text-gray-400 mb-4">
-            Enter a completion key from a game you played to claim it to your account
-          </p>
-          <form onSubmit={handleClaimKey} className="flex gap-3">
-            <input
-              type="text"
-              value={claimKey}
-              onChange={(e) => setClaimKey(e.target.value)}
-              placeholder="Paste your completion key here..."
-              className="flex-1 px-4 py-3 bg-gray-900 text-white border border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-transparent"
-            />
-            <button
-              type="submit"
-              disabled={claiming || !claimKey.trim()}
-              className="px-6 py-3 bg-gradient-to-r from-cyan-600 to-blue-600 text-white rounded-lg font-medium hover:from-cyan-700 hover:to-blue-700 focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:ring-offset-2 focus:ring-offset-gray-900 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
-            >
-              {claiming ? 'Claiming...' : 'Claim Key'}
-            </button>
-          </form>
-        </div>
 
         {/* Sessions List */}
         <div className="bg-gray-800 rounded-xl shadow-2xl overflow-hidden border border-gray-700">
@@ -540,7 +486,10 @@ const DashboardPage = () => {
                       Players
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
-                      Completion Key
+                      Discussion
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
+                      Voting
                     </th>
                     <th className="px-6 py-3 text-right text-xs font-medium text-gray-400 uppercase tracking-wider">
                       Actions
@@ -601,27 +550,17 @@ const DashboardPage = () => {
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-400">
                         {session.num_human_players}/{session.total_players}
                       </td>
-                      <td className="px-6 py-4">
-                        <div className="flex items-center gap-2">
-                          <code className="text-xs text-gray-500 bg-gray-900 px-2 py-1 rounded max-w-xs truncate">
-                            {session.completion_key.substring(0, 20)}...
-                          </code>
-                          <button
-                            onClick={() => copyToClipboard(session.completion_key, session.id)}
-                            className="p-1 text-gray-500 hover:text-cyan-400 transition-colors"
-                            title="Copy completion key"
-                          >
-                            {copiedKey === session.id ? (
-                              <Check className="w-4 h-4 text-green-500" />
-                            ) : (
-                              <Copy className="w-4 h-4" />
-                            )}
-                          </button>
-                        </div>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">
+                        {Math.floor(session.discussion_duration / 60)}m {session.discussion_duration % 60}s
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">
+                        {Math.floor(session.voting_duration / 60)}m {session.voting_duration % 60}s
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-right text-sm">
                         <Link
                           to={`/sessions/${session.id}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
                           className="inline-flex items-center gap-1 text-cyan-400 hover:text-cyan-300 font-medium transition-colors"
                         >
                           View Details

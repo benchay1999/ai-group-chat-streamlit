@@ -7,7 +7,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { sessionsAPI } from '../services/sessionsAPI';
 import { format } from 'date-fns';
-import { ArrowLeft, Copy, Check, Users, MessageCircle, Trophy, DollarSign } from 'lucide-react';
+import { ArrowLeft, Users, MessageCircle, Trophy, DollarSign } from 'lucide-react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip } from 'recharts';
 import toast from 'react-hot-toast';
 
@@ -15,7 +15,6 @@ const SessionDetailPage = () => {
   const { sessionId } = useParams();
   const [session, setSession] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [copiedKey, setCopiedKey] = useState(false);
 
   useEffect(() => {
     loadSession();
@@ -34,12 +33,6 @@ const SessionDetailPage = () => {
     }
   };
 
-  const copyToClipboard = (text) => {
-    navigator.clipboard.writeText(text);
-    setCopiedKey(true);
-    toast.success('Copied to clipboard!');
-    setTimeout(() => setCopiedKey(false), 2000);
-  };
 
   if (loading) {
     return (
@@ -205,34 +198,6 @@ const SessionDetailPage = () => {
           </div>
         )}
 
-        {/* Completion Key Card */}
-        <div className="bg-white rounded-lg shadow p-6 mb-8">
-          <h2 className="text-lg font-semibold text-gray-900 mb-3">Completion Key</h2>
-          <div className="flex items-center gap-3">
-            <div className="flex-1 bg-gray-50 px-4 py-3 rounded-lg font-mono text-sm text-gray-700 overflow-x-auto">
-              {session.completion_key}
-            </div>
-            <button
-              onClick={() => copyToClipboard(session.completion_key)}
-              className="px-4 py-3 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 flex items-center gap-2"
-            >
-              {copiedKey ? (
-                <>
-                  <Check className="w-4 h-4" />
-                  Copied!
-                </>
-              ) : (
-                <>
-                  <Copy className="w-4 h-4" />
-                  Copy
-                </>
-              )}
-            </button>
-          </div>
-          <p className="mt-2 text-sm text-gray-500">
-            Use this key to prove completion for Mechanical Turk compensation.
-          </p>
-        </div>
 
         {/* MTurk Information Card */}
         {(session.mturk_worker_id || session.mturk_assignment_id || session.calculated_earnings) && (

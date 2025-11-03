@@ -17,7 +17,7 @@ import { User, LogIn, Award } from 'lucide-react';
 
 const LobbyPage = () => {
   const navigate = useNavigate();
-  const { selectRoom, joinRoom } = useGame();
+  const { selectRoom, joinRoom, getActiveSession } = useGame();
   const { t, toggleLanguage, language } = useLanguage();
   const { isAuthenticated, user } = useAuth();
   const [rooms, setRooms] = useState([]);
@@ -64,6 +64,15 @@ const LobbyPage = () => {
   };
 
   const handleCreateRoom = async (config) => {
+    // Client-side validation: Check for active session
+    const activeSession = getActiveSession();
+    if (activeSession) {
+      toast.error('You already have an active game. Please leave it first.');
+      console.log('❌ Blocked create attempt - active session exists:', activeSession);
+      setIsCreateModalOpen(false);
+      return;
+    }
+
     try {
       const result = await roomAPI.createRoom(config);
       
