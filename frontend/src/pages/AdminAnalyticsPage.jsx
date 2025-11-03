@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { format } from 'date-fns';
-import { TrendingUp, DollarSign, Activity, Database } from 'lucide-react';
+import { TrendingUp, DollarSign, Activity, Database, ArrowLeft } from 'lucide-react';
 import api from '../services/api';
 
 const AdminAnalyticsPage = () => {
@@ -62,6 +63,15 @@ const AdminAnalyticsPage = () => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-purple-900 to-gray-900 p-6">
       <div className="max-w-7xl mx-auto">
+        {/* Back Button */}
+        <Link
+          to="/dashboard"
+          className="inline-flex items-center gap-2 text-gray-300 hover:text-white mb-6 transition-colors"
+        >
+          <ArrowLeft className="w-5 h-5" />
+          <span className="font-medium">Back to Dashboard</span>
+        </Link>
+
         {/* Header */}
         <div className="flex items-center justify-between mb-8">
           <div>

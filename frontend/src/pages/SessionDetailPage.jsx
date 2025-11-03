@@ -7,7 +7,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { sessionsAPI } from '../services/sessionsAPI';
 import { format } from 'date-fns';
-import { ArrowLeft, Copy, Check, Users, MessageCircle, Trophy } from 'lucide-react';
+import { ArrowLeft, Copy, Check, Users, MessageCircle, Trophy, DollarSign } from 'lucide-react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip } from 'recharts';
 import toast from 'react-hot-toast';
 
