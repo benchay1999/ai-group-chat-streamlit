@@ -10,7 +10,7 @@ import { sessionsAPI } from '../services/sessionsAPI';
 import { format } from 'date-fns';
 import { 
   ExternalLink, DollarSign, 
-  TrendingUp, Zap, Star, Sparkles, Award, Gem, Wallet, AlertCircle, ArrowRight, Clock
+  TrendingUp, Zap, Star, Sparkles, Award, Gem, Wallet, AlertCircle, ArrowRight, Clock, Check
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../services/api';
