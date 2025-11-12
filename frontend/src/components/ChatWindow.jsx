@@ -31,12 +31,14 @@ const ChatWindow = ({ chat, typing, currentPlayerId }) => {
             className={`flex ${isCurrentPlayer ? 'justify-end' : 'justify-start'} animate-fade-in`}
           >
             <div
-              className={`max-w-md rounded-lg p-3 shadow-sm bg-gradient-to-r ${playerColor.gradient} ${playerColor.text}`}
+              className={`max-w-md rounded-lg p-4 shadow-lg bg-gradient-to-r ${playerColor.gradient} ${playerColor.text}`}
             >
-              <p className={`text-xs font-semibold mb-1 ${playerColor.textLight}`}>
+              <p className={`text-xs font-bold mb-2 ${playerColor.senderText} uppercase tracking-wide filter ${playerColor.textShadow}`}>
                 {msg.sender}
               </p>
-              <p className="text-sm leading-relaxed">{msg.message}</p>
+              <p className={`text-base leading-relaxed font-medium filter ${playerColor.textShadow}`}>
+                {msg.message}
+              </p>
             </div>
           </div>
         );

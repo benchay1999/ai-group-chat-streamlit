@@ -293,15 +293,15 @@ const SessionDetailPage = () => {
                 return (
                   <div
                     key={index}
-                    className={`p-4 rounded-lg ${playerColor.bg} border-l-4 ${playerColor.border}`}
+                    className={`p-4 rounded-lg ${playerColor.bg} border-l-4 ${playerColor.border} shadow-sm hover:shadow-md transition-shadow`}
                   >
                     <div className="flex items-center justify-between mb-2">
-                      <span className="font-medium text-gray-900">{msg.sender}</span>
-                      <span className="text-xs text-gray-500">
+                      <span className="font-bold text-gray-900 text-sm uppercase tracking-wide">{msg.sender}</span>
+                      <span className="text-xs text-gray-500 font-medium">
                         {format(new Date(msg.timestamp * 1000), 'HH:mm:ss')}
                       </span>
                     </div>
-                    <p className="text-gray-700">{msg.message}</p>
+                    <p className="text-gray-800 font-medium leading-relaxed">{msg.message}</p>
                   </div>
                 );
               })
