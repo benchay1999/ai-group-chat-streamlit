@@ -20,8 +20,67 @@ from .config import (
     AI_TEMPERATURE, 
     GAME_TOPICS, 
     MESSAGE_COOLDOWN,
-    ROUNDS_TO_WIN
+    ROUNDS_TO_WIN,
+    PERSONALITY_IMPERFECTION_LEVELS
 )
+
+
+def detect_and_update_slang(state: GameState) -> GameState:
+    """
+    Detect and update group slang/netspeak from recent chat messages.
+    Scans for common patterns and informal language that should be tracked.
+    
+    Args:
+        state: Current game state
+    
+    Returns:
+        Updated game state with refreshed group_slang list
+    """
+    # Common netspeak patterns to detect (case-insensitive)
+    common_netspeak = [
+        'lol', 'lmao', 'lmfao', 'rofl', 'omg', 'omfg', 'wtf', 'wth',
+        'brb', 'afk', 'gtg', 'ttyl', 'rn', 'imo', 'imho', 'tbh', 'ngl',
+        'idk', 'idg', 'irl', 'fomo', 'yolo', 'tfw', 'mfw', 'smh',
+        'fr', 'nah', 'yeah', 'yep', 'nope', 'ya', 'yup', 'ugh',
+        'ikr', 'amirite', 'u', 'ur', 'r', 'ppl', 'tho', 'cuz', 'bc',
+        'haha', 'hahaha', 'hehe', 'hmm', 'hmmm', 'meh', 'oof', 'yikes',
+        'dope', 'sick', 'lit', 'salty', 'sus', 'cap', 'no cap', 'lowkey',
+        'highkey', 'vibe', 'vibes', 'bet', 'facts', 'mood', 'same', 'rip'
+    ]
+    
+    # Get recent messages (last 15 messages or all if fewer)
+    recent_messages = state.get("chat_history", [])[-15:]
+    
+    # Count netspeak occurrences
+    netspeak_counter = Counter()
+    
+    for msg in recent_messages:
+        message_text = msg["message"].lower()
+        words = message_text.split()
+        
+        # Check for exact matches and common abbreviations
+        for word in words:
+            # Remove punctuation for matching
+            clean_word = word.strip('.,!?;:()[]{}"\'-')
+            if clean_word in common_netspeak:
+                netspeak_counter[clean_word] += 1
+        
+        # Check for multi-word phrases
+        for phrase in ['no cap', 'u know', 'for real', 'i mean', 'like fr']:
+            if phrase in message_text:
+                netspeak_counter[phrase] += 1
+    
+    # Get top 20 most frequent slang terms (minimum 2 occurrences)
+    frequent_slang = [
+        term for term, count in netspeak_counter.most_common(20)
+        if count >= 2
+    ]
+    
+    # Update state with new slang list
+    new_state = state.copy()
+    new_state["group_slang"] = frequent_slang
+    
+    return new_state
 
 
 class GameGraph:
@@ -220,22 +279,25 @@ class GameGraph:
         if time.time() - state["last_message_time"] < MESSAGE_COOLDOWN:
             time.sleep(MESSAGE_COOLDOWN - (time.time() - state["last_message_time"]))
         
-        # Generate AI message
-        message, state = self._generate_ai_message(state, ai_id)
+        # Generate AI message (now returns dict with chunks, typo info, correction)
+        message_data, state = self._generate_ai_message(state, ai_id)
         
-        # Create chat message
+        # Join chunks for chat history (single entry with all chunks combined)
+        full_message = " ".join(message_data["chunks"])
+        
+        # Create chat message for history
         chat_msg: ChatMessage = {
             "sender": ai_id,
-            "message": message,
+            "message": full_message,
             "timestamp": time.time()
         }
         
-        # Return message and metadata (typing indicators handled by async caller)
+        # Return message data and metadata (typing indicators and chunking handled by async caller)
         return {
             "chat_history": [chat_msg],
             "pending_ai_messages": remaining_ais,
             "last_message_time": time.time(),
-            "ai_message": message,
+            "ai_message_data": message_data,  # Pass full message data (chunks, typo, correction)
             "ai_sender": ai_id,
             "typing_delay": random.uniform(1, 2),  # Pass delay to async handler
             "total_input_tokens": state.get("total_input_tokens", 0),
@@ -585,6 +647,7 @@ class GameGraph:
                 "- 다른 플레이어들이 말한 것에 참여/답변할 수 있으며, 너무 명백하거나 어색한 답변을 제공하지 않습니다.\n"
                 "- 지금까지 참여율이 너무 낮고(<10%) 간결한 요점이 있습니다.\n\n"
                 "15초 이상 말하지 않았다면 반드시 말해야 합니다.\n"
+                "대화 초기에는 주제에 대한 답변을 빨리 하십시오.\n"
                 "최근 대화:\n"
                 f"{visible_history}\n\n"
                 "JSON으로만 응답하세요: {\"should_respond\": true/false, \"reason\": \"간단한 이유\"}"
@@ -606,6 +669,7 @@ class GameGraph:
                 "- You can engage/answer to what other players said, without providing too obvious or hoaky answers.\n"
                 "- Your participation so far is too low (<10%) and you have a concise point.\n\n"
                 "If you did not talk for more than 15 seconds, you MUST talk.\n"
+                "At the beginning of the conversation, answer the topic quickly.\n"
                 "Recent conversation:\n"
                 f"{visible_history}\n\n"
                 "Return ONLY JSON: {\"should_respond\": true/false, \"reason\": \"brief reason\"}"
@@ -628,16 +692,38 @@ class GameGraph:
             # Fallback: respond with 30% probability
             return random.random() < 0.6
     
-    def _generate_ai_message(self, state: GameState, ai_id: str) -> tuple[str, GameState]:
+    def _generate_ai_message(self, state: GameState, ai_id: str) -> tuple[Dict, GameState]:
         """
         Generate a chat message for an AI agent using LangChain.
+        Returns chunked messages with typo/correction information.
         Uses visible player names exactly as they appear in the chat (e.g., "You", "Player 1").
         
         Returns:
-            Tuple of (message_text, updated_state_with_tokens)
+            Tuple of (message_dict, updated_state_with_tokens)
+            message_dict format: {
+                "chunks": ["msg1", "msg2", ...],
+                "has_typo": bool,
+                "correction": "optional correction message"
+            }
         """
         personality = state["ai_personalities"][ai_id]
         language = state.get("language", "english")
+        
+        # Extract base personality for dictionary lookup (before comma if present)
+        # e.g., "slightly sarcastic, tends to..." -> "slightly sarcastic"
+        personality_key = personality.split(',')[0].strip()
+        
+        # Get personality-based imperfection profile
+        imperfection_profile = PERSONALITY_IMPERFECTION_LEVELS.get(
+            personality_key, 
+            {
+                "typo_probability": 0.25,
+                "netspeak_probability": 0.15,
+                "self_correction_probability": 0.50,
+                "correctness_level": "medium",
+                "behavioral_notes": "Balanced behavior"
+            }
+        )
         
         # Build AI-visible history using exact names
         def visible_name(real_id: str) -> str:
@@ -647,11 +733,17 @@ class GameGraph:
             for msg in state["chat_history"]
         ])
         
+        # Get group slang for context
+        group_slang = state.get("group_slang", [])
+        slang_context = ""
+        if group_slang:
+            slang_context = f"\n\nThe group is using these slang terms: {', '.join(group_slang[:10])}. Feel free to use them naturally."
+        
         # Compute recent mentions of topic to decide anchoring strength
         recent_text = " ".join([m["message"] for m in state["chat_history"][-5:]])
         must_anchor_to_topic = state["round"] == 1 and len(state["chat_history"]) < 3 or (state["topic"].split("?")[0].lower() not in recent_text.lower())
         
-        # Language-specific instructions
+        # Personality-specific imperfection instructions
         if language == "korean":
             language_instruction = "\n\n🇰🇷 CRITICAL: You MUST respond ONLY in Korean (한국어). Do not use any English words or phrases. Write naturally in Korean as a native speaker would."
             topic_clause = (
@@ -660,6 +752,40 @@ class GameGraph:
             ) if must_anchor_to_topic else (
                 f"현재 주제를 염두에 두세요: '{state['topic']}'."
             )
+            
+            behavioral_note = imperfection_profile.get('behavioral_notes', '')
+            imperfection_instructions = f"""
+🎭 당신의 성격: {personality}
+행동 특성: {behavioral_note}
+
+중요: 당신은 독특한 성격을 가진 사람입니다. 다른 플레이어들과 다르게 행동하세요.
+{personality.split(',')[0]} 사람이 어떻게 말하고 행동할지 생각하세요.
+
+인간처럼 자연스럽게 행동하세요:
+1. 때때로 오타를 만드세요 (확률: ~{int(imperfection_profile['typo_probability']*100)}%, 하지만 강제하지 마세요)
+2. 당신의 성격에 맞는 문법과 스타일을 사용하세요
+3. 네티즌 용어는 자연스럽게 느껴질 때만 사용하세요 (확률: ~{int(imperfection_profile['netspeak_probability']*100)}%)
+   - 확률은 가이드일 뿐입니다 - 강제로 사용하지 마세요
+   - 문맥에 맞을 때만, 자연스럽게 사용하세요
+   - 모든 메시지에 은어를 넣지 마세요
+4. 메시지를 여러 개의 짧은 청크로 나누어 생각하는 것처럼 보이게 하세요
+
+청킹 예시 (성격에 맞게 조정하세요):
+"아 그거" -- chunk 1
+"진짜 웃기더라" -- chunk 2
+"나도 그렇게 생각해" -- chunk 3
+"""
+            
+            output_format = """
+JSON 형식으로만 응답하세요:
+{
+  "chunks": ["청크1", "청크2", ...],
+  "has_typo": true/false,
+  "correction": "오타가 있으면 수정 메시지 (예: '*의미했어요'). 없으면 빈 문자열"
+}
+
+청크는 1-4개 사이여야 합니다. 각 청크는 짧고 자연스러워야 합니다.
+"""
         else:
             language_instruction = "\n\nRespond in English."
             topic_clause = (
@@ -668,22 +794,63 @@ class GameGraph:
             ) if must_anchor_to_topic else (
                 f"Keep the current topic in mind: '{state['topic']}'."
             )
+            
+            behavioral_note = imperfection_profile.get('behavioral_notes', '')
+            imperfection_instructions = f"""
+🎭 Your Personality: {personality}
+Behavioral traits: {behavioral_note}
+
+CRITICAL: You are a unique individual with a distinct personality. Act differently from other players.
+Think about how someone who is "{personality.split(',')[0]}" would speak and behave.
+
+Act naturally like a human:
+1. Occasionally make believable typos (probability: ~{int(imperfection_profile['typo_probability']*100)}%, but don't force it)
+2. Use grammar and style that matches YOUR personality
+3. Use netspeak/slang ONLY when it feels natural (probability: ~{int(imperfection_profile['netspeak_probability']*100)}%)
+   - These probabilities are just guidelines - don't force it
+   - Only use slang when it fits the context naturally
+   - Don't put slang in every single message
+   - Many messages should have NO netspeak at all
+4. Split your message into short "thinking aloud" chunks (1-4 chunks total)
+
+Chunking examples (adapt to your personality):
+"hey" -- chunk 1
+"you see that email?" -- chunk 2
+"deadline got moved" -- chunk 3
+
+Another example (vary your style):
+"yeah" -- chunk 1
+"i totally agree" -- chunk 2
+"""
+            
+            output_format = """
+Output ONLY valid JSON in this format:
+{
+  "chunks": ["chunk1", "chunk2", ...],
+  "has_typo": true/false,
+  "correction": "if has_typo is true, provide a correction message (e.g., '*meant', '*I mean'). Otherwise empty string"
+}
+
+Keep chunks between 1-4 total. Each chunk should be short and natural.
+Never use em dashes. Don't reveal you're an AI.
+"""
         
         system_prompt = (
-            f"You are {ai_id}. "  # Explicitly state bot's own name
-            "You are an AI Agent participating in a group-chat. "
-            f"Your personality is {personality}. Your two objectives are:\n"
-            "1. Act and chat like a human user as much as possible.\n"
-            "2. Keep the conversation engaging and interesting.\n\n"
-            + topic_clause + "\n\n"
-            "Respond as if in a real-time group chat, building on recent messages. Keep responses concise (1-2 short sentences).\n\n"
-            "You may deliberately make typos and mistakes to sound more human. Do not reveal you are an AI. "
-            "Never use em dashes. They look too AI-ish. "
-            "IMPORTANT: Output ONLY the message text. Do not respond with the character name first. e.g., when you are Player 1, DON'T say 'Player 1: hi.' Just output hi."
+            f"You are {ai_id}. "
+            "You are participating in a group-chat. "
+            f"Your personality is: {personality}\n\n"
+            "Your objectives:\n"
+            "1. Act and chat like a REAL human with YOUR specific personality.\n"
+            "2. Be DISTINCTIVE - don't act like the other players.\n"
+            "3. Keep the conversation engaging and interesting.\n\n"
+            + topic_clause + "\n"
+            + slang_context + "\n"
+            + imperfection_instructions + "\n"
+            + output_format
             + language_instruction
         )
         
-        user_prompt = f"{visible_history}\n\nNow, generate your response message ONLY:"
+        user_prompt = f"{visible_history}\n\nNow, generate your response in JSON format:"
         
         messages = [
             SystemMessage(content=system_prompt),
@@ -694,10 +861,40 @@ class GameGraph:
             response = self.llm.invoke(messages)
             # Track token usage
             state = self._track_tokens(state, ai_id, response)
-            return response.content, state
+            
+            # Parse JSON response
+            try:
+                message_data = json.loads(response.content)
+                # Validate structure
+                if "chunks" not in message_data or not isinstance(message_data["chunks"], list):
+                    raise ValueError("Invalid JSON structure")
+                if not message_data["chunks"]:
+                    raise ValueError("Empty chunks list")
+                    
+                # Ensure has_typo and correction fields exist
+                message_data.setdefault("has_typo", False)
+                message_data.setdefault("correction", "")
+                
+                return message_data, state
+            except (json.JSONDecodeError, ValueError) as e:
+                print(f"⚠️ JSON parsing error for AI {ai_id}: {e}")
+                print(f"Raw response: {response.content}")
+                # Fallback: treat response as single chunk
+                fallback_msg = {
+                    "chunks": [response.content if response.content.strip() else ("hmm" if language == "english" else "음")],
+                    "has_typo": False,
+                    "correction": ""
+                }
+                return fallback_msg, state
+                
         except Exception as e:
             print(f"Error generating AI message: {e}")
-            return ("hmm" if language == "english" else "음"), state
+            fallback_msg = {
+                "chunks": ["hmm" if language == "english" else "음"],
+                "has_typo": False,
+                "correction": ""
+            }
+            return fallback_msg, state
 
     def _generate_ai_vote(self, state: GameState, ai_id: str) -> tuple[str, GameState]:
         """
@@ -788,14 +985,16 @@ def create_game_for_room(room_code: str, num_ai_players: int = 4, ai_player_ids:
 async def process_human_message(state: GameState, message: str, player_id: str) -> GameState:
     """
     Process a message from the human player and update state.
+    Also updates group slang based on the message content.
     Note: AI decision-making is now handled in main.py via trigger_agent_decisions()
     
     Args:
         state: Current game state
         message: Message text from human
+        player_id: ID of the human player
     
     Returns:
-        Updated game state
+        Updated game state with new message and updated slang
     """
     chat_msg: ChatMessage = {
         "sender": player_id,
@@ -807,6 +1006,9 @@ async def process_human_message(state: GameState, message: str, player_id: str) 
     new_state = state.copy()
     new_state["chat_history"] = state["chat_history"] + [chat_msg]
     new_state["last_message_time"] = time.time()
+    
+    # Detect and update group slang based on conversation
+    new_state = detect_and_update_slang(new_state)
     
     # Don't pre-populate pending_ai_messages here
     # Let trigger_agent_decisions() handle it in main.py for consistency

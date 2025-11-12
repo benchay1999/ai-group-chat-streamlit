@@ -62,6 +62,7 @@ class GameState(TypedDict):
     ai_personalities: Dict[str, str]  # ai_id -> personality
     pseudonym_map: Dict[str, str]  # {real_id: pseudo_label} shared across all agents
     human_external_name: str  # How AIs refer to the human (e.g., "Player 5")
+    group_slang: List[str]  # Dynamically learned slang/netspeak from conversation
     
     # Timing
     last_message_time: float
@@ -156,6 +157,7 @@ def create_initial_state(room_code: str, num_ai_players: int, ai_player_ids: lis
         ai_personalities=ai_personalities,
         pseudonym_map=pseudonym_map,
         human_external_name=human_external_name,
+        group_slang=[],  # Initialize empty, will be populated during conversation
         last_message_time=time.time(),
         round_start_time=time.time(),
         winner=None,

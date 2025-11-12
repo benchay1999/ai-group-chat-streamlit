@@ -4,6 +4,7 @@
  */
 
 import { useEffect, useRef } from 'react';
+import { getPlayerColor } from '../utils/playerColors';
 
 const ChatWindow = ({ chat, typing, currentPlayerId }) => {
   const chatEndRef = useRef(null);
@@ -23,21 +24,16 @@ const ChatWindow = ({ chat, typing, currentPlayerId }) => {
 
       {chat.map((msg, idx) => {
         const isCurrentPlayer = msg.sender === currentPlayerId;
+        const playerColor = getPlayerColor(msg.sender);
         return (
           <div
             key={idx}
             className={`flex ${isCurrentPlayer ? 'justify-end' : 'justify-start'} animate-fade-in`}
           >
             <div
-              className={`max-w-md rounded-lg p-3 shadow-sm ${
-                isCurrentPlayer
-                  ? 'bg-gradient-to-r from-blue-500 to-purple-500 text-white'
-                  : 'bg-white text-gray-800'
-              }`}
+              className={`max-w-md rounded-lg p-3 shadow-sm bg-gradient-to-r ${playerColor.gradient} ${playerColor.text}`}
             >
-              <p className={`text-xs font-semibold mb-1 ${
-                isCurrentPlayer ? 'text-blue-100' : 'text-gray-500'
-              }`}>
+              <p className={`text-xs font-semibold mb-1 ${playerColor.textLight}`}>
                 {msg.sender}
               </p>
               <p className="text-sm leading-relaxed">{msg.message}</p>

@@ -10,6 +10,7 @@ import { format } from 'date-fns';
 import { ArrowLeft, Users, MessageCircle, Trophy } from 'lucide-react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip } from 'recharts';
 import toast from 'react-hot-toast';
+import { getPlayerColor } from '../utils/playerColors';
 
 const SessionDetailPage = () => {
   const { sessionId } = useParams();
@@ -287,15 +288,12 @@ const SessionDetailPage = () => {
           <div className="space-y-3 max-h-[600px] overflow-y-auto">
             {chatHistory.length > 0 ? (
               chatHistory.map((msg, index) => {
-                const player = players.find(p => p.id === msg.sender);
-                const isHuman = player?.role === 'human';
+                const playerColor = getPlayerColor(msg.sender);
                 
                 return (
                   <div
                     key={index}
-                    className={`p-4 rounded-lg ${
-                      isHuman ? 'bg-blue-50 border-l-4 border-blue-500' : 'bg-gray-50 border-l-4 border-purple-500'
-                    }`}
+                    className={`p-4 rounded-lg ${playerColor.bg} border-l-4 ${playerColor.border}`}
                   >
                     <div className="flex items-center justify-between mb-2">
                       <span className="font-medium text-gray-900">{msg.sender}</span>

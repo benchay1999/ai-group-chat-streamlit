@@ -807,125 +807,76 @@ async def complete_voting(room_code: str):
     await save_session_stats(room_code, state)
 
 
-def chunk_message(message: str, max_chunks: int = 4) -> List[str]:
+async def schedule_correction_message(room_code: str, ai_id: str, correction_text: str, ai_sender: str, messages_before_correction: int):
     """
-    Split a message into 2-4 chunks based on commas and sentence boundaries.
-    Simulates human-like incremental typing by removing commas and keeping sentence endings.
-    Respects quoted text - doesn't split inside quotes.
+    Schedule a delayed correction message for a typo.
+    Waits 2-8 seconds and sends correction with asterisk prefix.
     
     Args:
-        message: Full message text to chunk
-        max_chunks: Maximum number of chunks (default 4)
-    
-    Returns:
-        List of message chunks (commas removed, sentence punctuation preserved)
-    
-    Example:
-        "yes, I think so. That makes sense!" → ["yes", "I think so.", "That makes sense!"]
-        'He said "stop." Then left.' → ['He said "stop."', 'Then left.']
+        room_code: Room identifier
+        ai_id: AI agent identifier
+        correction_text: The correction message (e.g., "*meant")
+        ai_sender: The display name of the AI sender
+        messages_before_correction: Number of messages in chat history before scheduling
     """
-    # Handle empty or whitespace-only messages
-    if not message or not message.strip():
-        return [message]
+    # Wait 2-8 seconds before sending correction
+    correction_delay = random.uniform(2.0, 8.0)
+    print(f"⏱️  Scheduling correction for {ai_id} in {correction_delay:.2f}s")
+    await asyncio.sleep(correction_delay)
     
-    # If message is very short, don't chunk it
-    if len(message) < 20:
-        return [message]
+    # Check if room still exists
+    if room_code not in rooms:
+        print(f"🚫 Correction for {ai_id} cancelled - room deleted")
+        return
     
-    # Find split points that are NOT inside quotes
-    def find_split_points(text):
-        """Find positions where we can split (sentence endings and commas outside quotes)"""
-        split_points = []
-        in_double_quote = False
-        in_single_quote = False
-        
-        for i, char in enumerate(text):
-            # Track quote state
-            if char == '"' and (i == 0 or text[i-1] != '\\'):
-                in_double_quote = not in_double_quote
-            elif char == "'" and (i == 0 or text[i-1] != '\\'):
-                in_single_quote = not in_single_quote
-            
-            # Only split at punctuation outside quotes
-            if not in_double_quote and not in_single_quote:
-                if char in '.!?,':
-                    # Record split point with punctuation type
-                    split_points.append((i, char))
-        
-        return split_points
+    current_state = rooms[room_code]['state']
     
-    split_points = find_split_points(message)
+    # Check if still in discussion phase
+    if current_state['phase'] != Phase.DISCUSSION:
+        print(f"🚫 Correction for {ai_id} cancelled - phase is {current_state['phase'].value}")
+        return
     
-    # If no split points found, return original
-    if not split_points:
-        return [message]
+    # Check if other messages were sent in between (adds realism)
+    messages_now = len(current_state.get('chat_history', []))
+    messages_between = messages_now - messages_before_correction
     
-    # Create chunks from split points
-    chunks = []
-    start = 0
+    print(f"📝 Sending correction for {ai_id}. {messages_between} messages sent in between.")
     
-    for pos, punct in split_points:
-        # Extract text up to and including the punctuation
-        chunk_text = message[start:pos+1].strip()
-        
-        if chunk_text:
-            # Remove commas to make chunks more natural
-            # Keep sentence-ending punctuation (. ! ?)
-            if punct == ',':
-                chunk_text = chunk_text[:-1].strip()  # Remove trailing comma
-            
-            if chunk_text:  # Only add non-empty chunks
-                chunks.append(chunk_text)
-        
-        start = pos + 1
+    # Create correction message
+    chat_msg = {
+        "sender": ai_sender,
+        "message": correction_text,
+        "timestamp": time.time()
+    }
     
-    # Add any remaining text after the last split point
-    if start < len(message):
-        remaining = message[start:].strip()
-        if remaining:
-            chunks.append(remaining)
+    # Add to chat history
+    current_state['chat_history'].append(chat_msg)
+    current_state['last_message_time'] = time.time()
+    rooms[room_code]['state'] = current_state
     
-    # If we have no chunks, return original
-    if not chunks:
-        return [message]
+    # Broadcast correction (minimal delay, just thinking time)
+    await broadcast_to_room(room_code, {
+        "type": "message",
+        "sender": ai_sender,
+        "message": correction_text
+    })
     
-    # Limit to max_chunks by combining adjacent chunks if needed
-    if len(chunks) > max_chunks:
-        combined = []
-        items_per_chunk = len(chunks) / max_chunks
-        
-        for chunk_idx in range(max_chunks):
-            start_idx = int(chunk_idx * items_per_chunk)
-            end_idx = int((chunk_idx + 1) * items_per_chunk) if chunk_idx < max_chunks - 1 else len(chunks)
-            combined_text = ' '.join(chunks[start_idx:end_idx])
-            if combined_text:
-                combined.append(combined_text)
-        
-        chunks = combined
-    
-    # Ensure we have at least 2 chunks for longer messages
-    if len(chunks) == 1 and len(message) > 40:
-        # Try to split roughly in half at a word boundary
-        mid = len(message) // 2
-        # Find nearest space after midpoint
-        space_pos = message.find(' ', mid)
-        if space_pos == -1:  # No space after mid, try before
-            space_pos = message.rfind(' ', 0, mid)
-        if space_pos > 0:
-            chunks = [message[:space_pos].strip(), message[space_pos+1:].strip()]
-    
-    # Final filter: ensure minimum of 2 chunks for meaningful chunking
-    if len(chunks) < 2:
-        return [message]
-    
-    return chunks
+    print(f"✅ Correction sent for {ai_id}: {correction_text}")
 
 
 async def process_single_ai_message(room_code: str, ai_id: str):
     """
     Process a single AI agent's message asynchronously.
     Allows multiple AI agents to respond simultaneously.
-    Implements chunk-based message sending for human-like typing behavior.
+    Implements LLM-generated chunk-based message sending for human-like typing behavior.
+    
+    HYBRID DELAY SYSTEM:
+    - Statistical model: 1 + N(0.255, 0.0255)×n_char + N(0.03, 0.003)×n_char_prev + Γ(2.5, 0.25)
+    - Typing speed: 15% faster than baseline (~3.92 chars/sec)
+    - Chunking behavior: LLM generates natural message chunks (1-4 chunks)
+    - Context awareness: Considers previous message length (cognitive load)
+    - Human-like imperfections: Typos, netspeak, self-corrections based on personality
+    
     Note: Should only be called from process_ai_messages() which handles locking.
     
     Args:
@@ -966,23 +917,65 @@ async def process_single_ai_message(room_code: str, ai_id: str):
             return
         
         # Extract message details before updating state
-        if 'ai_sender' not in result or 'ai_message' not in result:
+        if 'ai_sender' not in result or 'ai_message_data' not in result:
             return
             
         ai_sender = result['ai_sender']
-        ai_message = result['ai_message']
+        message_data = result['ai_message_data']
         
-        # Randomly decide whether to chunk message (30% probability)
-        should_chunk = random.random() < 0.3
+        # Extract chunks and typo information from LLM-generated response
+        chunks = message_data.get('chunks', [])
+        has_typo = message_data.get('has_typo', False)
+        correction = message_data.get('correction', '')
         
-        if should_chunk:
-            # Split message into chunks for human-like typing
-            chunks = chunk_message(ai_message, max_chunks=4)
-            print(f"📝 AI {ai_id} message split into {len(chunks)} chunks: {chunks}")
-        else:
-            # Send as single complete message (70% of the time)
-            chunks = [ai_message]
-            print(f"📝 AI {ai_id} sending complete message (no chunking)")
+        if not chunks:
+            print(f"⚠️ No chunks in message_data for {ai_id}")
+            return
+        
+        print(f"📝 AI {ai_id} generated {len(chunks)} chunks: {chunks}")
+        if has_typo and correction:
+            print(f"🔧 AI {ai_id} has typo, will send correction: {correction}")
+        
+        # =====================================================================
+        # HYBRID DELAY CALCULATION
+        # =====================================================================
+        import numpy as np
+        
+        # Get previous message length for context awareness (cognitive load)
+        chat_history = current_state.get('chat_history', [])
+        n_char_prev = len(chat_history[-1]['message']) if chat_history else 0
+        
+        # Calculate total message length from all chunks
+        full_message = " ".join(chunks)
+        n_char = len(full_message)
+        
+        # Statistical model parameters
+        # 1 + N(0.255, 0.0255)×n_char + N(0.03, 0.003)×n_char_prev + Γ(2.5, 0.25)
+        # https://dl.acm.org/doi/full/10.1145/3715275.3732108
+        
+        # Note: Typing speed enhanced by 15% (0.3 → 0.255s per char)
+        base_delay = 1.0  # Base reaction time
+        
+        # Typing rate with variance (Normal distribution)
+        # Enhanced by 15% (0.3 → 0.255s per char = ~3.92 chars/sec instead of 3.33)
+        typing_rate_per_char = max(0.1, np.random.normal(0.255, 0.0255))  # Clamp to avoid negative
+        
+        # Context factor - cognitive load from processing previous message
+        context_rate_per_char = max(0.0, np.random.normal(0.03, 0.003))
+        context_delay = context_rate_per_char * n_char_prev
+        
+        # Thinking time - Gamma distribution (right-skewed, models human thinking)
+        # Gamma(shape=2.5, scale=0.25) has mean=0.625s, variance=0.156s²
+        thinking_time = np.random.gamma(2.5, 0.25)
+        
+        # Total statistical delay
+        total_statistical_delay = base_delay + (typing_rate_per_char * n_char) + context_delay + thinking_time
+        
+        print(f"📊 Delay calculation for {ai_id}:")
+        print(f"   Message length: {n_char} chars, Previous: {n_char_prev} chars")
+        print(f"   Base: {base_delay:.2f}s, Typing: {typing_rate_per_char:.3f}s/char × {n_char} = {typing_rate_per_char * n_char:.2f}s")
+        print(f"   Context: {context_delay:.2f}s, Thinking: {thinking_time:.2f}s")
+        print(f"   Total delay: {total_statistical_delay:.2f}s")
         
         # Update pending_ai_messages to remove this AI
         current_state = rooms[room_code]['state']
@@ -991,8 +984,25 @@ async def process_single_ai_message(room_code: str, ai_id: str):
         # CRITICAL: Persist state update immediately to prevent duplicate processing
         rooms[room_code]['state'] = current_state
         
-        # Define typing speed (300 chars/minute = 5 chars/sec)
-        typing_speed_chars_per_sec = 290 / 60  # 5 characters per second
+        # =====================================================================
+        # DISTRIBUTE DELAY ACROSS CHUNKS (HYBRID APPROACH)
+        # =====================================================================
+        
+        # Calculate per-chunk delays proportionally
+        chunk_delays = []
+        total_chunk_chars = sum(len(chunk) for chunk in chunks)
+        
+        if len(chunks) > 1:
+            # Multi-chunk: Distribute delay proportionally by character count
+            for chunk in chunks:
+                chunk_proportion = len(chunk) / total_chunk_chars if total_chunk_chars > 0 else 1.0 / len(chunks)
+                chunk_delay = total_statistical_delay * chunk_proportion
+                chunk_delays.append(chunk_delay)
+        else:
+            # Single chunk: Use entire delay
+            chunk_delays = [total_statistical_delay]
+        
+        print(f"⏱️  Chunk delays: {[f'{d:.2f}s' for d in chunk_delays]}")
         
         # DEFENSE: Check phase before starting
         current_state = rooms[room_code]['state']
@@ -1007,8 +1017,8 @@ async def process_single_ai_message(room_code: str, ai_id: str):
             "status": "start"
         })
         
-        # Send each chunk with individual typing delays
-        for chunk_idx, chunk in enumerate(chunks):
+        # Send each chunk with statistically calculated delays
+        for chunk_idx, (chunk, chunk_delay) in enumerate(zip(chunks, chunk_delays)):
             # DEFENSE: Check phase before each chunk
             current_state = rooms[room_code]['state']
             if current_state['phase'] != Phase.DISCUSSION:
@@ -1021,12 +1031,17 @@ async def process_single_ai_message(room_code: str, ai_id: str):
                 })
                 return
             
-            # Add thinking/reaction delay before each utterance
-            # Short utterances (<=3 words) get 0.2s delay, longer ones get 1s
-            word_count = len(chunk.split())
-            thinking_delay = 0.2 if word_count <= 3 else 1.0
-            print(f"💭 AI {ai_id} thinking before chunk {chunk_idx+1}/{len(chunks)} ({word_count} words, {thinking_delay}s delay)")
-            await asyncio.sleep(thinking_delay)
+            # Split chunk delay into thinking (30%) and typing (70%) for better UX
+            thinking_portion = chunk_delay * 0.3
+            typing_portion = chunk_delay * 0.7
+            
+            # Add small variance to thinking time for realism
+            thinking_portion = thinking_portion * random.uniform(0.8, 1.2)
+            
+            print(f"💭 AI {ai_id} chunk {chunk_idx+1}/{len(chunks)}: thinking={thinking_portion:.2f}s, typing={typing_portion:.2f}s")
+            
+            # Thinking delay
+            await asyncio.sleep(thinking_portion)
             
             # DEFENSE: Check room and phase after thinking delay
             if room_code not in rooms:
@@ -1044,15 +1059,8 @@ async def process_single_ai_message(room_code: str, ai_id: str):
                 })
                 return
             
-            # Calculate typing delay for this chunk (250 chars/min = ~4.17 chars/sec)
-            chunk_typing_delay = len(chunk) / typing_speed_chars_per_sec
-            # Add variance for realism
-            chunk_typing_delay = chunk_typing_delay * random.uniform(0.8, 1.2)
-            
-            print(f"⌨️  AI {ai_id} typing chunk {chunk_idx+1}/{len(chunks)} ({len(chunk)} chars, {chunk_typing_delay:.1f}s delay)")
-            
-            # Wait for typing delay (typing indicator already shown)
-            await asyncio.sleep(chunk_typing_delay)
+            # Typing delay (simulates actual character-by-character typing)
+            await asyncio.sleep(typing_portion)
             
             # DEFENSE: Check room still exists after typing delay
             if room_code not in rooms:
@@ -1090,10 +1098,12 @@ async def process_single_ai_message(room_code: str, ai_id: str):
                 "message": chunk
             })
             
-            # Small pause between chunks (0.3-0.5s) if not the last chunk
+            # Small pause between chunks if not the last chunk
             # Simulates time to press "enter" and start next message
             if chunk_idx < len(chunks) - 1:
-                await asyncio.sleep(random.uniform(0.3, 0.5))
+                inter_chunk_pause = random.uniform(0.3, 0.5)
+                print(f"⏸️  Inter-chunk pause: {inter_chunk_pause:.2f}s")
+                await asyncio.sleep(inter_chunk_pause)
                 
                 # DEFENSE: Check room still exists after inter-chunk sleep
                 if room_code not in rooms:
@@ -1113,18 +1123,30 @@ async def process_single_ai_message(room_code: str, ai_id: str):
             "status": "stop"
         })
         
+        # Schedule correction message if has_typo is true
+        # Add 20-60% probability that another AI responds between typo and correction
+        if has_typo and correction and correction.strip():
+            # Record current message count for tracking
+            messages_before_correction = len(rooms[room_code]['state'].get('chat_history', []))
+            # Schedule the correction as a background task
+            asyncio.create_task(
+                schedule_correction_message(room_code, ai_id, correction, ai_sender, messages_before_correction)
+            )
+        
         # Handle any other broadcasts from result
         if 'broadcast_queue' in result:
             for msg in result['broadcast_queue']:
                 await broadcast_to_room(room_code, msg)
         
         # After AI speaks, give other agents a chance to respond
-        # Add small delay to allow message to be processed
-        await asyncio.sleep(1.25)
+        # Cooldown period to prevent immediate back-and-forth (models natural conversation pacing)
+        cooldown = random.uniform(0.8, 1.5)  # More natural than fixed 1.25s
+        print(f"⏱️  Post-message cooldown: {cooldown:.2f}s")
+        await asyncio.sleep(cooldown)
         
-        # DEFENSE: Check room still exists after final sleep
+        # DEFENSE: Check room still exists after cooldown
         if room_code not in rooms:
-            print(f"🚫 AI {ai_id} blocked after final delay - room deleted")
+            print(f"🚫 AI {ai_id} blocked after cooldown - room deleted")
             return
         
         # DEFENSE LAYER 4: Check phase before triggering more AI responses

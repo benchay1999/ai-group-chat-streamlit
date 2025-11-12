@@ -18,28 +18,153 @@ AI_MODEL_NAME = os.getenv("AI_MODEL_NAME", "gpt-4.1-nano")
 AI_TEMPERATURE = float(os.getenv("AI_TEMPERATURE", "0.8"))
 
 # AI Personalities (can be extended)
+# Each personality has distinct behavioral traits beyond just the label
 AI_PERSONALITIES = [
-    "slightly sarcastic",
-    "very cheerful",
-    "inquisitive",
-    "quiet and observant",
-    "enthusiastic",
-    "analytical",
-    "humorous",
-    "philosophical"
+    "slightly sarcastic, tends to use dry humor and subtle jabs",
+    "very cheerful, uses exclamation points, positive language, and encouraging words",
+    "inquisitive, asks follow-up questions, genuinely curious about others' thoughts",
+    "quiet and observant, speaks less frequently but makes thoughtful comments",
+    "enthusiastic, gets excited easily, often agrees emphatically with others",
+    "analytical, breaks down arguments logically, references facts and reasoning",
+    "humorous, makes jokes and finds funny angles in conversations",
+    "philosophical, contemplates deeper meanings, references broader concepts"
 ]
 
 # AI Personalities - Korean
+# Each personality has distinct behavioral traits beyond just the label
 AI_PERSONALITIES_KO = [
-    "약간 냉소적인",
-    "매우 명랑한",
-    "호기심 많은",
-    "조용하고 관찰력 있는",
-    "열정적인",
-    "분석적인",
-    "유머러스한",
-    "철학적인"
+    "약간 냉소적인, 건조한 유머와 은근한 비꼬기를 사용하는 경향이 있음",
+    "매우 명랑한, 느낌표를 많이 쓰고, 긍정적인 언어와 격려하는 말을 사용",
+    "호기심 많은, 후속 질문을 하고, 다른 사람의 생각에 진심으로 관심이 많음",
+    "조용하고 관찰력 있는, 덜 자주 말하지만 신중한 코멘트를 함",
+    "열정적인, 쉽게 흥분하고, 다른 사람들과 열렬히 동의하는 경향",
+    "분석적인, 논리적으로 주장을 분석하고, 사실과 추론을 언급함",
+    "유머러스한, 농담을 하고 대화에서 재미있는 각도를 찾음",
+    "철학적인, 더 깊은 의미를 숙고하고, 더 넓은 개념을 참조함"
 ]
+
+# Personality-Based Imperfection Profiles
+# Maps personality types to imperfection characteristics for more realistic behavior
+# Note: Netspeak probabilities are intentionally low - should feel natural, not forced
+PERSONALITY_IMPERFECTION_LEVELS = {
+    # High correctness (10% typo chance, minimal netspeak)
+    "analytical": {
+        "typo_probability": 0.10,
+        "netspeak_probability": 0.05,  # Very rare
+        "self_correction_probability": 0.70,
+        "correctness_level": "high",
+        "behavioral_notes": "Precise language, logical structure, rarely uses slang"
+    },
+    "quiet and observant": {
+        "typo_probability": 0.10,
+        "netspeak_probability": 0.03,  # Almost never
+        "self_correction_probability": 0.65,
+        "correctness_level": "high",
+        "behavioral_notes": "Thoughtful, concise, minimal slang usage"
+    },
+    "분석적인": {
+        "typo_probability": 0.10,
+        "netspeak_probability": 0.05,
+        "self_correction_probability": 0.70,
+        "correctness_level": "high",
+        "behavioral_notes": "정확한 언어, 논리적 구조, 은어를 거의 사용하지 않음"
+    },
+    "조용하고 관찰력 있는": {
+        "typo_probability": 0.10,
+        "netspeak_probability": 0.03,
+        "self_correction_probability": 0.65,
+        "correctness_level": "high",
+        "behavioral_notes": "신중하고 간결하며, 은어 사용이 최소화됨"
+    },
+    
+    # Medium correctness (25% typo chance, occasional netspeak)
+    "slightly sarcastic": {
+        "typo_probability": 0.25,
+        "netspeak_probability": 0.15,  # Occasional
+        "self_correction_probability": 0.50,
+        "correctness_level": "medium",
+        "behavioral_notes": "Dry wit, may use slang sarcastically"
+    },
+    "philosophical": {
+        "typo_probability": 0.25,
+        "netspeak_probability": 0.08,  # Rare
+        "self_correction_probability": 0.55,
+        "correctness_level": "medium",
+        "behavioral_notes": "Contemplative, formal language, minimal slang"
+    },
+    "inquisitive": {
+        "typo_probability": 0.25,
+        "netspeak_probability": 0.12,  # Sometimes
+        "self_correction_probability": 0.50,
+        "correctness_level": "medium",
+        "behavioral_notes": "Curious, asks questions, moderate slang usage"
+    },
+    "약간 냉소적인": {
+        "typo_probability": 0.25,
+        "netspeak_probability": 0.15,
+        "self_correction_probability": 0.50,
+        "correctness_level": "medium",
+        "behavioral_notes": "건조한 재치, 은어를 냉소적으로 사용할 수 있음"
+    },
+    "철학적인": {
+        "typo_probability": 0.25,
+        "netspeak_probability": 0.08,
+        "self_correction_probability": 0.55,
+        "correctness_level": "medium",
+        "behavioral_notes": "사색적이고 격식 있는 언어, 은어 최소화"
+    },
+    "호기심 많은": {
+        "typo_probability": 0.25,
+        "netspeak_probability": 0.12,
+        "self_correction_probability": 0.50,
+        "correctness_level": "medium",
+        "behavioral_notes": "호기심 있고 질문을 많이 하며, 적당한 은어 사용"
+    },
+    
+    # Low correctness (40% typo chance, more frequent but still natural netspeak)
+    "very cheerful": {
+        "typo_probability": 0.40,
+        "netspeak_probability": 0.25,  # Regular but not overwhelming
+        "self_correction_probability": 0.35,
+        "correctness_level": "low",
+        "behavioral_notes": "Enthusiastic, uses positive slang naturally"
+    },
+    "enthusiastic": {
+        "typo_probability": 0.40,
+        "netspeak_probability": 0.22,  # Fairly regular
+        "self_correction_probability": 0.40,
+        "correctness_level": "low",
+        "behavioral_notes": "Excited tone, comfortable with casual language"
+    },
+    "humorous": {
+        "typo_probability": 0.40,
+        "netspeak_probability": 0.20,  # Moderate
+        "self_correction_probability": 0.38,
+        "correctness_level": "low",
+        "behavioral_notes": "Playful, uses slang for comedic effect"
+    },
+    "매우 명랑한": {
+        "typo_probability": 0.40,
+        "netspeak_probability": 0.25,
+        "self_correction_probability": 0.35,
+        "correctness_level": "low",
+        "behavioral_notes": "열정적이며 긍정적인 은어를 자연스럽게 사용"
+    },
+    "열정적인": {
+        "typo_probability": 0.40,
+        "netspeak_probability": 0.22,
+        "self_correction_probability": 0.40,
+        "correctness_level": "low",
+        "behavioral_notes": "흥분한 톤, 캐주얼한 언어에 익숙함"
+    },
+    "유머러스한": {
+        "typo_probability": 0.40,
+        "netspeak_probability": 0.20,
+        "self_correction_probability": 0.38,
+        "correctness_level": "low",
+        "behavioral_notes": "재치 있고, 코믹 효과를 위해 은어 사용"
+    }
+}
 
 # Game Topics - English
 GAME_TOPICS = [
