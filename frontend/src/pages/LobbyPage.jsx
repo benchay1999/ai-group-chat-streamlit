@@ -14,7 +14,7 @@ import RoomCard from '../components/RoomCard';
 import CreateRoomModal from '../components/CreateRoomModal';
 import MTurkAutoLogin from '../components/MTurkAutoLogin';
 import toast from 'react-hot-toast';
-import { User, LogIn, Award, Trophy } from 'lucide-react';
+import { User, LogIn, Award, Trophy, Mail, Copy, Check } from 'lucide-react';
 
 const LobbyPage = () => {
   const navigate = useNavigate();
@@ -29,9 +29,23 @@ const LobbyPage = () => {
   const [serverOnline, setServerOnline] = useState(false);
   const [onlineUsers, setOnlineUsers] = useState(0);
   const [adminRoomStats, setAdminRoomStats] = useState(null);
+  const [showEmail, setShowEmail] = useState(false);
+  const [emailCopied, setEmailCopied] = useState(false);
 
   // Send heartbeat to track this user as online
   useHeartbeat();
+
+  const handleCopyEmail = () => {
+    const email = 'benchay@kaist.ac.kr';
+    navigator.clipboard.writeText(email).then(() => {
+      setEmailCopied(true);
+      toast.success('Email copied to clipboard!');
+      setTimeout(() => setEmailCopied(false), 2000);
+    }).catch(err => {
+      console.error('Failed to copy email:', err);
+      toast.error('Failed to copy email');
+    });
+  };
 
   const loadRooms = async () => {
     try {
@@ -170,7 +184,37 @@ const LobbyPage = () => {
           <div className="flex items-center justify-between">
             <div>
               <h1 className="text-4xl font-bold text-white mb-2">{t('lobby.title')}</h1>
-              <p className="text-blue-100">{t('lobby.subtitle')}</p>
+              
+              {/* Contact Email - Fancy Design */}
+              <div className="flex items-center gap-2 mt-2">
+                <button
+                  onClick={() => setShowEmail(!showEmail)}
+                  className="inline-flex items-center gap-2 px-4 py-2 bg-white bg-opacity-20 backdrop-blur-sm rounded-full hover:bg-opacity-30 transition-all group"
+                >
+                  <Mail className="w-4 h-4 text-blue-200 group-hover:text-white transition-colors" />
+                  <span className="text-sm font-medium text-blue-100 group-hover:text-white transition-colors">
+                    Contact
+                  </span>
+                </button>
+                
+                {showEmail && (
+                  <div className="inline-flex items-center gap-2 px-4 py-2 bg-white bg-opacity-20 backdrop-blur-sm rounded-full animate-in fade-in slide-in-from-left-2 duration-300">
+                    <span className="text-sm font-mono text-white">benchay@kaist.ac.kr</span>
+                    <button
+                      onClick={handleCopyEmail}
+                      className="p-1.5 hover:bg-white hover:bg-opacity-20 rounded-full transition-all"
+                      title="Copy email"
+                    >
+                      {emailCopied ? (
+                        <Check className="w-4 h-4 text-green-300" />
+                      ) : (
+                        <Copy className="w-4 h-4 text-blue-200 hover:text-white" />
+                      )}
+                    </button>
+                  </div>
+                )}
+              </div>
+              
               {/* Online Users Count */}
               <div className="flex items-center gap-2 mt-2">
                 <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-green-500 bg-opacity-20 rounded-full text-green-100 text-sm font-medium">
@@ -180,6 +224,17 @@ const LobbyPage = () => {
               </div>
             </div>
             <div className="flex items-center gap-4">
+              {/* Leaderboard Button */}
+              <button
+                onClick={() => navigate('/leaderboard')}
+                className="flex items-center gap-2 px-4 py-2 bg-yellow-400 bg-opacity-90 rounded-full hover:bg-opacity-100 transition-all transform hover:scale-105 shadow-lg"
+                title="View Leaderboard"
+              >
+                <Trophy className="w-4 h-4 text-yellow-900" />
+                <span className="text-sm font-semibold text-yellow-900">
+                  {t('lobby.leaderboard')}
+                </span>
+              </button>
               {/* Auth Status */}
               {isAuthenticated ? (
                 <button
@@ -222,17 +277,6 @@ const LobbyPage = () => {
                 <span className="text-2xl">{language === 'korean' ? '🇰🇷' : '🇺🇸'}</span>
                 <span className="text-sm font-semibold text-white">
                   {language === 'korean' ? 'KO' : 'EN'}
-                </span>
-              </button>
-              {/* Leaderboard Button */}
-              <button
-                onClick={() => navigate('/leaderboard')}
-                className="flex items-center gap-2 px-4 py-2 bg-yellow-400 bg-opacity-90 rounded-full hover:bg-opacity-100 transition-all transform hover:scale-105 shadow-lg"
-                title="View Leaderboard"
-              >
-                <Trophy className="w-4 h-4 text-yellow-900" />
-                <span className="text-sm font-semibold text-yellow-900">
-                  Leaderboard
                 </span>
               </button>
               {/* Server Status */}

@@ -1614,12 +1614,20 @@ async def save_session_stats(room_code: str, state: dict, current_user: Optional
                         print(f"❌ User with UUID {mapped_user_uuid} not found in database")
                         continue
                     
-                    # FIXED PAYOUT: Single-player games get exactly 2000 gems (for MTurk testing)
+                    # Check if this is a debug mode game (1 minute discussion OR 30 second voting)
+                    is_debug_mode = (discussion_duration == 60 or voting_duration == 30)
+                    
+                    if is_debug_mode:
+                        # DEBUG MODE: No gem rewards for debug games
+                        print(f"🐛 Debug mode detected (discussion: {discussion_duration}s, voting: {voting_duration}s) - skipping gem reward")
+                        continue  # Skip this player, don't credit gems
+                    
+                    # FIXED PAYOUT: Single-player games get exactly 20 gems (for now)
                     # Multi-player games use performance-based earnings
                     if num_humans == 1:
                         # Fixed payout for single-player games
-                        gems_earned = 2000
-                        print(f"💎 Fixed payout: 2000 gems for single-player game (MTurk standard rate)")
+                        gems_earned = 20
+                        print(f"💎 Fixed payout: 20 gems for single-player game")
                     else:
                         # Convert USD to gems for multi-player games (1000 gems = $1.00)
                         gems_earned = int(float(player_earnings_value) * GEMS_PER_DOLLAR)
