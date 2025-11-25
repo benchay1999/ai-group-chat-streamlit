@@ -3236,6 +3236,54 @@ async def get_online_users():
     }
 
 
+@app.get("/api/leaderboard")
+async def get_leaderboard(
+    db: AsyncSession = Depends(get_async_session),
+    limit: int = 10
+):
+    """
+    Get the top users by total gems earned, excluding admins.
+    
+    Args:
+        db: Database session
+        limit: Maximum number of users to return (default: 10)
+    
+    Returns:
+        List of top users with rank, username, stats
+    """
+    # Query users table, filtering out admins
+    result = await db.execute(
+        select(User)
+        .where(User.role == UserRole.USER)  # Exclude admins
+        .order_by(desc(User.total_gems_earned))
+        .limit(limit)
+    )
+    users = result.scalars().all()
+    
+    # Format leaderboard data
+    leaderboard = []
+    for rank, user in enumerate(users, start=1):
+        # Calculate win rate
+        win_rate = 0.0
+        if user.total_games > 0:
+            win_rate = (user.total_wins / user.total_games) * 100
+        
+        leaderboard.append({
+            "rank": rank,
+            "user_id": user.user_id,
+            "total_gems_earned": user.total_gems_earned,
+            "total_games": user.total_games,
+            "total_wins": user.total_wins,
+            "win_rate": round(win_rate, 1),  # Round to 1 decimal place
+            "level": user.level
+        })
+    
+    return {
+        "leaderboard": leaderboard,
+        "total_users": len(leaderboard)
+    }
+
+
 # ============================================================================
 # Wallet & Cashout API Endpoints
 # ============================================================================

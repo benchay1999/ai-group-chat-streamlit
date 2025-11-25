@@ -14,7 +14,7 @@ import RoomCard from '../components/RoomCard';
 import CreateRoomModal from '../components/CreateRoomModal';
 import MTurkAutoLogin from '../components/MTurkAutoLogin';
 import toast from 'react-hot-toast';
-import { User, LogIn, Award } from 'lucide-react';
+import { User, LogIn, Award, Trophy } from 'lucide-react';
 
 const LobbyPage = () => {
   const navigate = useNavigate();
@@ -224,6 +224,17 @@ const LobbyPage = () => {
                   {language === 'korean' ? 'KO' : 'EN'}
                 </span>
               </button>
+              {/* Leaderboard Button */}
+              <button
+                onClick={() => navigate('/leaderboard')}
+                className="flex items-center gap-2 px-4 py-2 bg-yellow-400 bg-opacity-90 rounded-full hover:bg-opacity-100 transition-all transform hover:scale-105 shadow-lg"
+                title="View Leaderboard"
+              >
+                <Trophy className="w-4 h-4 text-yellow-900" />
+                <span className="text-sm font-semibold text-yellow-900">
+                  Leaderboard
+                </span>
+              </button>
               {/* Server Status */}
               <div className="flex items-center gap-2 px-4 py-2 bg-white bg-opacity-20 rounded-full">
                 <span className={`w-3 h-3 rounded-full ${serverOnline ? 'bg-green-400' : 'bg-red-400'} animate-pulse`}></span>
@@ -281,7 +292,10 @@ const LobbyPage = () => {
             {t('lobby.availableRooms')} ({rooms.length})
           </h2>
           <button
-            onClick={loadRooms}
+            onClick={() => {
+              loadRooms();
+              loadAdminRoomStats();
+            }}
             disabled={loading}
             className="bg-white bg-opacity-20 text-white px-4 py-2 rounded-lg font-semibold hover:bg-opacity-30 transition-all disabled:opacity-50"
           >

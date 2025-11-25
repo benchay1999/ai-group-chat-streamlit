@@ -23,6 +23,7 @@ import AdminAnalyticsPage from './pages/AdminAnalyticsPage';
 import ProfilePage from './pages/ProfilePage';
 import Wallet from './components/Wallet';
 import CashoutConfirm from './pages/CashoutConfirm';
+import LeaderboardPage from './pages/LeaderboardPage';
 
 function App() {
   return (
@@ -35,6 +36,7 @@ function App() {
               {/* Public routes */}
               <Route path="/" element={<Navigate to="/lobby" replace />} />
               <Route path="/lobby" element={<LobbyPage />} />
+              <Route path="/leaderboard" element={<LeaderboardPage />} />
               <Route path="/join" element={<JoinPage />} />
               <Route path="/waiting" element={<WaitingPage />} />
               <Route path="/game" element={<GamePage />} />
