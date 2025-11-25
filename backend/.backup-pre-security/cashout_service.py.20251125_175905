@@ -121,9 +121,6 @@ async def create_cashout_transaction(
     Create a new cashout transaction with redemption code.
     No HIT creation needed - user will submit code to existing HIT.
     
-    SECURITY: Uses database transaction with row-level locking to prevent
-    race conditions during concurrent cashout requests.
-    
     Args:
         user: User requesting cashout
         amount_usd: USD amount to cash out
@@ -135,17 +132,7 @@ async def create_cashout_transaction(
     Raises:
         CashoutError: If validation fails
     """
-    from sqlalchemy import func
-    from sqlalchemy.exc import IntegrityError
-    
-    # SECURITY: Refresh user with FOR UPDATE lock to prevent concurrent modifications
-    # This ensures no other transaction can modify the user's gem balance simultaneously
-    user_result = await db.execute(
-        select(User).where(User.id == user.id).with_for_update()
-    )
-    user = user_result.scalar_one()
-    
-    # Validate request (with locked user data)
+    # Validate request
     is_valid, error_msg = await validate_cashout_request(user, amount_usd, db)
     if not is_valid:
         raise CashoutError(error_msg)
@@ -156,34 +143,12 @@ async def create_cashout_transaction(
     # Store original balance for logging
     original_balance = user.gem_balance
     
-    # SECURITY CHECK: Double-check gem balance after lock acquisition
-    if user.gem_balance < gems_amount:
-        raise CashoutError(
-            f"Insufficient gems after lock acquisition. "
-            f"You have {user.gem_balance} gems but need {gems_amount}. "
-            f"Another transaction may have used these gems."
-        )
-    
     print(f"💎 Creating cashout for user {user.user_id}")
     print(f"   Original balance: {original_balance} gems")
     print(f"   Requesting: {gems_amount} gems (${amount_usd})")
     
-    # Generate unique redemption code (retry loop to handle collision)
-    max_retries = 3
-    for attempt in range(max_retries):
-        redemption_code = generate_redemption_code()
-        
-        # Check if code already exists (extremely unlikely but handle it)
-        existing = await db.execute(
-            select(CashoutTransaction).where(
-                CashoutTransaction.redemption_code == redemption_code
-            )
-        )
-        if not existing.scalar_one_or_none():
-            break  # Code is unique
-        
-        if attempt == max_retries - 1:
-            raise CashoutError("Failed to generate unique redemption code. Please try again.")
+    # Generate unique redemption code
+    redemption_code = generate_redemption_code()
     
     # Create transaction record
     transaction = CashoutTransaction(
@@ -198,18 +163,13 @@ async def create_cashout_transaction(
     )
     
     try:
-        # Deduct gems from user's balance immediately (within locked transaction)
+        # Deduct gems from user's balance immediately
         user.gem_balance -= gems_amount
-        
-        # SECURITY: Validate gem balance didn't go negative (defense in depth)
-        if user.gem_balance < 0:
-            raise CashoutError("Gem balance would go negative. Transaction aborted.")
         
         # Add transaction to database
         db.add(transaction)
         
         # Commit atomically - both user balance and transaction
-        # The lock is held until commit, preventing race conditions
         await db.commit()
         await db.refresh(transaction)
         await db.refresh(user)  # Refresh user to get committed state
@@ -220,14 +180,6 @@ async def create_cashout_transaction(
         print(f"   Redemption Code: {redemption_code[:16]}...")
         
         return transaction
-        
-    except IntegrityError as e:
-        # Database constraint violation (e.g., duplicate redemption code)
-        print(f"❌ Database integrity error: {e}")
-        await db.rollback()
-        await db.refresh(user)
-        print(f"   Balance after rollback: {user.gem_balance} gems")
-        raise CashoutError("Failed to create cashout due to database constraint. Please try again.")
         
     except Exception as e:
         # CRITICAL FIX: rollback() already restores the user state
@@ -269,24 +221,20 @@ async def redeem_cashout_code(
     Raises:
         CashoutError: If code is invalid or already used
     """
-    # SECURITY: Find transaction with row-level lock to prevent concurrent redemptions
+    # Find transaction by redemption code
     result = await db.execute(
         select(CashoutTransaction).where(
             CashoutTransaction.redemption_code == redemption_code
-        ).with_for_update()
+        )
     )
     transaction = result.scalar_one_or_none()
     
     if not transaction:
         raise CashoutError("Invalid redemption code")
     
-    # SECURITY: Check if already redeemed (double-redemption prevention)
+    # Check if already redeemed
     if transaction.status == CashoutStatus.COMPLETED:
         raise CashoutError("This code has already been redeemed")
-    
-    # SECURITY: Check if HIT_CREATED (prevent redemption while HIT is being created)
-    if transaction.status == CashoutStatus.HIT_CREATED:
-        raise CashoutError("This cashout is being processed. Please wait.")
     
     # Check if expired
     if transaction.expires_at and datetime.utcnow() > transaction.expires_at:
@@ -299,9 +247,9 @@ async def redeem_cashout_code(
         raise CashoutError("This cashout was cancelled")
     
     try:
-        # SECURITY: Get user with FOR UPDATE lock to prevent concurrent modifications
+        # Get user (with lock to prevent concurrent modifications)
         user_result = await db.execute(
-            select(User).where(User.id == transaction.user_id).with_for_update()
+            select(User).where(User.id == transaction.user_id)
         )
         user = user_result.scalar_one()
         

@@ -49,7 +49,7 @@ cp env.example .env && nano .env  # Add your OPENAI_API_KEY
 ./start_local.sh
 
 # 3. In another terminal, expose via tunnel (choose one)
-./ngrok http 8000                              # Option A: ngrok
+./ngrok http 8000 --domain=ai-groupchat.ngrok.io # Option A: ngrok
 ssh -R 80:localhost:8000 nokey@localhost.run   # Option B: localhost.run (no signup!)
 
 # 4. Deploy frontend to Streamlit Cloud with the tunnel URL
@@ -207,7 +207,7 @@ The best setup for performance - run the heavy AI backend on your local machine 
 ./start_local.sh
 
 # 2. In another terminal, expose via ngrok
-ngrok http 8000
+./ngrok http 8000 --domain=ai-groupchat.ngrok.io
 
 # 3. Deploy frontend to Streamlit Cloud with BACKEND_URL set to your ngrok URL
 ```

@@ -234,6 +234,31 @@ class CashoutTransaction(Base):
         return f"<CashoutTransaction(id={self.id}, user_id={self.user_id}, amount_usd={self.amount_usd}, status={self.status}, code={self.redemption_code[:8]}...)>"
 
 
+
+
+class TokenBlacklist(Base):
+    """Token blacklist for logout functionality."""
+    __tablename__ = "token_blacklist"
+    
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    token = Column(Text, unique=True, nullable=False, index=True)  # SHA256 hash of the token
+    user_id = Column(UUID(as_uuid=True), ForeignKey('users.id', ondelete='CASCADE'), nullable=True, index=True)
+    blacklisted_at = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
+    expires_at = Column(DateTime, nullable=False, index=True)  # When the token would have expired
+    reason = Column(String(50), default='logout', nullable=False)  # 'logout', 'security', 'admin'
+    
+    # Relationship
+    user = relationship("User", foreign_keys=[user_id])
+    
+    # Index for cleanup queries
+    __table_args__ = (
+        Index('idx_expires_blacklisted', 'expires_at', 'blacklisted_at'),
+    )
+    
+    def __repr__(self):
+        return f"<TokenBlacklist(id={self.id}, user_id={self.user_id}, reason={self.reason})>"
+
+
 # Database helper functions
 async def get_async_session():
     """

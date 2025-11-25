@@ -35,10 +35,6 @@ from .auth import (
     get_current_user, get_current_user_optional, require_admin,
     register_or_login_mturk_worker
 )
-from .security_monitor import (
-    get_security_monitor, log_failed_login, log_rate_limit_violation,
-    log_invalid_token, log_admin_access_attempt, log_unusual_cashout
-)
 import json
 import os
 import time as _time
@@ -56,22 +52,9 @@ app = FastAPI(title="AI Group Chat API", version="2.0.0")
 allowed_origins_str = os.getenv('CORS_ALLOWED_ORIGINS', 'http://localhost:5173,http://localhost:3000')
 allowed_origins = [origin.strip() for origin in allowed_origins_str.split(',')]
 
-# Security validation: Never allow wildcard origins
-if '*' in allowed_origins:
-    raise ValueError(
-        "SECURITY ERROR: Wildcard CORS origins ('*') are not allowed. "
-        "Please specify explicit origins in CORS_ALLOWED_ORIGINS environment variable."
-    )
-
 # In production, MTURK_ENVIRONMENT should be set, and we should restrict CORS
 if os.getenv('MTURK_ENVIRONMENT') == 'production':
-    # In production, only allow HTTPS origins
-    for origin in allowed_origins:
-        if origin.startswith('http://') and 'localhost' not in origin:
-            raise ValueError(
-                f"SECURITY ERROR: HTTP origin '{origin}' not allowed in production. "
-                f"All production origins must use HTTPS."
-            )
+    # In production, only allow specified domains (never use "*")
     print(f"🔒 CORS configured for production with origins: {allowed_origins}")
 else:
     # In development/sandbox, allow localhost origins
@@ -135,15 +118,8 @@ class SimpleRateLimiter:
         for key in keys_to_delete:
             del self.requests[key]
 
-# Rate limiters for security-critical endpoints
-# MTurk registration: 10 requests per minute per IP
+# Rate limiter for MTurk registration: 10 requests per minute per IP
 mturk_rate_limiter = SimpleRateLimiter(max_requests=10, window_seconds=60)
-# Login: 5 attempts per minute per IP (prevent brute-force)
-login_rate_limiter = SimpleRateLimiter(max_requests=5, window_seconds=60)
-# Registration: 3 per minute per IP (prevent spam accounts)
-register_rate_limiter = SimpleRateLimiter(max_requests=3, window_seconds=60)
-# Cashout: 5 per minute per user (prevent abuse)
-cashout_rate_limiter = SimpleRateLimiter(max_requests=5, window_seconds=60)
 
 
 # ============================================================================
@@ -2284,7 +2260,6 @@ async def health_check():
 @app.post("/api/auth/register")
 async def register(
     request: RegisterRequest,
-    http_request: Request,
     db: AsyncSession = Depends(get_async_session)
 ):
     """
@@ -2292,20 +2267,11 @@ async def register(
     
     Args:
         request: User registration data (user_id, password)
-        http_request: FastAPI Request object (for rate limiting)
         db: Database session
     
     Returns:
         Success message
     """
-    # Rate limiting check
-    client_ip = http_request.client.host
-    if not register_rate_limiter.is_allowed(client_ip):
-        raise HTTPException(
-            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail="Too many registration attempts. Please wait a minute and try again."
-        )
-    
     # Check if user already exists
     existing_user = await db.execute(
         select(User).where(User.user_id == request.user_id)
@@ -2337,7 +2303,6 @@ async def register(
 @app.post("/api/auth/login", response_model=LoginResponse)
 async def login(
     request: LoginRequest,
-    http_request: Request,
     db: AsyncSession = Depends(get_async_session)
 ):
     """
@@ -2345,25 +2310,13 @@ async def login(
     
     Args:
         request: Login credentials (user_id, password)
-        http_request: FastAPI Request object (for rate limiting)
         db: Database session
     
     Returns:
         JWT access token and user info
     """
-    # Rate limiting check (prevent brute-force attacks)
-    client_ip = http_request.client.host
-    if not login_rate_limiter.is_allowed(client_ip):
-        log_rate_limit_violation(client_ip, "/api/auth/login")
-        raise HTTPException(
-            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail="Too many login attempts. Please wait a minute and try again."
-        )
-    
     user = await authenticate_user(db, request.user_id, request.password)
     if not user:
-        # Log failed login attempt
-        log_failed_login(request.user_id, client_ip, "Invalid credentials")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect user ID or password",
@@ -2988,25 +2941,12 @@ async def request_cashout(
     Returns:
         Cashout transaction with redemption code
     """
-    # Rate limiting check (per user to prevent cashout spam)
-    user_key = f"cashout_{current_user.id}"
-    if not cashout_rate_limiter.is_allowed(user_key):
-        log_rate_limit_violation(current_user.user_id, "/api/wallet/cashout")
-        raise HTTPException(
-            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail="Too many cashout requests. Please wait a minute and try again."
-        )
-    
     from decimal import Decimal
     from .cashout_service import create_cashout_transaction, CashoutError
     from .config import EXTERNAL_URL
     
     body = await request.json()
     amount_usd = Decimal(str(body.get('amount_usd', 0)))
-    
-    # Log unusual cashout amounts for monitoring
-    if amount_usd >= Decimal("50.00"):
-        log_unusual_cashout(current_user.user_id, float(amount_usd))
     
     print(f"\n{'='*70}")
     print(f"📥 CASHOUT REQUEST from user: {current_user.user_id}")
@@ -3181,14 +3121,6 @@ async def cashout_v2(
     
     This is the RECOMMENDED cashout method going forward.
     """
-    # Rate limiting check (per user to prevent cashout spam)
-    user_key = f"cashout_{current_user.id}"
-    if not cashout_rate_limiter.is_allowed(user_key):
-        raise HTTPException(
-            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail="Too many cashout requests. Please wait a minute and try again."
-        )
-    
     from .cashout_endpoint_v2 import request_cashout_v2
     return await request_cashout_v2(request, current_user, db)
 
@@ -3274,14 +3206,6 @@ async def cancel_cashout_request(
     Returns:
         Cancellation confirmation with returned gems
     """
-    # Rate limiting check (prevent abuse of cancel/re-request)
-    user_key = f"cashout_cancel_{current_user.id}"
-    if not cashout_rate_limiter.is_allowed(user_key):
-        raise HTTPException(
-            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail="Too many requests. Please wait a minute and try again."
-        )
-    
     from .cashout_cancel_service import cancel_cashout_transaction
     import uuid as uuid_module
     import traceback

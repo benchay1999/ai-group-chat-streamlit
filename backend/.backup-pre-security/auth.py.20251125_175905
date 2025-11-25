@@ -213,8 +213,6 @@ def require_admin(current_user: User = Depends(get_current_user)) -> User:
     """
     Dependency to ensure current user has admin role.
     
-    SECURITY: Logs all admin access attempts for monitoring.
-    
     Args:
         current_user: Current authenticated user
     
@@ -224,18 +222,7 @@ def require_admin(current_user: User = Depends(get_current_user)) -> User:
     Raises:
         HTTPException: If user is not an admin
     """
-    from .security_monitor import log_admin_access_attempt
-    
-    is_admin = current_user.role == UserRole.ADMIN
-    
-    # Log access attempt (for security monitoring)
-    log_admin_access_attempt(
-        user_id=current_user.user_id,
-        endpoint="admin_endpoint",  # Actual endpoint logged at route level
-        allowed=is_admin
-    )
-    
-    if not is_admin:
+    if current_user.role != UserRole.ADMIN:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Admin access required"
