@@ -28,6 +28,7 @@ const LobbyPage = () => {
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [serverOnline, setServerOnline] = useState(false);
   const [onlineUsers, setOnlineUsers] = useState(0);
+  const [adminRoomStats, setAdminRoomStats] = useState(null);
 
   // Send heartbeat to track this user as online
   useHeartbeat();
@@ -58,6 +59,21 @@ const LobbyPage = () => {
     }
   };
 
+  const loadAdminRoomStats = async () => {
+    // Only load for admin users
+    if (user?.role !== 'admin') {
+      return;
+    }
+    
+    try {
+      const data = await roomAPI.getAdminRoomStats();
+      setAdminRoomStats(data);
+    } catch (error) {
+      console.debug('Error loading admin room stats:', error);
+      // Silently fail - don't disrupt user experience
+    }
+  };
+
   useEffect(() => {
     // Check server health
     roomAPI.healthCheck()
@@ -66,16 +82,18 @@ const LobbyPage = () => {
 
     loadRooms();
     loadOnlineUsers();
-  }, [page]);
+    loadAdminRoomStats();
+  }, [page, user]);
 
   // Auto-refresh every 30 seconds (reduced to save bandwidth)
   useEffect(() => {
     const interval = setInterval(() => {
       loadRooms();
       loadOnlineUsers();
+      loadAdminRoomStats();
     }, 30000);
     return () => clearInterval(interval);
-  }, [page]);
+  }, [page, user]);
 
   const handleJoinRoom = (room) => {
     selectRoom(room);
@@ -270,6 +288,36 @@ const LobbyPage = () => {
             {loading ? t('lobby.refreshing') : '🔄 ' + t('lobby.refresh')}
           </button>
         </div>
+
+        {/* Admin Room Statistics */}
+        {user?.role === 'admin' && adminRoomStats && (
+          <div className="mb-6 bg-gradient-to-r from-orange-500 via-red-500 to-pink-500 rounded-xl p-6 shadow-xl">
+            <div className="flex items-start gap-4">
+              <div className="flex-shrink-0">
+                <div className="w-12 h-12 bg-white bg-opacity-20 rounded-lg flex items-center justify-center backdrop-blur-sm">
+                  <span className="text-2xl">📊</span>
+                </div>
+              </div>
+              <div className="flex-1">
+                <h3 className="text-xl font-bold text-white mb-3">Admin: Operating Rooms</h3>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="bg-white bg-opacity-20 rounded-lg px-4 py-3 backdrop-blur-sm">
+                    <div className="text-sm text-white opacity-90 mb-1">Total Operating</div>
+                    <div className="text-2xl font-bold text-white">{adminRoomStats.total_operating}</div>
+                  </div>
+                  <div className="bg-white bg-opacity-20 rounded-lg px-4 py-3 backdrop-blur-sm">
+                    <div className="text-sm text-white opacity-90 mb-1">Solo-Human Rooms</div>
+                    <div className="text-2xl font-bold text-white">{adminRoomStats.solo_human_count}</div>
+                  </div>
+                  <div className="bg-white bg-opacity-20 rounded-lg px-4 py-3 backdrop-blur-sm">
+                    <div className="text-sm text-white opacity-90 mb-1">Multi-Human Rooms</div>
+                    <div className="text-2xl font-bold text-white">{adminRoomStats.multi_human_count}</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Loading State */}
         {loading && rooms.length === 0 && (

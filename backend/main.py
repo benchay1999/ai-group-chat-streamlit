@@ -4092,6 +4092,39 @@ async def admin_analytics(
     }
 
 
+@app.get("/api/admin/room-stats")
+async def get_admin_room_stats(
+    admin_user: User = Depends(require_admin)
+):
+    """
+    Get statistics about currently operating rooms for admins.
+    
+    Args:
+        admin_user: Current admin user
+    
+    Returns:
+        Room operation statistics including solo-human and multi-human breakdowns
+    """
+    in_progress_rooms = []
+    for room_code, room_data in rooms.items():
+        if room_data.get('room_status') == 'in_progress':
+            in_progress_rooms.append({
+                'room_code': room_code,
+                'max_humans': room_data.get('max_humans'),
+                'total_players': room_data.get('total_players')
+            })
+    
+    # Count solo-human rooms (max_humans == 1)
+    solo_human_count = len([r for r in in_progress_rooms if r['max_humans'] == 1])
+    total_operating = len(in_progress_rooms)
+    
+    return {
+        "total_operating": total_operating,
+        "solo_human_count": solo_human_count,
+        "multi_human_count": total_operating - solo_human_count
+    }
+
+
 # ============================================================================
 # MTurk Admin API Endpoints
 # ============================================================================

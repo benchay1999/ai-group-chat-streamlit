@@ -173,6 +173,15 @@ export const roomAPI = {
     const response = await api.get('/api/lobby/online-users');
     return response.data;
   },
+
+  /**
+   * Get admin room statistics
+   * @returns {Promise} Room statistics for admins
+   */
+  getAdminRoomStats: async () => {
+    const response = await api.get('/api/admin/room-stats');
+    return response.data;
+  },
 };
 
 /**
