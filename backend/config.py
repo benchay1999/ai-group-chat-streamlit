@@ -4,7 +4,21 @@ Contains all configurable parameters for game settings, AI models, and timing.
 """
 
 import os
+from pathlib import Path
 from typing import Literal
+from dotenv import load_dotenv
+
+# Load .env file from project root
+# This ensures environment variables are available even if config is imported first
+_current_file = Path(__file__).resolve()
+_backend_dir = _current_file.parent
+_project_root = _backend_dir.parent
+_env_path = _project_root / ".env"
+
+if _env_path.exists():
+    load_dotenv(dotenv_path=_env_path, override=False)  # Don't override already-set vars
+else:
+    load_dotenv(override=False)  # Fallback to default behavior
 
 # Game Configuration
 NUM_AI_PLAYERS = int(os.getenv("NUM_AI_PLAYERS", "4"))  # Configurable: 4-8 AI players
@@ -196,9 +210,44 @@ GAME_TOPICS_KO = [
 MESSAGE_COOLDOWN = 10
 
 # API Keys
+# Single key for backward compatibility
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+
+# Multiple OpenAI API keys for load distribution (recommended for 100+ users)
+# Supports comma-separated keys: OPENAI_API_KEYS=sk-key1,sk-key2,sk-key3
+# Falls back to single OPENAI_API_KEY if not provided
+
+_openai_api_keys_str = os.getenv("OPENAI_API_KEYS", "")
+if _openai_api_keys_str:
+    # Parse comma-separated keys and strip whitespace
+    # Accept any non-empty string as a valid key - actual validation happens on API call
+    OPENAI_API_KEYS = [key.strip() for key in _openai_api_keys_str.split(",") if key.strip()]
+    
+    if OPENAI_API_KEYS:
+        print(f"✅ Loaded {len(OPENAI_API_KEYS)} OpenAI API key(s) for round-robin distribution")
+    else:
+        # If parsing resulted in no keys, fall back to single key
+        print("⚠️  OPENAI_API_KEYS was empty after parsing, falling back to OPENAI_API_KEY")
+        OPENAI_API_KEYS = [OPENAI_API_KEY] if OPENAI_API_KEY else []
+else:
+    # Fall back to single key
+    OPENAI_API_KEYS = [OPENAI_API_KEY] if OPENAI_API_KEY else []
+    if OPENAI_API_KEYS:
+        print(f"ℹ️  Using single OpenAI API key (set OPENAI_API_KEYS for load distribution)")
+
+# Validate that we have at least one API key
+if not OPENAI_API_KEYS or not any(OPENAI_API_KEYS):
+    print("⚠️  WARNING: No OpenAI API keys configured! Set OPENAI_API_KEY or OPENAI_API_KEYS")
+    print("⚠️  AI features will NOT work without valid API keys!")
+else:
+    # Validate minimum requirements for production
+    if os.getenv('ENVIRONMENT', 'development') == 'production':
+        if len(OPENAI_API_KEYS) < 2:
+            print("⚠️  PRODUCTION WARNING: Only 1 API key configured. For 100+ users, use 3+ keys to avoid rate limits.")
+        elif len(OPENAI_API_KEYS) >= 3:
+            print(f"✅ Production-ready: {len(OPENAI_API_KEYS)} API keys configured for load distribution")
 
 # Database Configuration
 DATABASE_URL = os.getenv(

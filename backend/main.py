@@ -19,13 +19,14 @@ from sqlalchemy import select, update, desc
 import uuid as uuid_lib
 
 from .langgraph_game import (
-    game_graph, 
     create_game_for_room,
+    create_game_graph_for_room,
     process_human_message,
     process_human_vote
 )
 from .langgraph_state import GameState, Phase
-from .config import NUM_AI_PLAYERS, DISCUSSION_TIME, VOTING_TIME
+from .config import NUM_AI_PLAYERS, DISCUSSION_TIME, VOTING_TIME, OPENAI_API_KEYS
+from .api_key_manager import APIKeyManager, APIKeyManagerError
 from .database import (
     init_db, close_db, get_async_session, 
     User, Session as DBSession, UserRole, PaymentStatus
@@ -136,14 +137,21 @@ class SimpleRateLimiter:
             del self.requests[key]
 
 # Rate limiters for security-critical endpoints
-# MTurk registration: 10 requests per minute per IP
-mturk_rate_limiter = SimpleRateLimiter(max_requests=10, window_seconds=60)
-# Login: 5 attempts per minute per IP (prevent brute-force)
-login_rate_limiter = SimpleRateLimiter(max_requests=5, window_seconds=60)
-# Registration: 3 per minute per IP (prevent spam accounts)
-register_rate_limiter = SimpleRateLimiter(max_requests=3, window_seconds=60)
-# Cashout: 5 per minute per user (prevent abuse)
-cashout_rate_limiter = SimpleRateLimiter(max_requests=5, window_seconds=60)
+# NOTE: These limits are per IP address (or per user for cashout)
+# 
+# For 100-120 concurrent users, limits should allow legitimate traffic
+# while still preventing abuse. Adjust based on your deployment:
+# - Single public IP (e.g., corporate network): Higher limits needed
+# - Distributed users (home networks): Lower limits acceptable
+#
+# MTurk registration: 20 requests per minute per IP
+mturk_rate_limiter = SimpleRateLimiter(max_requests=20, window_seconds=60)
+# Login: 30 attempts per minute per IP (allow rapid legitimate logins)
+login_rate_limiter = SimpleRateLimiter(max_requests=30, window_seconds=60)
+# Registration: 20 per minute per IP (allow concurrent user onboarding)
+register_rate_limiter = SimpleRateLimiter(max_requests=20, window_seconds=60)
+# Cashout: 10 per minute per user (prevent abuse)
+cashout_rate_limiter = SimpleRateLimiter(max_requests=10, window_seconds=60)
 
 
 # ============================================================================
@@ -435,6 +443,8 @@ rooms: Dict[str, Dict] = {}
 #     'current_humans': List[str],        # DEPRECATED - use assigned_humans (kept for backward compat)
 #     'connected_humans': List[str],      # Currently connected players (internal use only, never expose to clients)
 #     'player_user_map': Dict[str, str],  # Maps player_id -> user_id for authenticated users
+#     'game_graph': GameGraph,            # Room-specific GameGraph instance with assigned API key
+#     'api_key_index': int,               # Index of the API key assigned to this room (0-based)
 #     'permanently_left': Set[str],       # Players who explicitly left (cannot rejoin)
 #     'player_last_activity': Dict[str, float],  # Maps player_id -> last activity timestamp
 #     'player_heartbeat': Dict[str, float],      # Maps player_id -> last heartbeat timestamp
@@ -448,6 +458,101 @@ rooms: Dict[str, Dict] = {}
 
 # Room locks for preventing race conditions in AI processing
 room_locks: Dict[str, asyncio.Lock] = {}
+
+# ============================================================================
+# User Activity Tracking (for online user count)
+# ============================================================================
+
+# Global user activity tracking
+# Structure: {user_id: last_activity_timestamp, ...}
+user_activity: Dict[str, float] = {}
+ONLINE_THRESHOLD_SECONDS = 90  # Consider user online if active within 90 seconds
+
+
+def update_user_activity(user_id: str):
+    """Update last activity timestamp for a user."""
+    user_activity[user_id] = time.time()
+
+
+def get_online_users_count() -> int:
+    """
+    Get count of users active within the online threshold.
+    Cleans up stale entries (>5 minutes inactive).
+    """
+    current_time = time.time()
+    online_count = 0
+    stale_users = []
+    
+    for user_id, last_seen in user_activity.items():
+        if current_time - last_seen <= ONLINE_THRESHOLD_SECONDS:
+            online_count += 1
+        elif current_time - last_seen > 300:  # Remove after 5 minutes of inactivity
+            stale_users.append(user_id)
+    
+    # Cleanup stale entries
+    for user_id in stale_users:
+        user_activity.pop(user_id, None)
+    
+    return online_count
+
+# Initialize API key manager for round-robin distribution
+api_key_manager = None
+try:
+    if OPENAI_API_KEYS:
+        api_key_manager = APIKeyManager(OPENAI_API_KEYS)
+    else:
+        print(f"⚠️  WARNING: No OpenAI API keys configured")
+        print(f"⚠️  AI features will not work without valid API keys!")
+        print(f"⚠️  Set OPENAI_API_KEY or OPENAI_API_KEYS environment variable")
+except (ValueError, APIKeyManagerError) as e:
+    print(f"⚠️  CRITICAL: Failed to initialize APIKeyManager: {e}")
+    print(f"⚠️  AI features will NOT work! Check your API key configuration.")
+    api_key_manager = None
+except Exception as e:
+    print(f"⚠️  UNEXPECTED ERROR initializing APIKeyManager: {e}")
+    import traceback
+    traceback.print_exc()
+    api_key_manager = None
+
+
+# ============================================================================
+# API Key Assignment Helper
+# ============================================================================
+
+def get_api_key_for_room() -> tuple:
+    """
+    Get the next API key for a new room.
+    Handles errors gracefully and provides clear error messages.
+    
+    Returns:
+        Tuple of (api_key, api_key_index) or raises HTTPException
+        
+    Raises:
+        HTTPException: If no API keys are available or assignment fails
+    """
+    if api_key_manager is None:
+        raise HTTPException(
+            status_code=503,
+            detail="AI service unavailable: No API keys configured. Please contact administrator."
+        )
+    
+    try:
+        api_key, api_key_index = api_key_manager.get_next_api_key()
+        return api_key, api_key_index
+    except APIKeyManagerError as e:
+        print(f"⚠️  CRITICAL: Failed to get API key: {e}")
+        raise HTTPException(
+            status_code=503,
+            detail=f"AI service unavailable: {str(e)}"
+        )
+    except Exception as e:
+        print(f"⚠️  UNEXPECTED ERROR getting API key: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(
+            status_code=500,
+            detail="Internal error assigning API key. Please try again."
+        )
 
 
 # ============================================================================
@@ -741,6 +846,7 @@ async def process_ai_votes(room_code: str):
         
         # Run single AI vote node in thread pool to avoid blocking
         loop = asyncio.get_event_loop()
+        game_graph = rooms[room_code]['game_graph']
         result = await loop.run_in_executor(
             executor,
             lambda: game_graph.ai_vote_agent_node(state, ai_id=ai_id)
@@ -826,6 +932,7 @@ async def complete_voting(room_code: str):
     })
     
     # Broadcast game over
+    game_graph = rooms[room_code]['game_graph']
     result = game_graph.game_over_node(state)
     state.update(result)
     if 'broadcast_queue' in result:
@@ -927,6 +1034,7 @@ async def process_single_ai_message(room_code: str, ai_id: str):
         
         # Run AI chat node for this specific agent in thread pool to avoid blocking event loop
         loop = asyncio.get_event_loop()
+        game_graph = rooms[room_code]['game_graph']
         result = await loop.run_in_executor(
             executor, 
             lambda: game_graph.ai_chat_agent_node(state, ai_id=ai_id)
@@ -1244,6 +1352,7 @@ async def trigger_agent_decisions(room_code: str, exclude_agents: list = None):
     loop = asyncio.get_event_loop()
     
     # Let each AI decide if they should respond
+    game_graph = rooms[room_code]['game_graph']
     responding_ais = []
     for ai_id in active_ais:
         try:
@@ -1387,11 +1496,11 @@ async def save_session_stats(room_code: str, state: dict, current_user: Optional
     
     # Calculate token usage and costs
     from .pricing import calculate_cost
-    from .langgraph_game import game_graph
     from .database import AIAgentUsage
     
     total_input_tokens = state.get('total_input_tokens', 0)
     total_output_tokens = state.get('total_output_tokens', 0)
+    game_graph = rooms[room_code]['game_graph']
     model_name = game_graph.model_name
     total_cost = calculate_cost(total_input_tokens, total_output_tokens, model_name)
     agent_token_usage = state.get('agent_token_usage', {})
@@ -1896,8 +2005,35 @@ async def websocket_endpoint(websocket: WebSocket, room_code: str, player_id: st
         available_numbers = all_numbers[NUM_AI_PLAYERS:]
         ai_player_ids = [f"Player {num}" for num in ai_numbers]
         
+        # Get next API key for this room (round-robin with error handling)
+        try:
+            api_key, api_key_index = get_api_key_for_room()
+        except HTTPException as e:
+            # Send error to client and close connection
+            await websocket.send_json({
+                "type": "error",
+                "message": f"Failed to create room: {e.detail}"
+            })
+            await websocket.close()
+            return
+        
         # Create game with default language (english) for WebSocket rooms
         state = create_game_for_room(room_code, NUM_AI_PLAYERS, ai_player_ids, "english")
+        
+        # Create game graph with assigned API key
+        try:
+            game_graph = create_game_graph_for_room(api_key)
+        except Exception as e:
+            print(f"⚠️  CRITICAL: Failed to create game graph: {e}")
+            import traceback
+            traceback.print_exc()
+            await websocket.send_json({
+                "type": "error",
+                "message": "Failed to initialize AI system. Please try again."
+            })
+            await websocket.close()
+            return
+        
         rooms[room_code] = {
             'state': state,
             'connections': {},
@@ -1919,7 +2055,9 @@ async def websocket_endpoint(websocket: WebSocket, room_code: str, player_id: st
             'available_numbers': available_numbers,
             'human_overflow_counter': 0,  # Counter for H1, H2 fallback numbering
             'discussion_duration': DISCUSSION_TIME,  # Use default config
-            'voting_duration': VOTING_TIME  # Use default config
+            'voting_duration': VOTING_TIME,  # Use default config
+            'game_graph': game_graph,  # Room-specific GameGraph with assigned API key
+            'api_key_index': api_key_index  # Track which API key is assigned
         }
         # Initialize lock for this room to prevent race conditions
         if room_code not in room_locks:
@@ -2063,6 +2201,7 @@ async def websocket_endpoint(websocket: WebSocket, room_code: str, player_id: st
     state = rooms[room_code]['state']
     if 'initialized' not in rooms[room_code]:
         # Initialize game
+        game_graph = rooms[room_code]['game_graph']
         result = game_graph.initialize_game_node(state)
         
         # Broadcast initial state
@@ -2244,6 +2383,7 @@ async def start_game(room_code: str):
         })
         
         # Initialize game
+        game_graph = rooms[room_code]['game_graph']
         result = game_graph.initialize_game_node(state)
         state.update(result)
         rooms[room_code]['state'] = state
@@ -2280,8 +2420,31 @@ async def get_config():
 
 @app.get("/health")
 async def health_check():
-    """Health check endpoint."""
-    return {"status": "healthy"}
+    """
+    Health check endpoint with API key manager status.
+    
+    Returns:
+        Dictionary with health status and API configuration details
+    """
+    health_info = {
+        "status": "healthy",
+        "api_keys_configured": api_key_manager is not None
+    }
+    
+    if api_key_manager:
+        try:
+            stats = api_key_manager.get_stats()
+            health_info.update({
+                "api_key_count": stats["total_keys"],
+                "total_rooms_created": stats["total_assigned"],
+                "api_system": "operational"
+            })
+        except Exception as e:
+            health_info["api_system"] = f"degraded: {str(e)}"
+    else:
+        health_info["api_system"] = "unavailable - no API keys configured"
+    
+    return health_info
 
 
 # ============================================================================
@@ -2614,7 +2777,8 @@ async def mturk_register(
         }
     
     # Validate worker_id format (MTurk worker IDs: A followed by 13 alphanumeric chars)
-    worker_id_pattern = re.compile(r'^A[A-Z0-9]{13}$')
+    from .config import MTURK_WORKER_ID_PATTERN
+    worker_id_pattern = re.compile(MTURK_WORKER_ID_PATTERN)
     if not worker_id_pattern.match(request.worker_id):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -3024,6 +3188,51 @@ async def get_active_session(
         "player_id": None,
         "room_status": None,
         "max_humans": None
+    }
+
+
+@app.post("/api/users/heartbeat")
+async def user_heartbeat(
+    current_user: User = Depends(get_current_user_optional)
+):
+    """
+    Receive heartbeat from active users to track online status.
+    Works for both authenticated and anonymous users.
+    
+    Users send this periodically (every 30s) while browsing lobby, dashboard, or in-game.
+    Users are considered "online" if they've sent a heartbeat within ONLINE_THRESHOLD_SECONDS.
+    
+    Args:
+        current_user: Current authenticated user (optional)
+    
+    Returns:
+        Status confirmation
+    """
+    if current_user:
+        # Authenticated user - track by user_id
+        user_id = str(current_user.id)
+        update_user_activity(user_id)
+        return {"status": "ok", "user_type": "authenticated", "user_id": current_user.user_id}
+    else:
+        # Anonymous user - for now we don't track anonymous users
+        # Could be extended to use session tokens if needed
+        return {"status": "ok", "user_type": "anonymous"}
+
+
+@app.get("/api/lobby/online-users")
+async def get_online_users():
+    """
+    Get the count of currently online users.
+    Returns count of users who have sent a heartbeat within ONLINE_THRESHOLD_SECONDS.
+    
+    Returns:
+        Dictionary with total_online count and threshold_seconds
+    """
+    online_count = get_online_users_count()
+    
+    return {
+        "total_online": online_count,
+        "threshold_seconds": ONLINE_THRESHOLD_SECONDS
     }
 
 
@@ -4146,8 +4355,24 @@ async def create_room(room_data: dict):
     # Create AI player IDs with assigned numbers
     ai_player_ids = [f"Player {num}" for num in ai_numbers]
     
+    # Get next API key for this room (round-robin with error handling)
+    # This will raise HTTPException if API keys are not configured
+    api_key, api_key_index = get_api_key_for_room()
+    
     # Create initial game state with properly numbered AI players and language
     state = create_game_for_room(room_code, num_ai_players, ai_player_ids, language)
+    
+    # Create game graph with assigned API key
+    try:
+        game_graph = create_game_graph_for_room(api_key)
+    except Exception as e:
+        print(f"⚠️  CRITICAL: Failed to create game graph for room {room_code}: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to initialize AI system. Please contact administrator."
+        )
     
     # Initialize room with metadata
     rooms[room_code] = {
@@ -4172,7 +4397,9 @@ async def create_room(room_data: dict):
         'human_overflow_counter': 0,  # Counter for H1, H2 fallback numbering
         'language': language,  # Store room language
         'discussion_duration': discussion_duration,  # Store discussion duration
-        'voting_duration': voting_duration  # Store voting duration
+        'voting_duration': voting_duration,  # Store voting duration
+        'game_graph': game_graph,  # Room-specific GameGraph with assigned API key
+        'api_key_index': api_key_index  # Track which API key is assigned
     }
     
     # Initialize lock for this room
@@ -4573,6 +4800,7 @@ async def join_room(
                         # Initialize game if needed
                         state = room['state']
                         if 'initialized' not in room or not room['initialized']:
+                            game_graph = rooms[room_code]['game_graph']
                             result = game_graph.initialize_game_node(state)
                             state.update(result)
                             rooms[room_code]['state'] = state
@@ -4619,8 +4847,32 @@ async def join_room(
             ai_numbers = all_numbers[1:]
             ai_player_ids = [f"Player {num}" for num in ai_numbers]
         
+            # Get next API key for this room (round-robin with error handling)
+            try:
+                api_key, api_key_index = get_api_key_for_room()
+            except HTTPException as e:
+                # Legacy room creation failure - return error
+                return {
+                    "success": False,
+                    "error": f"Failed to create room: {e.detail}",
+                    "player_id": None
+                }
+        
             # Create game state with properly numbered AI players
             state = create_game_for_room(room_code, NUM_AI_PLAYERS, ai_player_ids)
+            
+            # Create game graph with assigned API key
+            try:
+                game_graph = create_game_graph_for_room(api_key)
+            except Exception as e:
+                print(f"⚠️  CRITICAL: Failed to create game graph for legacy room {room_code}: {e}")
+                import traceback
+                traceback.print_exc()
+                return {
+                    "success": False,
+                    "error": "Failed to initialize AI system. Please try again.",
+                    "player_id": None
+                }
         
             rooms[room_code] = {
                 'state': state,
@@ -4643,13 +4895,16 @@ async def join_room(
                 'available_numbers': [],  # All assigned for legacy rooms
                 'human_overflow_counter': 0,  # Counter for H1, H2 fallback numbering
                 'discussion_duration': DISCUSSION_TIME,  # Use default config for legacy rooms
-                'voting_duration': VOTING_TIME  # Use default config for legacy rooms
+                'voting_duration': VOTING_TIME,  # Use default config for legacy rooms
+                'game_graph': game_graph,  # Room-specific GameGraph with assigned API key
+                'api_key_index': api_key_index  # Track which API key is assigned
             }
             # Initialize lock for this room to prevent race conditions
             if room_code not in room_locks:
                 room_locks[room_code] = asyncio.Lock()
         
             # Initialize game
+            game_graph = rooms[room_code]['game_graph']
             result = game_graph.initialize_game_node(state)
             state.update(result)
             rooms[room_code]['state'] = state
@@ -4746,6 +5001,7 @@ async def join_room(
         
             # Initialize game if not already initialized
             if 'initialized' not in room:
+                game_graph = rooms[room_code]['game_graph']
                 result = game_graph.initialize_game_node(state)
                 state.update(result)
                 rooms[room_code]['state'] = state

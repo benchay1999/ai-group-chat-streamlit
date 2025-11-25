@@ -6,6 +6,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { useHeartbeat } from '../hooks/useHeartbeat';
 import { sessionsAPI } from '../services/sessionsAPI';
 import { format } from 'date-fns';
 import { 
@@ -26,6 +27,9 @@ const DashboardPage = () => {
   const [earningsLoading, setEarningsLoading] = useState(true);
   const [walletData, setWalletData] = useState(null);
   const [walletLoading, setWalletLoading] = useState(true);
+
+  // Send heartbeat to track this user as online
+  useHeartbeat();
 
   useEffect(() => {
     loadSessions();

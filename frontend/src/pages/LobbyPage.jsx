@@ -9,6 +9,7 @@ import { roomAPI } from '../services/api';
 import { useGame } from '../context/GameContext';
 import { useLanguage } from '../context/LanguageContext';
 import { useAuth } from '../contexts/AuthContext';
+import { useHeartbeat } from '../hooks/useHeartbeat';
 import RoomCard from '../components/RoomCard';
 import CreateRoomModal from '../components/CreateRoomModal';
 import MTurkAutoLogin from '../components/MTurkAutoLogin';
@@ -26,6 +27,10 @@ const LobbyPage = () => {
   const [totalPages, setTotalPages] = useState(0);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [serverOnline, setServerOnline] = useState(false);
+  const [onlineUsers, setOnlineUsers] = useState(0);
+
+  // Send heartbeat to track this user as online
+  useHeartbeat();
 
   const loadRooms = async () => {
     try {
@@ -43,6 +48,16 @@ const LobbyPage = () => {
     }
   };
 
+  const loadOnlineUsers = async () => {
+    try {
+      const data = await roomAPI.getOnlineUsers();
+      setOnlineUsers(data.total_online || 0);
+    } catch (error) {
+      console.debug('Error loading online users:', error);
+      // Silently fail - don't disrupt user experience
+    }
+  };
+
   useEffect(() => {
     // Check server health
     roomAPI.healthCheck()
@@ -50,11 +65,15 @@ const LobbyPage = () => {
       .catch(() => setServerOnline(false));
 
     loadRooms();
+    loadOnlineUsers();
   }, [page]);
 
   // Auto-refresh every 30 seconds (reduced to save bandwidth)
   useEffect(() => {
-    const interval = setInterval(loadRooms, 30000);
+    const interval = setInterval(() => {
+      loadRooms();
+      loadOnlineUsers();
+    }, 30000);
     return () => clearInterval(interval);
   }, [page]);
 
@@ -134,6 +153,13 @@ const LobbyPage = () => {
             <div>
               <h1 className="text-4xl font-bold text-white mb-2">{t('lobby.title')}</h1>
               <p className="text-blue-100">{t('lobby.subtitle')}</p>
+              {/* Online Users Count */}
+              <div className="flex items-center gap-2 mt-2">
+                <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-green-500 bg-opacity-20 rounded-full text-green-100 text-sm font-medium">
+                  <span className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></span>
+                  {onlineUsers} {onlineUsers === 1 ? 'user' : 'users'} online
+                </span>
+              </div>
             </div>
             <div className="flex items-center gap-4">
               {/* Auth Status */}

@@ -7,6 +7,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useGame } from '../context/GameContext';
 import { useWebSocket } from '../hooks/useWebSocket';
+import { useHeartbeat } from '../hooks/useHeartbeat';
 import { roomAPI } from '../services/api';
 import PlayerList from '../components/PlayerList';
 import ChatWindow from '../components/ChatWindow';
@@ -32,6 +33,9 @@ const GamePage = () => {
     suspect_role: null,
   });
   const [typing, setTyping] = useState([]);
+
+  // Send heartbeat to track this user as online
+  useHeartbeat();
 
   // Save active session when component mounts (user is in game)
   useEffect(() => {
@@ -252,7 +256,6 @@ const GamePage = () => {
     return (
       <GameOver
         winner={gameState.winner}
-        winningPlayers={gameState.winning_players || []}
         suspect={gameState.selected_suspect}
         suspectRole={gameState.suspect_role}
         voteCountsDisplay={voteCountsDisplay}

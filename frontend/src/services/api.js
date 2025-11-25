@@ -155,6 +155,24 @@ export const roomAPI = {
     const response = await api.get('/health');
     return response.data;
   },
+
+  /**
+   * Send heartbeat to track user as online
+   * @returns {Promise} Heartbeat confirmation
+   */
+  heartbeat: async () => {
+    const response = await api.post('/api/users/heartbeat');
+    return response.data;
+  },
+
+  /**
+   * Get count of online users
+   * @returns {Promise} Online users count
+   */
+  getOnlineUsers: async () => {
+    const response = await api.get('/api/lobby/online-users');
+    return response.data;
+  },
 };
 
 /**

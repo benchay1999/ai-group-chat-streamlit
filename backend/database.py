@@ -28,12 +28,36 @@ DATABASE_URL = os.getenv(
     f'sqlite+aiosqlite:///{DB_PATH}'
 )
 
-# Create async engine
-engine = create_async_engine(
-    DATABASE_URL,
-    echo=True,  # Set to False in production
-    future=True
-)
+# Determine if we're using SQLite or PostgreSQL
+is_sqlite = 'sqlite' in DATABASE_URL.lower()
+is_production = os.getenv('ENVIRONMENT', 'development') == 'production'
+
+# Warn if using SQLite in production
+if is_sqlite and is_production:
+    print("⚠️  WARNING: Using SQLite in production!")
+    print("   SQLite has poor concurrency handling for 100+ users")
+    print("   Recommended: Migrate to PostgreSQL for production")
+    print("   See: SQLITE_TO_POSTGRESQL.md")
+
+# Create async engine with appropriate settings
+if is_sqlite:
+    # SQLite configuration (development only)
+    engine = create_async_engine(
+        DATABASE_URL,
+        echo=False if is_production else True,
+        future=True
+    )
+else:
+    # PostgreSQL configuration with connection pooling
+    engine = create_async_engine(
+        DATABASE_URL,
+        echo=False if is_production else True,
+        future=True,
+        pool_size=20,  # Number of connections to maintain
+        max_overflow=40,  # Additional connections when pool is full
+        pool_pre_ping=True,  # Verify connections before using
+        pool_recycle=3600,  # Recycle connections after 1 hour
+    )
 
 # Create async session factory
 async_session_maker = async_sessionmaker(

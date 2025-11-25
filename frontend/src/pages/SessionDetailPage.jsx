@@ -144,13 +144,13 @@ const SessionDetailPage = () => {
           <div className="bg-white rounded-lg shadow p-6">
             <div className="flex items-center justify-between">
               <div className="w-full">
-                <p className="text-sm font-medium text-gray-600">Winner</p>
-                <p className="text-2xl font-bold text-gray-900 capitalize mb-1">
-                  {stats.winner ? `${stats.winner} Team` : 'N/A'}
+                <p className="text-sm font-medium text-gray-600">Most Voted Player</p>
+                <p className="text-2xl font-bold text-gray-900 mb-1">
+                  {stats.selected_suspect || 'N/A'}
                 </p>
-                {stats.winning_players && stats.winning_players.length > 0 && (
-                  <p className="text-sm text-gray-600">
-                    {stats.winning_players.join(', ')}
+                {stats.suspect_role && (
+                  <p className="text-sm text-gray-600 capitalize">
+                    ({stats.suspect_role})
                   </p>
                 )}
               </div>

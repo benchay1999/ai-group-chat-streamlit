@@ -89,12 +89,22 @@ class GameGraph:
     Manages the LangGraph StateGraph and all agent nodes.
     """
     
-    def __init__(self):
-        """Initialize the game graph with LangChain models."""
-        self.llm = ChatOpenAI(
-            model=AI_MODEL_NAME,
-            temperature=AI_TEMPERATURE
-        )
+    def __init__(self, api_key: str = None):
+        """
+        Initialize the game graph with LangChain models.
+        
+        Args:
+            api_key: Optional OpenAI API key. If not provided, uses default from environment.
+        """
+        # Initialize LLM with optional API key
+        llm_kwargs = {
+            "model": AI_MODEL_NAME,
+            "temperature": AI_TEMPERATURE
+        }
+        if api_key:
+            llm_kwargs["api_key"] = api_key
+        
+        self.llm = ChatOpenAI(**llm_kwargs)
         self.model_name = AI_MODEL_NAME  # Store for token tracking
         self.graph = self._build_graph()
     
@@ -962,8 +972,18 @@ Never use em dashes. Don't reveal you're an AI.
         return random.choice(eligible_targets), state
 
 
-# Global graph instance
-game_graph = GameGraph()
+# Factory function to create game graph instances with specific API keys
+def create_game_graph_for_room(api_key: str = None) -> GameGraph:
+    """
+    Create a new GameGraph instance for a room with a specific API key.
+    
+    Args:
+        api_key: OpenAI API key to use for this room's AI agents
+        
+    Returns:
+        GameGraph instance configured with the specified API key
+    """
+    return GameGraph(api_key=api_key)
 
 
 def create_game_for_room(room_code: str, num_ai_players: int = 4, ai_player_ids: list = None, language: str = "english") -> GameState:

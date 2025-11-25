@@ -11,7 +11,7 @@ import { useAuth } from '../contexts/AuthContext';
 import toast from 'react-hot-toast';
 import { TrendingUp, Award, Zap } from 'lucide-react';
 
-const GameOver = ({ winner, winningPlayers = [], suspect, suspectRole, voteCountsDisplay, onLeave, roomCode }) => {
+const GameOver = ({ winner, suspect, suspectRole, voteCountsDisplay, onLeave, roomCode }) => {
   const { user } = useAuth();
   const isHumanWin = winner === 'human';
   const [gamificationData, setGamificationData] = useState(null);
@@ -80,13 +80,13 @@ const GameOver = ({ winner, winningPlayers = [], suspect, suspectRole, voteCount
                 ? 'The humans successfully identified the most human-like player!' 
                 : 'The AIs tricked humans into voting for an AI!'}
             </p>
-            {winningPlayers && winningPlayers.length > 0 && (
+            {suspect && (
               <div className="mt-3 pt-3 border-t border-white border-opacity-30">
                 <p className="text-white text-sm font-medium opacity-90 mb-1">
-                  Winners:
+                  Most Voted Player:
                 </p>
                 <p className="text-white text-lg font-bold">
-                  {winningPlayers.join(', ')}
+                  {suspect}
                 </p>
               </div>
             )}

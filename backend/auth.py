@@ -23,6 +23,18 @@ JWT_SECRET_KEY = os.getenv('JWT_SECRET_KEY', 'your-secret-key-change-this-in-pro
 JWT_ALGORITHM = 'HS256'
 ACCESS_TOKEN_EXPIRE_HOURS = 24
 
+# Security validation: Warn on insecure JWT secrets
+if JWT_SECRET_KEY == 'your-secret-key-change-this-in-production':
+    print("⚠️  WARNING: Using default JWT_SECRET_KEY! This is INSECURE!")
+    print("   Generate a secure key with:")
+    print("   python -c \"import secrets; print(secrets.token_urlsafe(32))\"")
+    print("   Then add to .env file: JWT_SECRET_KEY=<generated-key>")
+    
+# Validate JWT secret strength (minimum 32 characters recommended)
+if len(JWT_SECRET_KEY) < 32:
+    print(f"⚠️  WARNING: JWT_SECRET_KEY is only {len(JWT_SECRET_KEY)} characters!")
+    print("   Recommended: At least 32 characters for strong security")
+
 # Password hashing configuration using Argon2
 # Argon2 is modern, secure, and has NO password length limits (unlike bcrypt's 72 bytes)
 pwd_context = CryptContext(
