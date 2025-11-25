@@ -43,7 +43,7 @@ const translations = {
     
     // Create Room Modal
     'modal.title': 'Create New Room',
-    'modal.maxHumans': 'Maximum Human Players',
+    'modal.maxHumans': 'Number of Human Players',
     'modal.totalPlayers': 'Total Players',
     'modal.language': 'Chat Language',
     'modal.discussionDuration': 'Discussion Duration',
@@ -121,7 +121,7 @@ const translations = {
     
     // Create Room Modal
     'modal.title': '새 방 만들기',
-    'modal.maxHumans': '최대 인간 플레이어 수',
+    'modal.maxHumans': '인간 플레이어 수',
     'modal.totalPlayers': '전체 플레이어 수',
     'modal.language': '채팅 언어',
     'modal.discussionDuration': '토론 시간',

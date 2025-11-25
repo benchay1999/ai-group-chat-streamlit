@@ -18,8 +18,19 @@ const CreateRoomModal = ({ isOpen, onClose, onCreate }) => {
   if (!isOpen) return null;
 
   const aiCount = totalPlayers - maxHumans;
+  
+  // Calculate minimum total players based on game rules
+  // Solo-human games (maxHumans = 1) MUST have at least 1 AI agent, so min total = 2
+  // Multi-human games can have 0 AI agents, so min total = maxHumans
+  const minTotalPlayers = maxHumans === 1 ? 2 : maxHumans;
 
   const handleCreate = async () => {
+    // Validation: Solo-human games must have AI agents
+    if (maxHumans === 1 && totalPlayers < 2) {
+      alert('Solo-human games must have at least 1 AI agent. Please increase the total players to at least 2.');
+      return;
+    }
+    
     setCreating(true);
     try {
       await onCreate({ 
@@ -57,14 +68,16 @@ const CreateRoomModal = ({ isOpen, onClose, onCreate }) => {
             <input
               type="range"
               min="1"
-              max="4"
+              max="5"
               value={maxHumans}
               onChange={(e) => {
                 const newMax = parseInt(e.target.value);
                 setMaxHumans(newMax);
-                // Ensure total players is at least max humans
-                if (totalPlayers < newMax) {
-                  setTotalPlayers(newMax);
+                // Calculate minimum total players based on game rules
+                const newMinTotal = newMax === 1 ? 2 : newMax;
+                // Ensure total players meets minimum requirement
+                if (totalPlayers < newMinTotal) {
+                  setTotalPlayers(newMinTotal);
                 }
               }}
               className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-purple-600"
@@ -75,6 +88,7 @@ const CreateRoomModal = ({ isOpen, onClose, onCreate }) => {
               <span>2</span>
               <span>3</span>
               <span>4</span>
+              <span>5</span>
             </div>
           </div>
 
@@ -85,7 +99,7 @@ const CreateRoomModal = ({ isOpen, onClose, onCreate }) => {
             </label>
             <input
               type="range"
-              min={maxHumans}
+              min={minTotalPlayers}
               max="12"
               value={totalPlayers}
               onChange={(e) => setTotalPlayers(parseInt(e.target.value))}
@@ -93,9 +107,12 @@ const CreateRoomModal = ({ isOpen, onClose, onCreate }) => {
               disabled={creating}
             />
             <div className="flex justify-between text-xs text-gray-500 mt-1">
-              <span>{maxHumans}</span>
+              <span>{minTotalPlayers}</span>
               <span>12</span>
             </div>
+            {maxHumans === 1 && aiCount === 0 && (
+              <p className="text-xs text-red-500 mt-1">⚠️ Solo-human games require at least 1 AI agent</p>
+            )}
           </div>
 
           {/* Language Selector */}
@@ -216,7 +233,11 @@ const CreateRoomModal = ({ isOpen, onClose, onCreate }) => {
           </div>
 
           {/* Preview */}
-          <div className="bg-gradient-to-r from-purple-50 to-blue-50 rounded-lg p-4 border border-purple-200">
+          <div className={`bg-gradient-to-r rounded-lg p-4 border ${
+            maxHumans === 1 && aiCount === 0 
+              ? 'from-red-50 to-orange-50 border-red-300' 
+              : 'from-purple-50 to-blue-50 border-purple-200'
+          }`}>
             <h3 className="text-sm font-semibold text-gray-700 mb-2">{t('modal.preview')}</h3>
             <div className="space-y-1 text-sm">
               <div className="flex justify-between">
@@ -225,7 +246,10 @@ const CreateRoomModal = ({ isOpen, onClose, onCreate }) => {
               </div>
               <div className="flex justify-between">
                 <span className="text-gray-600">{t('modal.aiPlayers')}:</span>
-                <span className="font-semibold text-purple-600">{aiCount}</span>
+                <span className={`font-semibold ${maxHumans === 1 && aiCount === 0 ? 'text-red-600' : 'text-purple-600'}`}>
+                  {aiCount}
+                  {maxHumans === 1 && aiCount === 0 && <span className="text-xs ml-1">⚠️</span>}
+                </span>
               </div>
               <div className="flex justify-between">
                 <span className="text-gray-600">{t('modal.total')}:</span>
@@ -266,7 +290,8 @@ const CreateRoomModal = ({ isOpen, onClose, onCreate }) => {
             <button
               onClick={handleCreate}
               className="flex-1 bg-gradient-to-r from-purple-600 to-blue-600 text-white py-2 px-4 rounded-lg font-semibold hover:from-purple-700 hover:to-blue-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-              disabled={creating}
+              disabled={creating || (maxHumans === 1 && aiCount === 0)}
+              title={maxHumans === 1 && aiCount === 0 ? 'Solo-human games must have at least 1 AI agent' : ''}
             >
               {creating ? t('modal.creating') : t('modal.create')}
             </button>
