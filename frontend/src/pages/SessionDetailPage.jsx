@@ -11,9 +11,11 @@ import { ArrowLeft, Users, MessageCircle, Trophy } from 'lucide-react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip } from 'recharts';
 import toast from 'react-hot-toast';
 import { getPlayerColor } from '../utils/playerColors';
+import { useAuth } from '../contexts/AuthContext';
 
 const SessionDetailPage = () => {
   const { sessionId } = useParams();
+  const { user } = useAuth();
   const [session, setSession] = useState(null);
   const [loading, setLoading] = useState(true);
 
@@ -141,11 +143,16 @@ const SessionDetailPage = () => {
 
           <div className="bg-white rounded-lg shadow p-6">
             <div className="flex items-center justify-between">
-              <div>
+              <div className="w-full">
                 <p className="text-sm font-medium text-gray-600">Winner</p>
-                <p className="text-2xl font-bold text-gray-900 capitalize">
-                  {stats.winner || 'N/A'}
+                <p className="text-2xl font-bold text-gray-900 capitalize mb-1">
+                  {stats.winner ? `${stats.winner} Team` : 'N/A'}
                 </p>
+                {stats.winning_players && stats.winning_players.length > 0 && (
+                  <p className="text-sm text-gray-600">
+                    {stats.winning_players.join(', ')}
+                  </p>
+                )}
               </div>
               <Trophy className="w-8 h-8 text-yellow-600" />
             </div>
@@ -168,9 +175,9 @@ const SessionDetailPage = () => {
         )}
 
         {/* Player Mappings Card (Admin only) */}
-        {session.player_mappings && session.player_mappings.some(p => p.user_name) && (
+        {user?.role === 'admin' && session.player_mappings && session.player_mappings.some(p => p.user_name) && (
           <div className="bg-white rounded-lg shadow p-6 mb-8">
-            <h2 className="text-lg font-semibold text-gray-900 mb-4">Player Identities</h2>
+            <h2 className="text-lg font-semibold text-gray-900 mb-4">Player Identities (Admin View)</h2>
             <div className="space-y-2">
               {session.player_mappings.map((mapping) => (
                 <div key={mapping.player_id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">

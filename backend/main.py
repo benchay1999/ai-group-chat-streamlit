@@ -807,7 +807,13 @@ async def complete_voting(room_code: str):
     # Humans win if suspect is actually a human (most human-like); otherwise AIs win
     state['selected_suspect'] = suspect
     state['suspect_role'] = suspect_role
-    state['winner'] = 'human' if suspect_role == 'human' else 'ai'
+    winning_team = 'human' if suspect_role == 'human' else 'ai'
+    state['winner'] = winning_team
+    
+    # Store list of winning player IDs for more specific winner info
+    winning_players = [p['id'] for p in state.get('players', []) if p.get('role') == winning_team]
+    state['winning_players'] = winning_players
+    
     state['phase'] = Phase.GAME_OVER
     rooms[room_code]['state'] = state
     
@@ -1352,7 +1358,8 @@ async def save_session_stats(room_code: str, state: dict, current_user: Optional
         'vote_counts': vote_counts,
         'selected_suspect': state.get('selected_suspect'),
         'suspect_role': state.get('suspect_role'),
-        'winner': state.get('winner')
+        'winner': state.get('winner'),
+        'winning_players': state.get('winning_players', [])
     }
     
     # Save to JSON file
@@ -3592,6 +3599,7 @@ async def get_session_detail(
     from .database import SessionPlayer
     current_user_player_id = None
     try:
+        print(f"🔍 Looking for player identification: session_id={session_uuid}, user_id={current_user.id}")
         player_result = await db.execute(
             select(SessionPlayer).where(
                 SessionPlayer.session_id == session_uuid,
@@ -3601,8 +3609,19 @@ async def get_session_detail(
         user_player = player_result.scalar_one_or_none()
         if user_player:
             current_user_player_id = user_player.player_id
+            print(f"✅ Found player identification: {current_user_player_id} for user {current_user.user_id}")
+        else:
+            print(f"⚠️ No player identification found for user {current_user.user_id} in session {session_uuid}")
+            # Debug: List all SessionPlayers for this session
+            debug_result = await db.execute(
+                select(SessionPlayer).where(SessionPlayer.session_id == session_uuid)
+            )
+            all_session_players = debug_result.scalars().all()
+            print(f"📋 All SessionPlayers in this session: {[(sp.player_id, sp.user_id, sp.role) for sp in all_session_players]}")
     except Exception as e:
-        print(f"Error getting player identification: {e}")
+        print(f"❌ Error getting player identification: {e}")
+        import traceback
+        traceback.print_exc()
     
     # Get player-user mappings (for admins)
     player_mappings = []
@@ -4424,6 +4443,7 @@ async def get_room_state(room_code: str, player_id: str = "StreamlitUser"):
         "chat_history": state['chat_history'],
         "votes": state.get('votes', {}),
         "winner": state.get('winner'),
+        "winning_players": state.get('winning_players', []),
         "selected_suspect": state.get('selected_suspect'),
         "suspect_role": state.get('suspect_role'),
         "current_player_id": player_id,

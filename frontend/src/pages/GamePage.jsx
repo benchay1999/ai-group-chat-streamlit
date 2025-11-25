@@ -252,6 +252,7 @@ const GamePage = () => {
     return (
       <GameOver
         winner={gameState.winner}
+        winningPlayers={gameState.winning_players || []}
         suspect={gameState.selected_suspect}
         suspectRole={gameState.suspect_role}
         voteCountsDisplay={voteCountsDisplay}
