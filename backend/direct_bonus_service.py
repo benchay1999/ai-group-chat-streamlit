@@ -56,6 +56,10 @@ async def validate_direct_cashout(
     if not user.mturk_worker_id:
         return False, "Please add your MTurk Worker ID to your profile first"
     
+    # Check if user has completed demographic information (required with worker ID)
+    if not user.age or not user.gender or not user.nationality or not user.major:
+        return False, "Demographic information incomplete. Please update your profile with age, gender, nationality, and major before cashing out."
+    
     # Validate Worker ID format (starts with A, followed by alphanumeric)
     if not user.mturk_worker_id.startswith('A') or len(user.mturk_worker_id) < 10:
         return False, "Invalid MTurk Worker ID format"

@@ -206,9 +206,9 @@ const Wallet = () => {
               <div className="flex items-start">
                 <AlertCircle className="w-5 h-5 text-yellow-600 mt-0.5 mr-3 flex-shrink-0" />
                 <div>
-                  <p className="text-yellow-800 font-semibold mb-1">MTurk Worker ID Required</p>
+                  <p className="text-yellow-800 font-semibold mb-1">MTurk Profile Required</p>
                   <p className="text-yellow-700 text-sm mb-2">
-                    To cash out your gems, you need to add your MTurk Worker ID in your profile settings.
+                    To cash out your gems, you need to add your MTurk Worker ID and complete your demographic information (age, gender, nationality, major) in your profile settings.
                   </p>
                   <a
                     href="/profile"

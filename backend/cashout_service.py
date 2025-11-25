@@ -86,6 +86,10 @@ async def validate_cashout_request(
     if not user.mturk_worker_id:
         return False, "MTurk Worker ID not set. Please add your Worker ID in profile settings before cashing out."
     
+    # Check if user has completed demographic information (required with worker ID)
+    if not user.age or not user.gender or not user.nationality or not user.major:
+        return False, "Demographic information incomplete. Please update your profile with age, gender, nationality, and major before cashing out."
+    
     # Check minimum cashout amount
     if amount_usd < Decimal(str(MINIMUM_CASHOUT_AMOUNT)):
         return False, f"Minimum cashout amount is ${MINIMUM_CASHOUT_AMOUNT:.2f}"

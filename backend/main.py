@@ -2423,6 +2423,10 @@ async def get_user_profile(
         "role": current_user.role.value,
         "created_at": current_user.created_at.isoformat(),
         "mturk_worker_id": current_user.mturk_worker_id,
+        "age": current_user.age,
+        "gender": current_user.gender,
+        "nationality": current_user.nationality,
+        "major": current_user.major,
         "gem_balance": current_user.gem_balance,
         "gem_balance_usd": float(gems_to_usd(current_user.gem_balance)),
         "total_gems_earned": current_user.total_gems_earned,
@@ -2444,10 +2448,10 @@ async def update_mturk_worker_id(
     db: AsyncSession = Depends(get_async_session)
 ):
     """
-    Update user's MTurk Worker ID.
+    Update user's MTurk Worker ID and demographic information.
     
     Args:
-        request: Request with worker_id in body
+        request: Request with worker_id, age, gender, nationality, major in body
         current_user: Current authenticated user
         db: Database session
     
@@ -2458,6 +2462,10 @@ async def update_mturk_worker_id(
     
     body = await request.json()
     worker_id = body.get('worker_id', '').strip()
+    age = body.get('age')
+    gender = body.get('gender', '').strip().lower()
+    nationality = body.get('nationality', '').strip()
+    major = body.get('major', '').strip()
     
     # Validate MTurk Worker ID format (typically starts with 'A' and is alphanumeric)
     if worker_id:
@@ -2467,18 +2475,94 @@ async def update_mturk_worker_id(
                 status_code=400,
                 detail="Invalid MTurk Worker ID format. Worker IDs typically start with 'A' followed by alphanumeric characters (e.g., A12TU3EXAMPLE93)"
             )
+        
+        # Demographic fields are MANDATORY when setting worker ID
+        if not age:
+            raise HTTPException(
+                status_code=400,
+                detail="Age is required when setting MTurk Worker ID"
+            )
+        
+        if not gender:
+            raise HTTPException(
+                status_code=400,
+                detail="Gender is required when setting MTurk Worker ID"
+            )
+        
+        if not nationality:
+            raise HTTPException(
+                status_code=400,
+                detail="Nationality is required when setting MTurk Worker ID"
+            )
+        
+        if not major:
+            raise HTTPException(
+                status_code=400,
+                detail="Major/field of study is required when setting MTurk Worker ID"
+            )
+        
+        # Validate age
+        try:
+            age_int = int(age)
+            if age_int < 18 or age_int > 100:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Age must be between 18 and 100"
+                )
+        except (ValueError, TypeError):
+            raise HTTPException(
+                status_code=400,
+                detail="Age must be a valid number"
+            )
+        
+        # Validate gender
+        valid_genders = ['male', 'female', 'wish_not_to_answer']
+        if gender not in valid_genders:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Gender must be one of: {', '.join(valid_genders)}"
+            )
+        
+        # Validate nationality and major (non-empty strings)
+        if len(nationality) < 2:
+            raise HTTPException(
+                status_code=400,
+                detail="Nationality must be at least 2 characters"
+            )
+        
+        if len(major) < 2:
+            raise HTTPException(
+                status_code=400,
+                detail="Major/field of study must be at least 2 characters"
+            )
+        
+        # Update all fields atomically
+        current_user.mturk_worker_id = worker_id
+        current_user.age = age_int
+        current_user.gender = gender
+        current_user.nationality = nationality
+        current_user.major = major
+    else:
+        # If clearing worker ID, clear demographics too
+        current_user.mturk_worker_id = None
+        current_user.age = None
+        current_user.gender = None
+        current_user.nationality = None
+        current_user.major = None
     
-    # Update user's worker ID
-    current_user.mturk_worker_id = worker_id if worker_id else None
     await db.commit()
     await db.refresh(current_user)
     
-    print(f"✅ Updated MTurk Worker ID for user {current_user.user_id}: {worker_id}")
+    print(f"✅ Updated MTurk Worker ID and demographics for user {current_user.user_id}: {worker_id}")
     
     return {
         "success": True,
         "mturk_worker_id": current_user.mturk_worker_id,
-        "message": "MTurk Worker ID updated successfully"
+        "age": current_user.age,
+        "gender": current_user.gender,
+        "nationality": current_user.nationality,
+        "major": current_user.major,
+        "message": "MTurk Worker ID and demographics updated successfully"
     }
 
 
@@ -2956,6 +3040,15 @@ async def get_wallet_balance(
     from .config import GEMS_PER_DOLLAR
     from .cashout_service import gems_to_usd
     
+    # Check if user has complete MTurk profile (worker ID + demographics)
+    has_complete_profile = bool(
+        current_user.mturk_worker_id and 
+        current_user.age and 
+        current_user.gender and 
+        current_user.nationality and 
+        current_user.major
+    )
+    
     return {
         "gem_balance": current_user.gem_balance,
         "usd_equivalent": float(gems_to_usd(current_user.gem_balance)),
@@ -2966,7 +3059,8 @@ async def get_wallet_balance(
             "description": f"{GEMS_PER_DOLLAR} gems = $1.00 USD"
         },
         "mturk_worker_id": current_user.mturk_worker_id,
-        "has_worker_id": bool(current_user.mturk_worker_id)
+        "has_worker_id": has_complete_profile,  # Now checks for complete profile
+        "has_demographics": bool(current_user.age and current_user.gender and current_user.nationality and current_user.major)
     }
 
 

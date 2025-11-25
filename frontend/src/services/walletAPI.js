@@ -57,13 +57,21 @@ export const getCashoutStatus = async (transactionId) => {
 };
 
 /**
- * Update user's MTurk Worker ID
+ * Update user's MTurk Worker ID and demographic information
  * @param {string} workerId - MTurk Worker ID
+ * @param {number} age - Worker's age
+ * @param {string} gender - Worker's gender (male, female, wish_not_to_answer)
+ * @param {string} nationality - Worker's nationality
+ * @param {string} major - Worker's major/field of study
  * @returns {Promise<Object>} Update result
  */
-export const updateMTurkWorkerId = async (workerId) => {
+export const updateMTurkWorkerId = async (workerId, age, gender, nationality, major) => {
   const response = await api.put('/api/profile/mturk-worker-id', {
-    worker_id: workerId
+    worker_id: workerId,
+    age: age,
+    gender: gender,
+    nationality: nationality,
+    major: major
   });
   return response.data;
 };

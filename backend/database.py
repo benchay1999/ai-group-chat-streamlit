@@ -91,6 +91,12 @@ class User(Base):
     total_gems_cashed_out = Column(Integer, default=0, nullable=False)  # Lifetime gems cashed out
     mturk_worker_id = Column(String(255), nullable=True, index=True)  # MTurk Worker ID for cashouts
     
+    # MTurk worker demographics (required when setting worker ID)
+    age = Column(Integer, nullable=True)  # Worker age
+    gender = Column(String(50), nullable=True)  # Worker gender: male, female, wish_not_to_answer
+    nationality = Column(String(255), nullable=True)  # Worker nationality
+    major = Column(String(255), nullable=True)  # Worker major/field of study
+    
     # Relationships
     sessions = relationship("Session", back_populates="user", cascade="all, delete-orphan")
     cashout_transactions = relationship("CashoutTransaction", back_populates="user", cascade="all, delete-orphan")

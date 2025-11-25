@@ -18,6 +18,10 @@ const ProfilePage = () => {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [workerId, setWorkerId] = useState('');
+  const [age, setAge] = useState('');
+  const [gender, setGender] = useState('');
+  const [nationality, setNationality] = useState('');
+  const [major, setMajor] = useState('');
   const [message, setMessage] = useState({ type: '', text: '' });
 
   useEffect(() => {
@@ -30,6 +34,10 @@ const ProfilePage = () => {
       const data = await getUserProfile();
       setProfile(data);
       setWorkerId(data.mturk_worker_id || '');
+      setAge(data.age || '');
+      setGender(data.gender || '');
+      setNationality(data.nationality || '');
+      setMajor(data.major || '');
     } catch (error) {
       console.error('Failed to fetch profile:', error);
       toast.error('Failed to load profile');
@@ -41,8 +49,30 @@ const ProfilePage = () => {
   const handleSaveWorkerId = async (e) => {
     e.preventDefault();
     
+    // Validate all required fields
     if (!workerId.trim()) {
       setMessage({ type: 'error', text: 'Worker ID cannot be empty' });
+      return;
+    }
+
+    const ageNum = parseInt(age);
+    if (!age || isNaN(ageNum) || ageNum < 18 || ageNum > 100) {
+      setMessage({ type: 'error', text: 'Please enter a valid age (18-100)' });
+      return;
+    }
+
+    if (!gender) {
+      setMessage({ type: 'error', text: 'Please select your gender' });
+      return;
+    }
+
+    if (!nationality.trim()) {
+      setMessage({ type: 'error', text: 'Please enter your nationality' });
+      return;
+    }
+
+    if (!major.trim()) {
+      setMessage({ type: 'error', text: 'Please enter your major/field of study' });
       return;
     }
 
@@ -60,10 +90,16 @@ const ProfilePage = () => {
       setSaving(true);
       setMessage({ type: '', text: '' });
       
-      const result = await updateMTurkWorkerId(workerId.trim());
+      const result = await updateMTurkWorkerId(
+        workerId.trim(), 
+        ageNum, 
+        gender, 
+        nationality.trim(), 
+        major.trim()
+      );
       
-      setMessage({ type: 'success', text: 'Worker ID saved successfully!' });
-      toast.success('MTurk Worker ID updated!');
+      setMessage({ type: 'success', text: 'Worker ID and demographics saved successfully!' });
+      toast.success('MTurk Worker ID and demographics updated!');
       
       // Refresh profile
       await fetchProfile();
@@ -141,9 +177,9 @@ const ProfilePage = () => {
 
           {/* MTurk Worker ID Section */}
           <div className="bg-purple-50 border border-purple-200 rounded-lg p-6">
-            <h2 className="text-xl font-bold text-gray-900 mb-2">💳 MTurk Worker ID</h2>
+            <h2 className="text-xl font-bold text-gray-900 mb-2">💳 MTurk Worker ID & Demographics</h2>
             <p className="text-sm text-gray-600 mb-4">
-              Required to cash out your gems. Your Worker ID can be found in your MTurk dashboard.
+              Required to cash out your gems. Please provide your MTurk Worker ID and demographic information. Your Worker ID can be found in your MTurk dashboard.
             </p>
 
             {message.text && (
@@ -166,9 +202,79 @@ const ProfilePage = () => {
             )}
 
             <form onSubmit={handleSaveWorkerId} className="space-y-4">
+              {/* Age Field */}
+              <div>
+                <label htmlFor="age" className="block text-sm font-semibold text-gray-700 mb-2">
+                  Age <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="number"
+                  id="age"
+                  value={age}
+                  onChange={(e) => setAge(e.target.value)}
+                  placeholder="e.g., 25"
+                  min="18"
+                  max="100"
+                  required
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                />
+              </div>
+
+              {/* Gender Field */}
+              <div>
+                <label htmlFor="gender" className="block text-sm font-semibold text-gray-700 mb-2">
+                  Gender <span className="text-red-500">*</span>
+                </label>
+                <select
+                  id="gender"
+                  value={gender}
+                  onChange={(e) => setGender(e.target.value)}
+                  required
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                >
+                  <option value="">Select gender...</option>
+                  <option value="male">Male</option>
+                  <option value="female">Female</option>
+                  <option value="wish_not_to_answer">Prefer not to answer</option>
+                </select>
+              </div>
+
+              {/* Nationality Field */}
+              <div>
+                <label htmlFor="nationality" className="block text-sm font-semibold text-gray-700 mb-2">
+                  Nationality <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  id="nationality"
+                  value={nationality}
+                  onChange={(e) => setNationality(e.target.value)}
+                  placeholder="e.g., American, British, Chinese"
+                  required
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                />
+              </div>
+
+              {/* Major Field */}
+              <div>
+                <label htmlFor="major" className="block text-sm font-semibold text-gray-700 mb-2">
+                  Major/Field of Study <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  id="major"
+                  value={major}
+                  onChange={(e) => setMajor(e.target.value)}
+                  placeholder="e.g., Computer Science, Psychology"
+                  required
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                />
+              </div>
+
+              {/* Worker ID Field */}
               <div>
                 <label htmlFor="workerId" className="block text-sm font-semibold text-gray-700 mb-2">
-                  Worker ID
+                  MTurk Worker ID <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="text"
@@ -176,6 +282,7 @@ const ProfilePage = () => {
                   value={workerId}
                   onChange={(e) => setWorkerId(e.target.value.toUpperCase())}
                   placeholder="A1BCDEFGHIJK2LMN"
+                  required
                   className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent font-mono text-sm"
                 />
                 <p className="mt-2 text-xs text-gray-500">
@@ -193,9 +300,9 @@ const ProfilePage = () => {
 
               <button
                 type="submit"
-                disabled={saving || !workerId.trim()}
+                disabled={saving || !workerId.trim() || !age || !gender || !nationality.trim() || !major.trim()}
                 className={`w-full py-3 rounded-lg font-semibold transition flex items-center justify-center gap-2 ${
-                  saving || !workerId.trim()
+                  saving || !workerId.trim() || !age || !gender || !nationality.trim() || !major.trim()
                     ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
                     : 'bg-purple-600 text-white hover:bg-purple-700'
                 }`}
@@ -206,17 +313,39 @@ const ProfilePage = () => {
                     Saving...
                   </>
                 ) : (
-                  'Save Worker ID'
+                  'Save Worker ID & Demographics'
                 )}
               </button>
             </form>
 
             {profile?.mturk_worker_id && (
-              <div className="mt-4 bg-green-50 border border-green-200 rounded-lg p-3">
-                <p className="text-sm text-green-800 flex items-center gap-2">
+              <div className="mt-4 bg-green-50 border border-green-200 rounded-lg p-4">
+                <p className="text-sm text-green-800 flex items-center gap-2 mb-3">
                   <CheckCircle className="w-4 h-4" />
-                  Current Worker ID: <span className="font-mono">{profile.mturk_worker_id}</span>
+                  <span className="font-semibold">Profile Saved</span>
                 </p>
+                <div className="grid grid-cols-2 gap-3 text-sm">
+                  <div>
+                    <span className="text-gray-600">Worker ID:</span>
+                    <p className="font-mono text-green-900">{profile.mturk_worker_id}</p>
+                  </div>
+                  <div>
+                    <span className="text-gray-600">Age:</span>
+                    <p className="text-green-900">{profile.age || 'N/A'}</p>
+                  </div>
+                  <div>
+                    <span className="text-gray-600">Gender:</span>
+                    <p className="text-green-900 capitalize">{profile.gender?.replace('_', ' ') || 'N/A'}</p>
+                  </div>
+                  <div>
+                    <span className="text-gray-600">Nationality:</span>
+                    <p className="text-green-900">{profile.nationality || 'N/A'}</p>
+                  </div>
+                  <div className="col-span-2">
+                    <span className="text-gray-600">Major:</span>
+                    <p className="text-green-900">{profile.major || 'N/A'}</p>
+                  </div>
+                </div>
               </div>
             )}
           </div>
@@ -225,9 +354,10 @@ const ProfilePage = () => {
           <div className="mt-8 bg-blue-50 border border-blue-200 rounded-lg p-4">
             <h3 className="font-semibold text-blue-900 mb-2">Need Help?</h3>
             <ul className="text-sm text-blue-800 space-y-1">
-              <li>• Your Worker ID is required to receive payments via MTurk</li>
-              <li>• You can update it anytime if you made a mistake</li>
-              <li>• Make sure to enter it correctly to avoid payment issues</li>
+              <li>• Your Worker ID and demographics are required to receive payments via MTurk</li>
+              <li>• All fields marked with * are mandatory</li>
+              <li>• You can update your information anytime if you made a mistake</li>
+              <li>• Make sure to enter your Worker ID correctly to avoid payment issues</li>
             </ul>
           </div>
         </div>

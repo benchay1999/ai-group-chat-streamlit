@@ -56,6 +56,13 @@ async def request_cashout_v2(
                 detail="Please add your MTurk Worker ID to your profile first. Go to Profile → Add Worker ID."
             )
         
+        # Validation 1b: Check demographic information
+        if not current_user.age or not current_user.gender or not current_user.nationality or not current_user.major:
+            raise HTTPException(
+                status_code=400,
+                detail="Demographic information incomplete. Please update your profile with age, gender, nationality, and major before cashing out."
+            )
+        
         # Validation 2: Check minimum amount
         if amount_usd < MINIMUM_CASHOUT_AMOUNT:
             raise HTTPException(
