@@ -3,9 +3,9 @@
  * Chat input with typing detection
  */
 
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 
-const MessageInput = ({ onSendMessage, disabled, phase }) => {
+const MessageInput = ({ onSendMessage, disabled, phase, onTypingChange }) => {
   const [message, setMessage] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const typingTimeoutRef = useRef(null);
@@ -16,6 +16,10 @@ const MessageInput = ({ onSendMessage, disabled, phase }) => {
     // Start typing indicator
     if (!isTyping && message.length > 0) {
       setIsTyping(true);
+      // Notify parent component that user started typing
+      if (onTypingChange) {
+        onTypingChange('start');
+      }
     }
 
     // Reset typing timeout
@@ -25,6 +29,10 @@ const MessageInput = ({ onSendMessage, disabled, phase }) => {
 
     typingTimeoutRef.current = setTimeout(() => {
       setIsTyping(false);
+      // Notify parent component that user stopped typing
+      if (onTypingChange) {
+        onTypingChange('stop');
+      }
     }, 2000);
 
     // Send message on Enter
@@ -39,11 +47,24 @@ const MessageInput = ({ onSendMessage, disabled, phase }) => {
       onSendMessage(message.trim());
       setMessage('');
       setIsTyping(false);
+      // Notify parent that user stopped typing (message sent)
+      if (onTypingChange) {
+        onTypingChange('stop');
+      }
       if (typingTimeoutRef.current) {
         clearTimeout(typingTimeoutRef.current);
       }
     }
   };
+
+  // Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (typingTimeoutRef.current) {
+        clearTimeout(typingTimeoutRef.current);
+      }
+    };
+  }, []);
 
   const placeholderText = disabled 
     ? phase === 'Voting' 
@@ -61,6 +82,10 @@ const MessageInput = ({ onSendMessage, disabled, phase }) => {
           onKeyDown={handleKeyDown}
           onBlur={() => {
             setIsTyping(false);
+            // Notify parent that user stopped typing (input lost focus)
+            if (onTypingChange) {
+              onTypingChange('stop');
+            }
             if (typingTimeoutRef.current) {
               clearTimeout(typingTimeoutRef.current);
             }

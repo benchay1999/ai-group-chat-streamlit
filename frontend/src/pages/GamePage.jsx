@@ -208,7 +208,7 @@ const GamePage = () => {
   }, [clearActiveSession]);
 
   // Initialize WebSocket
-  const { status: wsStatus } = useWebSocket(roomCode, playerId, handleWebSocketMessage);
+  const { status: wsStatus, sendMessage: wsSendMessage } = useWebSocket(roomCode, playerId, handleWebSocketMessage);
 
   // Timer countdown (client-side, gets synced with server every 5 seconds)
   useEffect(() => {
@@ -235,6 +235,22 @@ const GamePage = () => {
     } catch (error) {
       console.error('Error sending message:', error);
       toast.error('Failed to send message');
+    }
+  };
+
+  // Handle typing indicator
+  const handleTypingChange = (status) => {
+    // Only send typing indicators during Discussion phase
+    if (gameState.phase !== 'Discussion') {
+      return;
+    }
+    
+    // Send typing status via WebSocket
+    if (wsSendMessage) {
+      wsSendMessage({
+        type: 'typing',
+        status: status
+      });
     }
   };
 
@@ -372,6 +388,7 @@ const GamePage = () => {
             onSendMessage={handleSendMessage}
             disabled={gameState.phase !== 'Discussion'}
             phase={gameState.phase}
+            onTypingChange={handleTypingChange}
           />
         </div>
       </div>

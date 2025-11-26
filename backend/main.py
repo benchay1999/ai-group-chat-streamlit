@@ -92,6 +92,46 @@ app.add_middleware(
 
 
 # ============================================================================
+# Global Exception Handler (with CORS support)
+# ============================================================================
+
+from fastapi.responses import JSONResponse
+from fastapi import Request
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    """
+    Global exception handler that ensures CORS headers are included in error responses.
+    This prevents CORS errors when backend exceptions occur.
+    """
+    print(f"❌ Global exception handler caught: {type(exc).__name__}: {str(exc)}")
+    import traceback
+    traceback.print_exc()
+    
+    # Determine origin for CORS
+    origin = request.headers.get("origin")
+    
+    # Create error response
+    response = JSONResponse(
+        status_code=500,
+        content={
+            "success": False,
+            "error": "Internal server error",
+            "detail": str(exc)[:200]  # Limit error message length
+        }
+    )
+    
+    # Add CORS headers
+    if origin and (origin in allowed_origins or "*" in allowed_origins):
+        response.headers["Access-Control-Allow-Origin"] = origin
+        response.headers["Access-Control-Allow-Credentials"] = "true"
+        response.headers["Access-Control-Allow-Methods"] = "*"
+        response.headers["Access-Control-Allow-Headers"] = "*"
+    
+    return response
+
+
+# ============================================================================
 # Rate Limiting Configuration
 # ============================================================================
 
@@ -1382,6 +1422,10 @@ async def complete_voting(room_code: str):
     rooms[room_code]['room_status'] = 'completed'
     print(f"✅ Room {room_code} marked as COMPLETED")
     
+    # Get suspect info from state (works for both single and multi-human games)
+    suspect = state.get('selected_suspect')
+    suspect_role = state.get('suspect_role')
+    
     # Broadcast voting result
     await broadcast_to_room(room_code, {
         "type": "voting_result",
@@ -1457,7 +1501,7 @@ async def complete_voting(room_code: str):
         traceback.print_exc()
         
         # Broadcast error to frontend so players can see it
-        error_message = f"⚠️ ERROR: Failed to save game session. Error: {str(save_error)[:200]}"
+        error_message = f"⚠️ Game completed but failed to award gems. Please contact support if this persists."
         try:
             await broadcast_to_room(room_code, {
                 "type": "system_message",
@@ -1467,8 +1511,9 @@ async def complete_voting(room_code: str):
         except Exception as broadcast_err:
             print(f"❌ Also failed to broadcast error: {broadcast_err}")
         
-        # Re-raise so we can see it in logs
-        raise
+        # DON'T re-raise - game is already complete, gem rewards are secondary
+        # Raising here would cause CORS errors and prevent vote response from returning
+        print(f"⚠️ Continuing despite gem reward failure - game completion is more important")
 
 
 async def schedule_correction_message(room_code: str, ai_id: str, correction_text: str, ai_sender: str, messages_before_correction: int):
@@ -2043,6 +2088,12 @@ async def save_session_stats(room_code: str, state: dict, current_user: Optional
     voting_duration = room_data.get('voting_duration', VOTING_TIME)
     completed_at = payload['ended_at']
     
+    # Check if debug mode (EARLY CHECK to prevent stake deductions)
+    is_debug_mode = (discussion_duration == 60 or voting_duration == 30)
+    print(f"🐛 Debug mode check: discussion={discussion_duration}s, voting={voting_duration}s, is_debug={is_debug_mode}")
+    if is_debug_mode:
+        print(f"🐛 Debug mode detected - will skip all gem distributions and stake deductions")
+    
     # Generate session UUID
     session_id = uuid_lib.uuid4()
     
@@ -2099,7 +2150,8 @@ async def save_session_stats(room_code: str, state: dict, current_user: Optional
             
             # CRITICAL: Deduct stakes FIRST if requested (after voting, before rewards)
             # This makes the entire operation atomic: deduct + credit in ONE transaction
-            if deduct_stakes_first:
+            # SKIP stake deduction in debug mode
+            if deduct_stakes_first and not is_debug_mode:
                 max_humans = room_data.get('max_humans', 1)
                 minimum_stake = room_data.get('minimum_stake', 0)
                 
@@ -2111,6 +2163,8 @@ async def save_session_stats(room_code: str, state: dict, current_user: Optional
                         await db.rollback()
                         raise Exception("Failed to deduct stakes - transaction rolled back")
                     print(f"✅ Stakes deducted (not committed yet - will commit with rewards)")
+            elif deduct_stakes_first and is_debug_mode:
+                print(f"🐛 Debug mode - skipping stake deduction")
             
             # Calculate and distribute gems using new gem reward system
             player_user_map = room_data.get('player_user_map', {})
@@ -2136,12 +2190,6 @@ async def save_session_stats(room_code: str, state: dict, current_user: Optional
             
             # Track successfully credited players for session data
             credited_players = []
-            
-            # Check if debug mode
-            is_debug_mode = (discussion_duration == 60 or voting_duration == 30)
-            print(f"🐛 Debug mode check: discussion={discussion_duration}s, voting={voting_duration}s, is_debug={is_debug_mode}")
-            if is_debug_mode:
-                print(f"🐛 Debug mode detected - skipping all gem distributions")
             
             # Process each human player based on calculated rewards
             print(f"👥 Processing {len([p for p in state.get('players', []) if p.get('role') == 'human'])} human players for gem credits...")
@@ -6270,32 +6318,48 @@ async def cast_vote(room_code: str, vote_data: dict):
     print(f"✅ Human vote recorded: {player_id} → {voted_for}")
     print(f"📊 Current votes after human: {state.get('votes', {})}")
     
-    # Broadcast vote to WebSocket clients
-    await broadcast_to_room(room_code, {
-        "type": "voted",
-        "player": player_id
-    })
-    
-    # Check if all votes are in
-    # In multi-human games: only humans vote
-    # In single-human games: all active players vote
-    active_player_ids = [p['id'] for p in state['players'] if not p['eliminated']]
-    human_player_ids = [p['id'] for p in state['players'] if p['role'] == 'human' and not p['eliminated']]
-    
-    if num_humans > 1:
-        # Multi-human game: wait for all humans to vote
-        required_votes = len(human_player_ids)
-        print(f"📊 Multi-human voting check: {len(state['votes'])}/{required_votes} humans voted")
-    else:
-        # Single-human game: wait for all active players (human + AIs) to vote
-        required_votes = len(active_player_ids)
-        print(f"📊 Single-human voting check: {len(state['votes'])}/{required_votes} players voted")
-    
-    if len(state['votes']) >= required_votes:
-        print(f"✅ All required votes received, completing voting...")
-        await complete_voting(room_code)
-    
-    return {"success": True}
+    try:
+        # Broadcast vote to WebSocket clients
+        await broadcast_to_room(room_code, {
+            "type": "voted",
+            "player": player_id
+        })
+        
+        # Check if all votes are in
+        # In multi-human games: only humans vote
+        # In single-human games: all active players vote
+        active_player_ids = [p['id'] for p in state['players'] if not p['eliminated']]
+        human_player_ids = [p['id'] for p in state['players'] if p['role'] == 'human' and not p['eliminated']]
+        
+        if num_humans > 1:
+            # Multi-human game: wait for all humans to vote
+            required_votes = len(human_player_ids)
+            print(f"📊 Multi-human voting check: {len(state['votes'])}/{required_votes} humans voted")
+        else:
+            # Single-human game: wait for all active players (human + AIs) to vote
+            required_votes = len(active_player_ids)
+            print(f"📊 Single-human voting check: {len(state['votes'])}/{required_votes} players voted")
+        
+        if len(state['votes']) >= required_votes:
+            print(f"✅ All required votes received, completing voting...")
+            try:
+                await complete_voting(room_code)
+            except Exception as completion_error:
+                print(f"❌ Error during vote completion: {type(completion_error).__name__}: {str(completion_error)}")
+                import traceback
+                traceback.print_exc()
+                # Return success for the vote itself, but log the completion error
+                # The global exception handler will handle this
+                raise
+        
+        return {"success": True}
+        
+    except Exception as e:
+        print(f"❌ Error processing vote for {player_id}: {type(e).__name__}: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        # Re-raise to let global exception handler deal with it
+        raise
 
 
 @app.post("/api/rooms/{room_code}/typing")

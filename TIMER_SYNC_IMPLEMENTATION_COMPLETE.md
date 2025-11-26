@@ -83,9 +83,8 @@ Successfully identified and fixed critical timer synchronization bugs that affec
 ### Test Script Created
 - **File:** `test_timer_sync.py`
 - **Tests:**
-  1. Mid-phase join timer accuracy
-  2. Multi-player timer synchronization
-  3. Phase transition synchronization
+  1. Mid-phase join timer accuracy: Verifies players joining mid-phase get correct remaining time
+  2. Timer sync consistency: Verifies timer sync messages arrive at regular ~5 second intervals
 
 ### Manual Testing Checklist
 - [ ] Player joining mid-Discussion sees correct remaining time

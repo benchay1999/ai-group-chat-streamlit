@@ -109,7 +109,7 @@ const PlayerList = ({ players, phase, castVote, currentPlayerId, onLeave, numHum
 
                 {/* Status Badges */}
                 <div className="flex items-center gap-2">
-                  {player.voted && (
+                  {player.voted && phase !== 'Voting' && (
                     <span className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded-full font-semibold">
                       ✓ {t('player.voted')}
                     </span>

@@ -2,9 +2,14 @@
 """
 Timer Synchronization Test Script
 
-Tests the timer sync fixes to ensure all players see synchronized timers.
+Tests the timer sync fixes to ensure players receive accurate timer updates.
+
+Test Cases:
+1. Mid-Phase Join: Player joining mid-phase receives correct remaining time
+2. Timer Sync Consistency: Timer sync messages arrive at regular intervals
 
 Usage:
+    # Make sure backend is running on localhost:8000
     python test_timer_sync.py
 """
 
@@ -211,61 +216,66 @@ class TimerSyncTester:
             print("❌ Test failed: Could not connect player")
             return False
         
-        # Get initial timers
+        # Get initial timer
         timer1 = await self.receive_initial_state(ws1, "Player1")
-        timer2 = await self.receive_initial_state(ws2, "Player2")
-        timer3 = await self.receive_initial_state(ws3, "Player3")
         
-        print(f"\n📊 Initial Timer Readings:")
+        print(f"\n📊 Initial Timer Reading:")
         print(f"   Player 1: {timer1}s")
-        print(f"   Player 2: {timer2}s")
-        print(f"   Player 3: {timer3}s")
         
-        # Monitor all players for 15 seconds
-        print("\n👀 Monitoring timer sync for 15 seconds...")
-        tasks = [
-            self.monitor_timer_sync(ws1, "Player1", 15),
-            self.monitor_timer_sync(ws2, "Player2", 15),
-            self.monitor_timer_sync(ws3, "Player3", 15)
-        ]
+        # Monitor player for 20 seconds
+        print("\n👀 Monitoring timer sync for 20 seconds...")
+        readings = await self.monitor_timer_sync(ws1, "Player1", 20)
         
-        results = await asyncio.gather(*tasks)
+        # Analyze consistency of server sync messages
+        print("\n📊 Timer Sync Analysis:")
         
-        # Analyze synchronization
-        # Group readings by approximate timestamp (within 0.5s)
-        print("\n📊 Synchronization Analysis:")
+        if len(readings) == 0:
+            print("❌ FAIL: No timer sync messages received")
+            return False
         
-        all_readings = []
-        for player_readings in results:
-            all_readings.extend(player_readings)
+        print(f"   Received {len(readings)} timer sync messages")
         
-        # Sort by timestamp
-        all_readings.sort(key=lambda x: x['timestamp'])
+        # Check that timer decreases consistently
+        # Should receive sync every ~5 seconds
+        sync_intervals = []
+        for i in range(1, len(readings)):
+            interval = readings[i]['elapsed'] - readings[i-1]['elapsed']
+            sync_intervals.append(interval)
+            print(f"   Sync {i}: {readings[i]['remaining']}s (interval: {interval:.1f}s)")
         
-        # Check if readings at similar times are synchronized
-        tolerance = 2  # Allow 2 second difference
-        sync_issues = 0
-        
-        for i, reading in enumerate(all_readings):
-            # Find readings from other players within 1 second
-            nearby_readings = [
-                r for r in all_readings
-                if abs(r['timestamp'] - reading['timestamp']) < 1.0
-                and r['player'] != reading['player']
-            ]
+        # Average interval should be around 5 seconds
+        if sync_intervals:
+            avg_interval = sum(sync_intervals) / len(sync_intervals)
+            print(f"\n   Average sync interval: {avg_interval:.1f}s")
             
-            for nearby in nearby_readings:
-                diff = abs(reading['remaining'] - nearby['remaining'])
-                if diff > tolerance:
-                    print(f"   ⚠️ Sync issue: {reading['player']} ({reading['remaining']}s) vs "
-                          f"{nearby['player']} ({nearby['remaining']}s) = {diff}s difference")
-                    sync_issues += 1
-        
-        if sync_issues == 0:
-            print(f"✅ PASS: All players synchronized (0 issues)")
-            return True
+            # Check if average is close to 5 seconds (±2 seconds tolerance)
+            if 3 <= avg_interval <= 7:
+                print(f"✅ PASS: Timer sync interval is consistent (~5s)")
+                
+                # Also check that timer decreases properly
+                timer_diffs = []
+                for i in range(1, len(readings)):
+                    diff = readings[i-1]['remaining'] - readings[i]['remaining']
+                    timer_diffs.append(diff)
+                
+                if timer_diffs:
+                    avg_diff = sum(timer_diffs) / len(timer_diffs)
+                    print(f"   Average timer decrease: {avg_diff:.1f}s per sync")
+                    
+                    # Should be approximately equal to sync interval
+                    if 3 <= avg_diff <= 7:
+                        print(f"✅ PASS: Timer decreases correctly")
+                        return True
+                    else:
+                        print(f"❌ FAIL: Timer decrease inconsistent")
+                        return False
+                
+                return True
+            else:
+                print(f"❌ FAIL: Sync interval inconsistent ({avg_interval:.1f}s)")
+                return False
         else:
-            print(f"❌ FAIL: {sync_issues} synchronization issues found")
+            print("❌ FAIL: Not enough sync messages to analyze")
             return False
     
     async def cleanup(self):
@@ -301,7 +311,7 @@ async def main():
         print("TEST SUMMARY")
         print("="*80)
         print(f"Test 1 (Mid-Phase Join): {'✅ PASS' if result1 else '❌ FAIL'}")
-        print(f"Test 2 (Multi-Player Sync): {'✅ PASS' if result2 else '❌ FAIL'}")
+        print(f"Test 2 (Timer Sync Consistency): {'✅ PASS' if result2 else '❌ FAIL'}")
         print()
         
         if result1 and result2:

@@ -336,7 +336,7 @@ const LobbyPage = () => {
                 <p className="text-sm opacity-95 leading-relaxed">
                   Earn <strong>Gems</strong> by playing and convert them to <strong>real USD</strong> via MTurk! 
                   Your conversations help us research human-AI interaction while you get rewarded. 
-                  Win more by being human-like! 🎮💰 (Well, it is fake money (MTurk Sandbox) at the moment...)
+                  Win more by being human-like! 🎮💰 Well, it is fake money (MTurk Sandbox) at the moment...
                 </p>
               </div>
             </div>
