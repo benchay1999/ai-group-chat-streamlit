@@ -4,7 +4,7 @@
  */
 
 import { Link } from 'react-router-dom';
-import { ArrowLeft, Coins, Users, Trophy, TrendingUp, AlertCircle, DollarSign, Award, Zap } from 'lucide-react';
+import { ArrowLeft, Coins, Users, Trophy, TrendingUp, AlertCircle, DollarSign, Award, Zap, Sparkles } from 'lucide-react';
 
 const GemsInfoPage = () => {
   return (

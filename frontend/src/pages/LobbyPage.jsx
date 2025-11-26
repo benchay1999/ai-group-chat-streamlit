@@ -215,17 +215,6 @@ const LobbyPage = () => {
               </div>
             </div>
             <div className="flex items-center gap-4">
-              {/* Gems Guide Button */}
-              <button
-                onClick={() => navigate('/gems-info')}
-                className="flex items-center gap-2 px-4 py-2 bg-purple-500 bg-opacity-90 rounded-full hover:bg-opacity-100 transition-all transform hover:scale-105 shadow-lg"
-                title="Learn How Gems Work"
-              >
-                <Award className="w-4 h-4 text-white" />
-                <span className="text-sm font-semibold text-white">
-                  Gems Guide
-                </span>
-              </button>
               {/* Leaderboard Button */}
               <button
                 onClick={() => navigate('/leaderboard')}
