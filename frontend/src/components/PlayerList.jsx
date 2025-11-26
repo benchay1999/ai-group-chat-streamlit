@@ -3,12 +3,52 @@
  * Enhanced player sidebar with voting capabilities
  */
 
+import { useState, useEffect } from 'react';
 import { useLanguage } from '../context/LanguageContext';
 
-const PlayerList = ({ players, phase, castVote, currentPlayerId, onLeave }) => {
+const PlayerList = ({ players, phase, castVote, currentPlayerId, onLeave, numHumanPlayers = 1 }) => {
   const { t } = useLanguage();
+  const [selectedPlayers, setSelectedPlayers] = useState([]);
   const currentPlayer = players.find(p => p.id === currentPlayerId);
   const hasVoted = currentPlayer?.voted || false;
+  
+  // Use the num_human_players from backend (passed as prop)
+  const numHumans = numHumanPlayers;
+  
+  // For multi-human games, need to select N-1 players
+  const votesNeeded = numHumans > 1 ? numHumans - 1 : 1;
+  const canSubmitVotes = selectedPlayers.length === votesNeeded;
+  
+  // Toggle player selection
+  const togglePlayerSelection = (playerId) => {
+    setSelectedPlayers(prev => {
+      if (prev.includes(playerId)) {
+        return prev.filter(id => id !== playerId);
+      } else {
+        // Only allow selecting up to votesNeeded players
+        if (prev.length < votesNeeded) {
+          return [...prev, playerId];
+        }
+        return prev;
+      }
+    });
+  };
+  
+  // Submit votes
+  const handleSubmitVotes = () => {
+    if (canSubmitVotes) {
+      // Always send array for consistency (backend handles both formats)
+      castVote(selectedPlayers);
+      setSelectedPlayers([]);
+    }
+  };
+  
+  // Reset selection when phase changes
+  useEffect(() => {
+    if (phase !== 'Voting') {
+      setSelectedPlayers([]);
+    }
+  }, [phase]);
 
   return (
     <div className="w-80 bg-gradient-to-b from-gray-50 to-gray-100 border-r border-gray-200 flex flex-col">
@@ -24,21 +64,34 @@ const PlayerList = ({ players, phase, castVote, currentPlayerId, onLeave }) => {
       <div className="flex-1 overflow-y-auto p-4 space-y-2">
         {players.map(player => {
           const isCurrentPlayer = player.id === currentPlayerId;
-          const canVote = phase === 'Voting' && !player.eliminated && !isCurrentPlayer && !hasVoted;
+          const canSelect = phase === 'Voting' && !player.eliminated && !isCurrentPlayer && !hasVoted;
+          const isSelected = selectedPlayers.includes(player.id);
 
           return (
             <div
               key={player.id}
+              onClick={() => canSelect && togglePlayerSelection(player.id)}
               className={`rounded-lg p-4 transition-all ${
                 player.eliminated 
                   ? 'bg-gray-200 opacity-50' 
                   : isCurrentPlayer
                   ? 'bg-gradient-to-r from-blue-100 to-purple-100 border-2 border-blue-300'
+                  : isSelected
+                  ? 'bg-gradient-to-r from-green-100 to-emerald-100 border-2 border-green-400'
                   : 'bg-white shadow-sm hover:shadow-md'
-              }`}
+              } ${canSelect ? 'cursor-pointer' : ''}`}
             >
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
+                  {/* Selection Checkbox for Multi-Human Voting */}
+                  {canSelect && numHumans > 1 && (
+                    <div className={`w-5 h-5 rounded border-2 flex items-center justify-center ${
+                      isSelected ? 'bg-green-500 border-green-500' : 'border-gray-400'
+                    }`}>
+                      {isSelected && <span className="text-white text-xs">✓</span>}
+                    </div>
+                  )}
+                  
                   <div className={`w-3 h-3 rounded-full ${
                     player.eliminated ? 'bg-gray-400' : 'bg-green-400'
                   }`}></div>
@@ -69,10 +122,13 @@ const PlayerList = ({ players, phase, castVote, currentPlayerId, onLeave }) => {
                 </div>
               </div>
 
-              {/* Vote Button */}
-              {canVote && (
+              {/* Single Vote Button (for single-human games only) */}
+              {canSelect && numHumans === 1 && (
                 <button
-                  onClick={() => castVote(player.id)}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    castVote([player.id]);  // Send as array for consistency
+                  }}
                   className="mt-3 w-full bg-gradient-to-r from-blue-500 to-indigo-600 text-white py-2 px-4 rounded-lg font-semibold hover:from-blue-600 hover:to-indigo-700 transition-all transform hover:scale-105"
                 >
                   {t('player.voteButton')}
@@ -82,6 +138,30 @@ const PlayerList = ({ players, phase, castVote, currentPlayerId, onLeave }) => {
           );
         })}
       </div>
+      
+      {/* Submit Votes Button (for multi-human games) */}
+      {phase === 'Voting' && !hasVoted && numHumans > 1 && (
+        <div className="p-4 border-t border-gray-200 bg-gray-50">
+          <div className="mb-2 text-sm text-gray-600 text-center">
+            {selectedPlayers.length < votesNeeded ? (
+              <span>Select {votesNeeded - selectedPlayers.length} more player{votesNeeded - selectedPlayers.length !== 1 ? 's' : ''}</span>
+            ) : (
+              <span className="text-green-600 font-semibold">✓ Ready to submit votes</span>
+            )}
+          </div>
+          <button
+            onClick={handleSubmitVotes}
+            disabled={!canSubmitVotes}
+            className={`w-full py-3 px-4 rounded-lg font-bold transition-all ${
+              canSubmitVotes
+                ? 'bg-gradient-to-r from-green-500 to-emerald-600 text-white hover:from-green-600 hover:to-emerald-700 transform hover:scale-105'
+                : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+            }`}
+          >
+            Submit Votes ({selectedPlayers.length}/{votesNeeded})
+          </button>
+        </div>
+      )}
 
       {/* Leave Button */}
       {onLeave && (

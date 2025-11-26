@@ -5,11 +5,12 @@
 
 import { useState, useEffect } from 'react';
 import { roomAPI } from '../services/api';
+import walletAPI from '../services/walletAPI';
 import PointsAnimation from './PointsAnimation';
 import AchievementUnlock from './AchievementUnlock';
 import { useAuth } from '../contexts/AuthContext';
 import toast from 'react-hot-toast';
-import { TrendingUp, Award, Zap } from 'lucide-react';
+import { TrendingUp, Award, Zap, Coins } from 'lucide-react';
 
 const GameOver = ({ winner, suspect, suspectRole, voteCountsDisplay, onLeave, roomCode }) => {
   const { user } = useAuth();
@@ -17,8 +18,24 @@ const GameOver = ({ winner, suspect, suspectRole, voteCountsDisplay, onLeave, ro
   const [gamificationData, setGamificationData] = useState(null);
   const [showPoints, setShowPoints] = useState(false);
   const [showAchievements, setShowAchievements] = useState(false);
+  const [gemReward, setGemReward] = useState(null);
+  const [initialBalance, setInitialBalance] = useState(null);
 
   useEffect(() => {
+    // Fetch initial balance if authenticated
+    const fetchInitialBalance = async () => {
+      if (user) {
+        try {
+          const balance = await walletAPI.getWalletBalance();
+          setInitialBalance(balance.gem_balance);
+        } catch (error) {
+          console.debug('Could not fetch initial balance');
+        }
+      }
+    };
+    
+    fetchInitialBalance();
+    
     // Fetch session stats which includes gamification data
     const fetchStats = async () => {
       try {
@@ -46,13 +63,28 @@ const GameOver = ({ winner, suspect, suspectRole, voteCountsDisplay, onLeave, ro
             }, 4000);
           }
         }
+        
+        // Fetch final balance after a delay (give backend time to process)
+        if (user) {
+          setTimeout(async () => {
+            try {
+              const balance = await walletAPI.getWalletBalance();
+              if (initialBalance !== null) {
+                const gemsEarned = balance.gem_balance - initialBalance;
+                setGemReward(gemsEarned);
+              }
+            } catch (error) {
+              console.debug('Could not fetch final balance');
+            }
+          }, 2000);
+        }
       } catch (error) {
         console.error('Failed to fetch stats:', error);
       }
     };
 
     fetchStats();
-  }, [roomCode, user]);
+  }, [roomCode, user, initialBalance]);
 
   const handleAchievementsClose = () => {
     setShowAchievements(false);
@@ -91,6 +123,33 @@ const GameOver = ({ winner, suspect, suspectRole, voteCountsDisplay, onLeave, ro
               </div>
             )}
           </div>
+
+          {/* Gem Reward Display */}
+          {user && gemReward !== null && (
+            <div className={`rounded-lg p-6 mb-6 border-2 ${
+              gemReward >= 0 
+                ? 'bg-gradient-to-r from-green-50 to-emerald-50 border-green-300'
+                : 'bg-gradient-to-r from-red-50 to-rose-50 border-red-300'
+            }`}>
+              <div className="text-center">
+                <div className="flex items-center justify-center gap-2 mb-2">
+                  <Coins className={`w-6 h-6 ${gemReward >= 0 ? 'text-green-600' : 'text-red-600'}`} />
+                  <h3 className="text-lg font-bold text-gray-700">Gem Reward</h3>
+                </div>
+                <div className={`text-4xl font-bold ${gemReward >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                  {gemReward >= 0 ? '+' : ''}{gemReward} gems
+                </div>
+                <p className="text-sm text-gray-600 mt-2">
+                  {gemReward >= 0 
+                    ? 'Added to your wallet!' 
+                    : 'Stakes lost this game'}
+                </p>
+                <p className="text-xs text-gray-500 mt-1">
+                  View detailed breakdown in Dashboard
+                </p>
+              </div>
+            </div>
+          )}
 
           {/* Gamification Quick Stats (if available) */}
           {gamificationData && user && (

@@ -31,6 +31,7 @@ const GamePage = () => {
     winner: null,
     selected_suspect: null,
     suspect_role: null,
+    num_human_players: 1,  // Default to 1, updated by backend
   });
   const [typing, setTyping] = useState([]);
 
@@ -78,6 +79,7 @@ const GamePage = () => {
           ...prev,
           phase: data.phase,
           players: prev.players.map(p => ({ ...p, voted: false })),
+          num_human_players: data.num_human_players || prev.num_human_players,  // Update from backend
         }));
         
         // Update timer based on phase duration from server
@@ -315,6 +317,7 @@ const GamePage = () => {
           castVote={handleCastVote}
           currentPlayerId={playerId}
           onLeave={handleLeave}
+          numHumanPlayers={gameState.num_human_players}
         />
 
         {/* Chat Area */}

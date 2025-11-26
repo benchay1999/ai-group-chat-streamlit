@@ -13,6 +13,7 @@ const CreateRoomModal = ({ isOpen, onClose, onCreate }) => {
   const [roomLanguage, setRoomLanguage] = useState('english');
   const [discussionDuration, setDiscussionDuration] = useState(180); // 3 minutes default
   const [votingDuration, setVotingDuration] = useState(60); // 1 minute default
+  const [stakePercentage, setStakePercentage] = useState(10); // 10% default for multi-human
   const [creating, setCreating] = useState(false);
 
   if (!isOpen) return null;
@@ -38,7 +39,8 @@ const CreateRoomModal = ({ isOpen, onClose, onCreate }) => {
         total_players: totalPlayers,
         language: roomLanguage,
         discussion_duration: discussionDuration,
-        voting_duration: votingDuration
+        voting_duration: votingDuration,
+        stake_percentage: maxHumans > 1 ? stakePercentage : 0  // Only for multi-human games
       });
     } finally {
       setCreating(false);
@@ -232,6 +234,75 @@ const CreateRoomModal = ({ isOpen, onClose, onCreate }) => {
             </div>
           </div>
 
+          {/* Stake Percentage (Multi-Human Only) */}
+          {maxHumans > 1 && (
+            <div>
+              <label className="block text-sm font-semibold text-gray-700 mb-2">
+                💎 Stake Percentage
+              </label>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setStakePercentage(0)}
+                  className={`flex-1 py-2 px-2 rounded-lg font-semibold transition-all text-xs ${
+                    stakePercentage === 0
+                      ? 'bg-gray-600 text-white'
+                      : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                  }`}
+                  disabled={creating}
+                >
+                  0%<br/><span className="text-[10px] opacity-80">No Stakes</span>
+                </button>
+                <button
+                  onClick={() => setStakePercentage(10)}
+                  className={`flex-1 py-2 px-2 rounded-lg font-semibold transition-all text-xs ${
+                    stakePercentage === 10
+                      ? 'bg-green-600 text-white'
+                      : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                  }`}
+                  disabled={creating}
+                >
+                  10%<br/><span className="text-[10px] opacity-80">Low</span>
+                </button>
+                <button
+                  onClick={() => setStakePercentage(30)}
+                  className={`flex-1 py-2 px-2 rounded-lg font-semibold transition-all text-xs ${
+                    stakePercentage === 30
+                      ? 'bg-yellow-600 text-white'
+                      : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                  }`}
+                  disabled={creating}
+                >
+                  30%<br/><span className="text-[10px] opacity-80">Med</span>
+                </button>
+                <button
+                  onClick={() => setStakePercentage(50)}
+                  className={`flex-1 py-2 px-2 rounded-lg font-semibold transition-all text-xs ${
+                    stakePercentage === 50
+                      ? 'bg-orange-600 text-white'
+                      : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                  }`}
+                  disabled={creating}
+                >
+                  50%<br/><span className="text-[10px] opacity-80">High</span>
+                </button>
+                <button
+                  onClick={() => setStakePercentage(100)}
+                  className={`flex-1 py-2 px-2 rounded-lg font-semibold transition-all text-xs ${
+                    stakePercentage === 100
+                      ? 'bg-red-600 text-white'
+                      : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                  }`}
+                  disabled={creating}
+                >
+                  100%<br/><span className="text-[10px] opacity-80">All-in</span>
+                </button>
+              </div>
+              <p className="text-xs text-gray-500 mt-1">
+                💎 Minimum 250 gems required to join multi-human rooms
+              </p>
+            </div>
+          )}
+
           {/* Preview */}
           <div className={`bg-gradient-to-r rounded-lg p-4 border ${
             maxHumans === 1 && aiCount === 0 
@@ -275,6 +346,21 @@ const CreateRoomModal = ({ isOpen, onClose, onCreate }) => {
                   {votingDuration === 30 && <span className="text-[10px] ml-1">(Debug)</span>}
                 </span>
               </div>
+              {maxHumans > 1 && (
+                <div className="flex justify-between">
+                  <span className="text-gray-600">💎 Stakes:</span>
+                  <span className={`font-semibold ${
+                    stakePercentage === 0 ? 'text-gray-600' :
+                    stakePercentage === 10 ? 'text-green-600' :
+                    stakePercentage === 30 ? 'text-yellow-600' :
+                    stakePercentage === 50 ? 'text-orange-600' :
+                    'text-red-600'
+                  }`}>
+                    {stakePercentage}%
+                    {stakePercentage === 0 && <span className="text-xs ml-1">(No Stakes)</span>}
+                  </span>
+                </div>
+              )}
             </div>
           </div>
 

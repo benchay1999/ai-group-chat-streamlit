@@ -5,9 +5,23 @@
 
 import { useLanguage } from '../context/LanguageContext';
 
-const RoomCard = ({ room, onJoin }) => {
+const RoomCard = ({ room, onJoin, userGemBalance }) => {
   const { t } = useLanguage();
-  const { room_code, room_name, current_humans, max_humans, total_players, language } = room;
+  const { 
+    room_code, 
+    room_name, 
+    current_humans, 
+    max_humans, 
+    total_players, 
+    language,
+    stake_percentage = 0,
+    minimum_stake = 0,
+    has_stakes = false
+  } = room;
+  
+  // Check if user has enough gems to join
+  const hasEnoughGems = max_humans > 1 ? (userGemBalance >= 250) : true;
+  const canJoin = hasEnoughGems;
 
   return (
     <div className="bg-white rounded-lg shadow-lg hover:shadow-xl transition-shadow duration-300 p-6 border border-gray-200">
@@ -41,6 +55,35 @@ const RoomCard = ({ room, onJoin }) => {
           <span className="text-gray-600">{t('room.aiPlayers')}:</span>
           <span className="font-semibold text-purple-600">{total_players - max_humans}</span>
         </div>
+        
+        {/* Stake Information for Multi-Human Rooms */}
+        {max_humans > 1 && (
+          <>
+            <div className="flex justify-between text-sm border-t border-gray-200 pt-2 mt-2">
+              <span className="text-gray-600">💎 Stakes:</span>
+              <span className={`font-semibold ${
+                stake_percentage === 0 ? 'text-gray-600' :
+                stake_percentage <= 10 ? 'text-green-600' :
+                stake_percentage <= 30 ? 'text-yellow-600' :
+                stake_percentage <= 50 ? 'text-orange-600' :
+                'text-red-600'
+              }`}>
+                {stake_percentage}%
+                {stake_percentage === 0 && <span className="text-xs ml-1">(No Stakes)</span>}
+              </span>
+            </div>
+            {has_stakes && minimum_stake > 0 && (
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-600">Min Stake:</span>
+                <span className="font-semibold text-indigo-600">{minimum_stake} gems</span>
+              </div>
+            )}
+            <div className="flex justify-between text-xs text-gray-500 bg-yellow-50 p-2 rounded">
+              <span>⚠️ Entry:</span>
+              <span className="font-semibold">250+ gems required</span>
+            </div>
+          </>
+        )}
       </div>
 
       {/* Progress bar */}
@@ -53,9 +96,15 @@ const RoomCard = ({ room, onJoin }) => {
 
       <button
         onClick={() => onJoin(room)}
-        className="w-full bg-gradient-to-r from-purple-600 to-blue-600 text-white py-2 px-4 rounded-lg font-semibold hover:from-purple-700 hover:to-blue-700 transition-all duration-200 transform hover:scale-105"
+        disabled={!canJoin}
+        className={`w-full py-2 px-4 rounded-lg font-semibold transition-all duration-200 ${
+          canJoin
+            ? 'bg-gradient-to-r from-purple-600 to-blue-600 text-white hover:from-purple-700 hover:to-blue-700 transform hover:scale-105'
+            : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+        }`}
+        title={!hasEnoughGems ? `Insufficient gems. Need 250+ gems (you have ${userGemBalance})` : ''}
       >
-        {t('room.joinRoom')}
+        {!hasEnoughGems ? `Need 250+ gems` : t('room.joinRoom')}
       </button>
     </div>
   );

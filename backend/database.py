@@ -266,6 +266,34 @@ class CashoutTransaction(Base):
 
 
 
+class RoomStake(Base):
+    """Track stakes and gem transactions per room for multi-human games."""
+    __tablename__ = "room_stakes"
+    
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    room_code = Column(String(50), nullable=False, index=True)
+    user_id = Column(UUID(as_uuid=True), ForeignKey('users.id', ondelete='CASCADE'), nullable=False, index=True)
+    player_id = Column(String(50), nullable=False)  # e.g., "Player 3", "You"
+    stake_percentage = Column(Integer, nullable=False)  # 0, 10, 30, 50, 100
+    stake_amount = Column(Integer, nullable=False)  # Actual gems at risk
+    deducted = Column(Integer, default=0, nullable=False)  # Boolean: 0=False, 1=True (SQLite compatible)
+    returned_amount = Column(Integer, default=0, nullable=False)  # Gems returned (if any)
+    won_amount = Column(Integer, default=0, nullable=False)  # Gems won (if any)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    
+    # Relationship
+    user = relationship("User", backref="room_stakes")
+    
+    # Indexes for common queries
+    __table_args__ = (
+        Index('idx_room_user', 'room_code', 'user_id'),
+        Index('idx_user_stakes', 'user_id', 'created_at'),
+    )
+    
+    def __repr__(self):
+        return f"<RoomStake(room_code={self.room_code}, user_id={self.user_id}, stake_amount={self.stake_amount})>"
+
+
 class TokenBlacklist(Base):
     """Token blacklist for logout functionality."""
     __tablename__ = "token_blacklist"

@@ -344,6 +344,7 @@ class GameGraph:
         """
         AI agent node for casting votes.
         Each execution processes one AI agent from pending_ai_votes.
+        For multi-human games, casts votes for N-1 humans.
         """
         if not state.get("pending_ai_votes"):
             return {}
@@ -358,12 +359,12 @@ class GameGraph:
         # Small delay for realism
         time.sleep(random.uniform(0.5, 1.2))
         
-        # Generate AI vote
-        voted_for, state = self._generate_ai_vote(state, ai_id)
+        # Generate AI votes (returns list)
+        voted_for_list, state = self._generate_ai_vote(state, ai_id)
         
         # Update votes
         new_votes = state["votes"].copy()
-        new_votes[ai_id] = voted_for
+        new_votes[ai_id] = voted_for_list
         
         broadcasts = [
             {"type": "voted", "player": ai_id}
@@ -381,51 +382,81 @@ class GameGraph:
     def elimination_node(self, state: GameState) -> GameState:
         """
         Process elimination based on votes.
-        Determine which player is eliminated and update state.
+        For single-human games: Eliminate player with most votes
+        For multi-human games: No elimination, just track votes for win condition
         """
-        # Count votes
-        vote_counts = Counter(state["votes"].values())
+        # Count human players
+        human_players = [p for p in state["players"] if p["role"] == "human" and not p["eliminated"]]
+        num_humans = len(human_players)
         
-        if not vote_counts:
-            # No votes cast - randomly eliminate an AI
-            active_players = [
-                p["id"] for p in state["players"] 
-                if not p["eliminated"] and p["id"] != "You"
-            ]
-            eliminated = random.choice(active_players) if active_players else None
-        else:
-            # Get player(s) with most votes
-            max_votes = max(vote_counts.values())
-            candidates = [
-                player for player, count in vote_counts.items() 
-                if count == max_votes
-            ]
-            eliminated = random.choice(candidates) if len(candidates) > 1 else candidates[0]
-        
-        # Update player elimination status
-        updated_players = []
-        eliminated_role = None
-        for p in state["players"]:
-            if p["id"] == eliminated:
-                updated_players.append({**p, "eliminated": True})
-                eliminated_role = p["role"]
+        if num_humans <= 1:
+            # SINGLE-HUMAN GAME: Traditional elimination logic
+            # Flatten vote lists and count individual votes
+            vote_counts = Counter()
+            for voter_id, voted_for_list in state["votes"].items():
+                for voted_player in voted_for_list:
+                    vote_counts[voted_player] += 1
+            
+            if not vote_counts:
+                # No votes cast - randomly eliminate an AI
+                active_players = [
+                    p["id"] for p in state["players"] 
+                    if not p["eliminated"] and p["id"] != "You"
+                ]
+                eliminated = random.choice(active_players) if active_players else None
             else:
-                updated_players.append(p)
-        
-        broadcasts = [
-            {
-                "type": "elimination",
-                "eliminated": eliminated,
-                "role": eliminated_role
+                # Get player(s) with most votes
+                max_votes = max(vote_counts.values())
+                candidates = [
+                    player for player, count in vote_counts.items() 
+                    if count == max_votes
+                ]
+                eliminated = random.choice(candidates) if len(candidates) > 1 else candidates[0]
+            
+            # Update player elimination status
+            updated_players = []
+            eliminated_role = None
+            for p in state["players"]:
+                if p["id"] == eliminated:
+                    updated_players.append({**p, "eliminated": True})
+                    eliminated_role = p["role"]
+                else:
+                    updated_players.append(p)
+            
+            broadcasts = [
+                {
+                    "type": "elimination",
+                    "eliminated": eliminated,
+                    "role": eliminated_role
+                }
+            ]
+            
+            return {
+                "phase": Phase.ELIMINATION,
+                "players": updated_players,
+                "eliminated_player": eliminated,
+                "broadcast_queue": broadcasts
             }
-        ]
-        
-        return {
-            "phase": Phase.ELIMINATION,
-            "players": updated_players,
-            "eliminated_player": eliminated,
-            "broadcast_queue": broadcasts
-        }
+        else:
+            # MULTI-HUMAN GAME: No elimination, voting is for human identification
+            # The game ends after this voting round (handled by check_win_condition)
+            # Just store vote counts for final tallying
+            vote_counts = Counter()
+            for voter_id, voted_for_list in state["votes"].items():
+                for voted_player in voted_for_list:
+                    vote_counts[voted_player] += 1
+            
+            broadcasts = [
+                {
+                    "type": "voting_complete",
+                    "vote_counts": dict(vote_counts)
+                }
+            ]
+            
+            return {
+                "phase": Phase.ELIMINATION,
+                "broadcast_queue": broadcasts
+            }
     
     def check_win_condition_node(self, state: GameState) -> GameState:
         """
@@ -906,15 +937,20 @@ Never use em dashes. Don't reveal you're an AI.
             }
             return fallback_msg, state
 
-    def _generate_ai_vote(self, state: GameState, ai_id: str) -> tuple[str, GameState]:
+    def _generate_ai_vote(self, state: GameState, ai_id: str) -> tuple[List[str], GameState]:
         """
-        Generate a vote for an AI agent using LangChain.
-        Returns the REAL player id (e.g., 'You' or 'Player 2').
+        Generate votes for an AI agent using LangChain.
+        For multi-human games, votes for N-1 humans (where N = number of humans).
+        For single-human games, votes for 1 player (the suspected human).
         
         Returns:
-            Tuple of (voted_player_id, updated_state_with_tokens)
+            Tuple of ([voted_player_ids], updated_state_with_tokens)
         """
         language = state.get("language", "english")
+        
+        # Count human players to determine voting mode
+        human_players = [p for p in state["players"] if p["role"] == "human" and not p["eliminated"]]
+        num_humans = len(human_players)
         
         # Build chat history using visible names
         def visible_name(real_id: str) -> str:
@@ -932,24 +968,54 @@ Never use em dashes. Don't reveal you're an AI.
         eligible_targets_visible = [visible_name(pid) for pid in eligible_targets]
         targets_list = ", ".join(eligible_targets_visible)
         
-        if language == "korean":
-            prompt = (
-                f"당신은 {ai_id}입니다. "
-                "채팅 기록을 바탕으로 가장 인간답게 행동한 플레이어에게 투표하세요.\n"
-                "유효한 JSON으로만 응답하세요: {\"vote\": \"<정확한_이름>\", \"reason\": \"간단한 이유.\"}.\n"
-                f"- <정확한_이름>은 다음 중 하나여야 합니다: {targets_list}.\n"
-                f"- 자신에게 투표하지 마세요 ('{ai_id}').\n\n"
-                f"채팅 기록:\n{visible_history}"
-            )
+        # Determine how many votes to cast
+        if num_humans <= 1:
+            # Single-human game: vote for 1 suspected human
+            votes_needed = 1
         else:
-            prompt = (
-                f"You are {ai_id}. "  # Explicitly state bot's own name
-                "Based on the chat history, who do you vote for as the most human-like player?\n"
-                "Respond ONLY with valid JSON: {\"vote\": \"<exact_name>\", \"reason\": \"Brief reason.\"}.\n"
-                f"- The <exact_name> must be one of: {targets_list}.\n"
-                f"- Do not vote for yourself ('{ai_id}').\n\n"
-                f"History:\n{visible_history}"
-            )
+            # Multi-human game: vote for N-1 humans
+            votes_needed = num_humans - 1
+        
+        if language == "korean":
+            if votes_needed == 1:
+                prompt = (
+                    f"당신은 {ai_id}입니다. "
+                    "채팅 기록을 바탕으로 가장 인간답게 행동한 플레이어에게 투표하세요.\n"
+                    "유효한 JSON으로만 응답하세요: {\"votes\": [\"<정확한_이름>\"], \"reason\": \"간단한 이유.\"}.\n"
+                    f"- <정확한_이름>은 다음 중 하나여야 합니다: {targets_list}.\n"
+                    f"- 자신에게 투표하지 마세요 ('{ai_id}').\n\n"
+                    f"채팅 기록:\n{visible_history}"
+                )
+            else:
+                prompt = (
+                    f"당신은 {ai_id}입니다. "
+                    f"채팅 기록을 바탕으로 인간이라고 생각하는 플레이어 {votes_needed}명을 선택하세요.\n"
+                    f"유효한 JSON으로만 응답하세요: {{\"votes\": [\"<이름1>\", \"<이름2>\", ...], \"reason\": \"간단한 이유.\"}}.\n"
+                    f"- 정확히 {votes_needed}명의 플레이어를 선택해야 합니다.\n"
+                    f"- 선택 가능한 플레이어: {targets_list}.\n"
+                    f"- 자신에게 투표하지 마세요 ('{ai_id}').\n\n"
+                    f"채팅 기록:\n{visible_history}"
+                )
+        else:
+            if votes_needed == 1:
+                prompt = (
+                    f"You are {ai_id}. "
+                    "Based on the chat history, who do you vote for as the most human-like player?\n"
+                    "Respond ONLY with valid JSON: {\"votes\": [\"<exact_name>\"], \"reason\": \"Brief reason.\"}.\n"
+                    f"- The <exact_name> must be one of: {targets_list}.\n"
+                    f"- Do not vote for yourself ('{ai_id}').\n\n"
+                    f"History:\n{visible_history}"
+                )
+            else:
+                prompt = (
+                    f"You are {ai_id}. "
+                    f"Based on the chat history, select {votes_needed} players you think are HUMANS.\n"
+                    f"Respond ONLY with valid JSON: {{\"votes\": [\"<name1>\", \"<name2>\", ...], \"reason\": \"Brief reason.\"}}.\n"
+                    f"- You must select exactly {votes_needed} players.\n"
+                    f"- Available players: {targets_list}.\n"
+                    f"- Do not vote for yourself ('{ai_id}').\n\n"
+                    f"History:\n{visible_history}"
+                )
         
         for attempt in range(3):
             try:
@@ -959,17 +1025,35 @@ Never use em dashes. Don't reveal you're an AI.
                 state = self._track_tokens(state, ai_id, response)
                 
                 vote_data = json.loads(response.content)
-                voted_visible = vote_data.get("vote")
-                # Map back to real id
-                if voted_visible in eligible_targets_visible:
-                    index = eligible_targets_visible.index(voted_visible)
-                    return eligible_targets[index], state
+                votes_visible = vote_data.get("votes", [])
+                
+                # Ensure votes is a list
+                if not isinstance(votes_visible, list):
+                    votes_visible = [votes_visible]
+                
+                # Validate number of votes
+                if len(votes_visible) != votes_needed:
+                    raise ValueError(f"Expected {votes_needed} votes, got {len(votes_visible)}")
+                
+                # Map back to real ids
+                voted_ids = []
+                for vote_visible in votes_visible:
+                    if vote_visible in eligible_targets_visible:
+                        index = eligible_targets_visible.index(vote_visible)
+                        voted_ids.append(eligible_targets[index])
+                    else:
+                        raise ValueError(f"Invalid vote: {vote_visible}")
+                
+                return voted_ids, state
+                
             except (json.JSONDecodeError, KeyError, ValueError) as e:
                 print(f"Vote generation attempt {attempt + 1} failed: {e}")
-                error_msg = "\nPrevious response invalid. Output ONLY valid JSON with 'vote' exactly from the allowed names." if language == "english" else "\n이전 응답이 유효하지 않습니다. 허용된 이름 중에서 'vote'가 포함된 유효한 JSON만 출력하세요."
+                error_msg = f"\nPrevious response invalid. Output ONLY valid JSON with 'votes' as a list of exactly {votes_needed} names from the allowed list." if language == "english" else f"\n이전 응답이 유효하지 않습니다. 허용된 이름 중에서 정확히 {votes_needed}명의 'votes' 리스트를 포함한 유효한 JSON만 출력하세요."
                 prompt += error_msg
         
-        return random.choice(eligible_targets), state
+        # Fallback: random selection
+        random.shuffle(eligible_targets)
+        return eligible_targets[:votes_needed], state
 
 
 # Factory function to create game graph instances with specific API keys
@@ -1037,17 +1121,22 @@ async def process_human_message(state: GameState, message: str, player_id: str) 
     return new_state
 
 
-async def process_human_vote(state: GameState, player_id: str, voted_for: str) -> GameState:
+async def process_human_vote(state: GameState, player_id: str, voted_for: List[str]) -> GameState:
     """
-    Process a vote from the human player and update state.
+    Process votes from the human player and update state.
     
     Args:
         state: Current game state
-        voted_for: ID of player being voted for
+        player_id: ID of the voting player
+        voted_for: List of player IDs being voted for (N-1 for N human players)
     
     Returns:
         Updated game state
     """
+    # Ensure voted_for is a list
+    if not isinstance(voted_for, list):
+        voted_for = [voted_for]  # Convert single vote to list for backward compatibility
+    
     new_votes = state["votes"].copy()
     new_votes[player_id] = voted_for
     

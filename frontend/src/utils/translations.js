@@ -5,7 +5,7 @@
 const translations = {
   english: {
     // Lobby Page
-    'lobby.title': 'Group Chat',
+    'lobby.title': 'Human-AI Group Chat',
     'lobby.subtitle': 'Find a room or create your own',
     'lobby.serverOnline': 'Server Online',
     'lobby.serverOffline': 'Server Offline',
@@ -23,8 +23,8 @@ const translations = {
     'lobby.of': 'of',
     
     // Game Description
-    'game.banner.title': 'Can You Find the AI?',
-    'game.banner.description': 'Join a group chat with AI bots and other humans. Chat, analyze behavior, and vote for who you think is the most human-like player. Humans win if they successfully identify a human. AIs win if they trick you into voting for an AI!',
+    'game.banner.title': 'Human-AI Group Chat',
+    'game.banner.description': 'Join a group chat with AI bots and/or other humans. Chat, analyze behavior, and vote for who you think is the most human-like player (besides yourself). In a single-human game, you have to get the most votes from the players. In a multi-human game, you have to (1) get the most votes from the players, and (2) identify other human players.',
     'game.banner.challenge': 'The Challenge:',
     'game.banner.chat': 'Chat & Discuss',
     'game.banner.analyze': 'Analyze Behavior',
@@ -83,7 +83,7 @@ const translations = {
   
   korean: {
     // Lobby Page
-    'lobby.title': '그룹 채팅',
+    'lobby.title': '인간-AI 그룹 채팅',
     'lobby.subtitle': '방을 찾거나 직접 만드세요',
     'lobby.serverOnline': '서버 온라인',
     'lobby.serverOffline': '서버 오프라인',
@@ -101,8 +101,8 @@ const translations = {
     'lobby.of': '/',
     
     // Game Description
-    'game.banner.title': 'AI를 찾을 수 있나요?',
-    'game.banner.description': 'AI 봇과 다른 인간들과 함께 그룹 채팅에 참여하세요. 채팅하고, 행동을 분석하고, 가장 인간다운 플레이어에게 투표하세요. 인간이 인간을 성공적으로 식별하면 인간이 승리합니다. AI가 당신을 속여 AI에게 투표하게 만들면 AI가 승리합니다!',
+    'game.banner.title': '인간-AI 그룹 채팅',
+    'game.banner.description': 'AI 봇, 혹은 다른 인간들과 함께 그룹 채팅에 참여하세요. 채팅하고, 행동을 분석하고, (자신을 제외하고) 가장 인간답다고 생각하는 플레이어에게 투표하세요. 단일 인간 게임에서는 플레이어들로부터 가장 많은 표를 얻어야 합니다. 다중 인간 게임에서는 (1) 플레이어들로부터 가장 많은 표를 얻고, (2) 다른 인간 플레이어를 식별해야 합니다.',
     'game.banner.challenge': '도전 과제:',
     'game.banner.chat': '채팅 & 토론',
     'game.banner.analyze': '행동 분석',

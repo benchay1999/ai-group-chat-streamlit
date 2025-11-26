@@ -29,7 +29,7 @@ from .config import NUM_AI_PLAYERS, DISCUSSION_TIME, VOTING_TIME, OPENAI_API_KEY
 from .api_key_manager import APIKeyManager, APIKeyManagerError
 from .database import (
     init_db, close_db, get_async_session, 
-    User, Session as DBSession, UserRole, PaymentStatus
+    User, Session as DBSession, UserRole, PaymentStatus, RoomStake
 )
 from .auth import (
     hash_password, authenticate_user, create_access_token,
@@ -786,13 +786,15 @@ async def run_discussion_phase(room_code: str):
         # Save state BEFORE broadcasting to ensure checks see VOTING phase
         rooms[room_code]['state'] = state
         
-        # Broadcast phase change with voting duration
+        # Broadcast phase change with voting duration and num_human_players
         voting_duration = rooms[room_code].get('voting_duration', VOTING_TIME)
+        num_human_players = len([p for p in state['players'] if p['role'] == 'human' and not p['eliminated']])
         await broadcast_to_room(room_code, {
             "type": "phase",
             "phase": "Voting",
             "message": "Discussion ended. Time to vote.",
-            "voting_duration": voting_duration
+            "voting_duration": voting_duration,
+            "num_human_players": num_human_players
         })
         
         print(f"✅ Phase transition complete: DISCUSSION → VOTING in room {room_code}")
@@ -872,6 +874,310 @@ async def process_ai_votes(room_code: str):
             break
 
 
+async def deduct_stakes(room_code: str, db: AsyncSession) -> bool:
+    """
+    Deduct stakes from all players when game starts (multi-human games only).
+    
+    Args:
+        room_code: Room identifier
+        db: Database session
+    
+    Returns:
+        True if successful, False if any deduction failed
+    """
+    import uuid as uuid_lib
+    
+    if room_code not in rooms:
+        print(f"❌ Room {room_code} not found for stake deduction")
+        return False
+    
+    room_data = rooms[room_code]
+    max_humans = room_data.get('max_humans', 1)
+    
+    # Only deduct stakes in multi-human games
+    if max_humans <= 1:
+        print(f"ℹ️  Single-human game, no stakes to deduct")
+        return True
+    
+    stake_percentage = room_data.get('stake_percentage', 0)
+    if stake_percentage == 0:
+        print(f"ℹ️  No stakes configured for room {room_code}")
+        return True
+    
+    player_stakes = room_data.get('player_stakes', {})
+    player_user_map = room_data.get('player_user_map', {})
+    minimum_stake = room_data.get('minimum_stake', 0)
+    
+    if not player_stakes:
+        print(f"⚠️  No player stakes calculated for room {room_code}")
+        return True
+    
+    print(f"💎 Deducting stakes for room {room_code}: {minimum_stake} gems per player")
+    
+    # Deduct stakes from each player
+    deduction_records = []
+    try:
+        for player_id, stake_amount in player_stakes.items():
+            # Get user ID from mapping
+            user_id_str = player_user_map.get(player_id)
+            if not user_id_str:
+                print(f"⚠️  Player {player_id} not authenticated, skipping stake deduction")
+                continue
+            
+            try:
+                user_uuid = uuid_lib.UUID(user_id_str)
+            except ValueError:
+                print(f"❌ Invalid user ID format for player {player_id}: {user_id_str}")
+                continue
+            
+            # Get user from database
+            result = await db.execute(select(User).where(User.id == user_uuid))
+            user = result.scalar_one_or_none()
+            
+            if not user:
+                print(f"❌ User not found for player {player_id} (ID: {user_id_str})")
+                # Rollback and return failure
+                await db.rollback()
+                return False
+            
+            # Validate user has sufficient gems
+            if user.gem_balance < minimum_stake:
+                print(f"❌ User {user.user_id} has insufficient gems: {user.gem_balance} < {minimum_stake}")
+                await db.rollback()
+                return False
+            
+            # Deduct minimum stake (actual winnings calculated at end)
+            user.gem_balance -= minimum_stake
+            
+            # Create RoomStake record
+            stake_record = RoomStake(
+                id=uuid_lib.uuid4(),
+                room_code=room_code,
+                user_id=user_uuid,
+                player_id=player_id,
+                stake_percentage=stake_percentage,
+                stake_amount=minimum_stake,
+                deducted=1,  # True
+                returned_amount=0,
+                won_amount=0,
+                created_at=datetime.utcnow()
+            )
+            db.add(stake_record)
+            deduction_records.append(stake_record)
+            
+            print(f"💎 Deducted {minimum_stake} gems from {user.user_id} ({player_id}), new balance: {user.gem_balance}")
+        
+        # Commit all deductions atomically
+        await db.commit()
+        print(f"✅ Successfully deducted stakes for {len(deduction_records)} players in room {room_code}")
+        
+        # Broadcast stake deduction to all players
+        await broadcast_to_room(room_code, {
+            "type": "stakes_deducted",
+            "minimum_stake": minimum_stake,
+            "num_players": len(deduction_records)
+        })
+        
+        return True
+        
+    except Exception as e:
+        print(f"❌ Error deducting stakes for room {room_code}: {e}")
+        import traceback
+        traceback.print_exc()
+        await db.rollback()
+        return False
+
+
+async def calculate_game_rewards(
+    room_code: str,
+    room_data: dict,
+    state: GameState,
+    db: AsyncSession
+) -> dict:
+    """
+    Calculate and distribute gems for completed game.
+    
+    Handles both single-human and multi-human games with stake system.
+    
+    Args:
+        room_code: Room identifier
+        room_data: Room metadata
+        state: Current game state
+        db: Database session
+    
+    Returns:
+        Dictionary mapping player_id to reward details:
+        {
+            player_id: {
+                'base_gems': int,
+                'stake_gems': int,  # positive for won, negative for lost
+                'total_gems': int,
+                'is_winner': bool,
+                'identification_accuracy': float,  # for multi-human
+                'votes_received': int
+            }
+        }
+    """
+    from collections import Counter
+    
+    # Get human players
+    human_players = [p for p in state['players'] if p['role'] == 'human' and not p['eliminated']]
+    num_humans = len(human_players)
+    human_player_ids = [p['id'] for p in human_players]
+    
+    # Get player_user_map to find authenticated users
+    player_user_map = room_data.get('player_user_map', {})
+    
+    # Initialize rewards dict
+    rewards = {}
+    for player in state['players']:
+        if player['role'] == 'human':
+            rewards[player['id']] = {
+                'base_gems': 0,
+                'stake_gems': 0,
+                'total_gems': 0,
+                'is_winner': False,
+                'identification_accuracy': 0.0,
+                'votes_received': 0
+            }
+    
+    # Count votes received by each player (for determining most voted)
+    vote_counts = Counter()
+    for voter_id, voted_for_list in state.get('votes', {}).items():
+        if isinstance(voted_for_list, list):
+            for voted_player in voted_for_list:
+                vote_counts[voted_player] += 1
+        else:
+            # Backward compatibility for single votes
+            vote_counts[voted_for_list] += 1
+    
+    # Store vote counts in rewards
+    for player_id in human_player_ids:
+        rewards[player_id]['votes_received'] = vote_counts.get(player_id, 0)
+    
+    if num_humans == 1:
+        # SINGLE-HUMAN GAME: Simple winner-takes-all
+        # Winner = player with most votes
+        # Reward: 50 gems (no stakes in single-human games)
+        
+        if vote_counts:
+            max_votes = max(vote_counts.values())
+            winners = [pid for pid, count in vote_counts.items() if count == max_votes and pid in human_player_ids]
+        else:
+            winners = []
+        
+        for player_id in human_player_ids:
+            if player_id in winners:
+                rewards[player_id]['base_gems'] = 50
+                rewards[player_id]['total_gems'] = 50
+                rewards[player_id]['is_winner'] = True
+            else:
+                # Losers get 0 in single-human games
+                rewards[player_id]['base_gems'] = 0
+                rewards[player_id]['total_gems'] = 0
+        
+        print(f"💎 Single-human game rewards: {rewards}")
+        
+    else:
+        # MULTI-HUMAN GAME: Complex with partial credit
+        # Base reward: 100 gems for all participants
+        # Stakes: Calculated based on voting accuracy
+        
+        # All humans get base gems
+        for player_id in human_player_ids:
+            rewards[player_id]['base_gems'] = 100
+        
+        # Find player(s) with most votes
+        if vote_counts:
+            max_votes = max(vote_counts.values())
+            top_voted_players = [pid for pid, count in vote_counts.items() if count == max_votes and pid in human_player_ids]
+        else:
+            top_voted_players = []
+        
+        # Get stake configuration
+        stake_percentage = room_data.get('stake_percentage', 0)
+        player_stakes = room_data.get('player_stakes', {})
+        
+        if stake_percentage > 0 and player_stakes:
+            # Calculate minimum stake (what each loser contributes)
+            minimum_stake = room_data.get('minimum_stake', 0)
+            
+            # Total pot = minimum_stake * (num_humans - num_winners)
+            # If there are ties, winners split the pot
+            num_winners = len(top_voted_players)
+            num_losers = num_humans - num_winners
+            
+            if num_winners > 0 and num_losers > 0:
+                total_pot = minimum_stake * num_losers
+                base_pot_per_winner = total_pot / num_winners
+                
+                # For each winner, calculate identification accuracy
+                for winner_id in top_voted_players:
+                    votes_needed = num_humans - 1
+                    winner_votes = state['votes'].get(winner_id, [])
+                    if not isinstance(winner_votes, list):
+                        winner_votes = [winner_votes] if winner_votes else []
+                    
+                    # Calculate correct identifications
+                    correct_identifications = sum(1 for v in winner_votes if v in human_player_ids and v != winner_id)
+                    accuracy = correct_identifications / votes_needed if votes_needed > 0 else 0.0
+                    
+                    # Winner gets: their stake back + (accuracy%) * (their share of pot from losers)
+                    stake_winnings = int(accuracy * base_pot_per_winner)
+                    stake_reward = minimum_stake + stake_winnings  # Refund + winnings
+                    
+                    rewards[winner_id]['identification_accuracy'] = accuracy
+                    rewards[winner_id]['stake_gems'] = stake_reward
+                    rewards[winner_id]['is_winner'] = True
+                    
+                    print(f"💎 Winner {winner_id}: {correct_identifications}/{votes_needed} correct ({accuracy*100:.1f}%), wins {stake_winnings} gems (+ {minimum_stake} refund = {stake_reward} total)")
+                
+                # Calculate total stakes collected from pot (excluding refunds)
+                # total_stakes_distributed = winnings only, not including refunds
+                total_stakes_distributed_from_pot = sum(rewards[w]['stake_gems'] - minimum_stake for w in top_voted_players)
+                uncollected_stakes = total_pot - total_stakes_distributed_from_pot
+                
+                # Return uncollected stakes to losers proportionally
+                loser_ids = [pid for pid in human_player_ids if pid not in top_voted_players]
+                if uncollected_stakes > 0 and loser_ids:
+                    # Calculate each loser's original stake
+                    total_loser_stakes = sum(player_stakes.get(lid, minimum_stake) for lid in loser_ids)
+                    
+                    for loser_id in loser_ids:
+                        loser_stake = player_stakes.get(loser_id, minimum_stake)
+                        proportion = loser_stake / total_loser_stakes if total_loser_stakes > 0 else 1.0 / len(loser_ids)
+                        returned_amount = int(proportion * uncollected_stakes)
+                        
+                        # Loser gets partial refund from uncollected stakes
+                        rewards[loser_id]['stake_gems'] = returned_amount
+                        net_loss = minimum_stake - returned_amount
+                        
+                        print(f"💎 Loser {loser_id}: Lost {minimum_stake} gems, returned {returned_amount} gems (net loss: -{net_loss})")
+                else:
+                    # No uncollected stakes, losers get nothing back
+                    for loser_id in loser_ids:
+                        rewards[loser_id]['stake_gems'] = 0
+            elif num_winners > 0 and num_losers == 0:
+                # Everyone tied - no stakes change hands, refund stakes to everyone
+                # Since stakes were deducted at game start, we need to credit them back
+                for player_id in top_voted_players:
+                    rewards[player_id]['is_winner'] = True
+                    rewards[player_id]['stake_gems'] = minimum_stake  # Refund the deducted stake
+            elif num_winners == 0:
+                # No one got any votes - no winners, refund stakes to everyone
+                # Since stakes were deducted at game start, we need to credit them back
+                for player_id in human_player_ids:
+                    rewards[player_id]['stake_gems'] = minimum_stake  # Refund the deducted stake
+        
+        # Calculate total gems
+        for player_id in human_player_ids:
+            rewards[player_id]['total_gems'] = rewards[player_id]['base_gems'] + rewards[player_id]['stake_gems']
+        
+        print(f"💎 Multi-human game rewards: {rewards}")
+    
+    return rewards
+
+
 async def complete_voting(room_code: str):
     """
     Complete the voting phase and process elimination.
@@ -891,11 +1197,19 @@ async def complete_voting(room_code: str):
     print(f"📊 Final votes before processing: {state.get('votes', {})}")
     
     # Determine suspect (player with most votes) and winner directly; no elimination
+    # FIXED: Handle both list votes (multi-human) and single votes (backward compatibility)
     vote_counts: Dict[str, int] = {}
-    for _, target in state.get('votes', {}).items():
-        if target is None:
+    for _, target_list in state.get('votes', {}).items():
+        if not target_list:
             continue
-        vote_counts[target] = vote_counts.get(target, 0) + 1
+        if isinstance(target_list, list):
+            # Multi-human game: count each voted player
+            for target in target_list:
+                vote_counts[target] = vote_counts.get(target, 0) + 1
+        else:
+            # Backward compatibility: single vote
+            vote_counts[target_list] = vote_counts.get(target_list, 0) + 1
+    
     suspect = None
     if vote_counts:
         max_votes = max(vote_counts.values())
@@ -1541,14 +1855,22 @@ async def save_session_stats(room_code: str, state: dict, current_user: Optional
                     'already_existed': True
                 }
             
-            # Credit gems to ALL authenticated human players in the game
+            # Calculate and distribute gems using new gem reward system
             player_user_map = room_data.get('player_user_map', {})
-            print(f"💎 Starting gem credit process for {len(player_user_map)} mapped players")
+            print(f"💎 Starting gem distribution using calculate_game_rewards for {len(player_user_map)} players")
+            
+            # Call the comprehensive reward calculation function
+            rewards = await calculate_game_rewards(room_code, room_data, state, db)
             
             # Track successfully credited players for session data
             credited_players = []
             
-            # Process each human player
+            # Check if debug mode
+            is_debug_mode = (discussion_duration == 60 or voting_duration == 30)
+            if is_debug_mode:
+                print(f"🐛 Debug mode detected - skipping all gem distributions")
+            
+            # Process each human player based on calculated rewards
             for player in state.get('players', []):
                 if player.get('role') != 'human':
                     continue
@@ -1561,40 +1883,24 @@ async def save_session_stats(room_code: str, state: dict, current_user: Optional
                     print(f"⚠️ Player {player_id} is not authenticated, skipping gem credit")
                     continue
                 
-                # Calculate this player's earnings
-                num_messages = sum(1 for msg in state.get('chat_history', []) if msg.get('sender') == player_id)
-                voted = player_id in state.get('votes', {})
+                # Get reward details from calculated rewards
+                player_rewards = rewards.get(player_id, {
+                    'base_gems': 0,
+                    'stake_gems': 0,
+                    'total_gems': 0,
+                    'is_winner': False,
+                    'identification_accuracy': 0.0,
+                    'votes_received': 0
+                })
                 
-                # Check if player won
-                won_game = False
-                if num_humans == 1:
-                    # Single-player game: check if they voted for an AI
-                    player_vote = state.get('votes', {}).get(player_id)
-                    if player_vote:
-                        for p in state.get('players', []):
-                            if p['id'] == player_vote and p.get('role') == 'ai':
-                                won_game = True
-                                break
-                else:
-                    # Multi-player game: use original logic
-                    if state.get('selected_suspect') and state.get('suspect_role') == 'ai':
-                        player_vote = state.get('votes', {}).get(player_id)
-                        if player_vote:
-                            for p in state.get('players', []):
-                                if p['id'] == player_vote and p.get('role') == 'ai':
-                                    won_game = True
-                                    break
+                total_gems = player_rewards['total_gems']
+                base_gems = player_rewards['base_gems']
+                stake_gems = player_rewards['stake_gems']
                 
-                player_earnings_value, earnings_breakdown = calculate_earnings(
-                    game_completed=True,
-                    won_game=won_game,
-                    num_messages=num_messages,
-                    discussion_duration=discussion_duration,
-                    voted=voted
-                )
+                print(f"💎 Reward for {player_id}: {total_gems} gems (base: {base_gems}, stake: {stake_gems})")
                 
-                print(f"💵 Calculated earnings for {player_id}: ${player_earnings_value}")
-                print(f"💡 Breakdown: {earnings_breakdown}")
+                # Calculate legacy earnings value for database compatibility
+                player_earnings_value = total_gems / 1000.0  # Convert gems to USD equivalent
                 
                 # Get the user object and credit gems
                 try:
@@ -1614,54 +1920,79 @@ async def save_session_stats(room_code: str, state: dict, current_user: Optional
                         print(f"❌ User with UUID {mapped_user_uuid} not found in database")
                         continue
                     
-                    # Check if this is a debug mode game (1 minute discussion OR 30 second voting)
-                    is_debug_mode = (discussion_duration == 60 or voting_duration == 30)
-                    
+                    # Skip debug mode games
                     if is_debug_mode:
-                        # DEBUG MODE: No gem rewards for debug games
-                        print(f"🐛 Debug mode detected (discussion: {discussion_duration}s, voting: {voting_duration}s) - skipping gem reward")
-                        continue  # Skip this player, don't credit gems
+                        print(f"🐛 Debug mode - skipping gem credit for {player_id}")
+                        continue
                     
-                    # FIXED PAYOUT: Single-player games get exactly 20 gems (for now)
-                    # Multi-player games use performance-based earnings
-                    if num_humans == 1:
-                        # Fixed payout for single-player games
-                        gems_earned = 20
-                        print(f"💎 Fixed payout: 20 gems for single-player game")
-                    else:
-                        # Convert USD to gems for multi-player games (1000 gems = $1.00)
-                        gems_earned = int(float(player_earnings_value) * GEMS_PER_DOLLAR)
-                        print(f"💎 Performance-based payout: {gems_earned} gems (${player_earnings_value})")
+                    # Use calculated gems from reward system
+                    gems_earned = total_gems
                     
-                    # VALIDATION: Ensure gems_earned is reasonable
-                    if gems_earned < 0:
-                        print(f"⚠️ Negative gems calculated ({gems_earned}), setting to 0")
-                        gems_earned = 0
+                    # VALIDATION: Ensure gems_earned is reasonable (allow negative for stake losses)
+                    if gems_earned < -100000:  # Sanity check: max 100,000 gem loss
+                        print(f"⚠️ Suspiciously high gem loss ({gems_earned}), capping at -100,000")
+                        gems_earned = -100000
                     elif gems_earned > 100000:  # Sanity check: max 100,000 gems per game ($100)
                         print(f"⚠️ Suspiciously high gems ({gems_earned}), capping at 100,000")
                         gems_earned = 100000
                     
-                    # Validate final amount
-                    if gems_earned <= 0:
-                        print(f"⚠️ No gems to credit for player {player_id} (amount: {gems_earned})")
-                        continue
-                    
-                    # Credit gems to user's balance (ATOMIC OPERATION)
+                    # Credit/debit gems to user's balance (ATOMIC OPERATION)
+                    # Note: Stakes were already deducted at game start
+                    # This credits back base gems + any stake winnings (or just base if lost stakes)
                     old_balance = db_user.gem_balance
                     db_user.gem_balance += gems_earned
-                    db_user.total_gems_earned += gems_earned
+                    
+                    # Only add to total_gems_earned if positive (don't count stake losses)
+                    if gems_earned > 0:
+                        db_user.total_gems_earned += gems_earned
+                    
                     db_user.total_games += 1  # INCREMENT TOTAL GAMES COUNTER
                     
-                    print(f"💎 Credited {gems_earned} gems to user {db_user.user_id} (${player_earnings_value})")
+                    print(f"💎 Credited {gems_earned} gems to user {db_user.user_id}")
                     print(f"   Balance: {old_balance} → {db_user.gem_balance} gems")
                     print(f"   Total games played: {db_user.total_games}")
+                    print(f"   Breakdown - Base: {base_gems}, Stakes: {stake_gems}")
+                    
+                    # Update RoomStake record with final amounts (if exists)
+                    stake_result = await db.execute(
+                        sql_select(RoomStake).where(
+                            RoomStake.room_code == room_code,
+                            RoomStake.user_id == mapped_user_uuid
+                        )
+                    )
+                    stake_record = stake_result.scalar_one_or_none()
+                    
+                    if stake_record:
+                        minimum_stake = room_data.get('minimum_stake', 0)
+                        
+                        if stake_gems > minimum_stake:
+                            # Winner: got refund + winnings
+                            stake_record.won_amount = stake_gems - minimum_stake
+                            stake_record.returned_amount = minimum_stake
+                        elif stake_gems == minimum_stake:
+                            # Tie or no stakes: got full refund, no winnings
+                            stake_record.won_amount = 0
+                            stake_record.returned_amount = minimum_stake
+                        elif stake_gems > 0:
+                            # Loser with partial return
+                            stake_record.won_amount = 0
+                            stake_record.returned_amount = stake_gems
+                        else:
+                            # Loser with no return
+                            stake_record.won_amount = 0
+                            stake_record.returned_amount = 0
+                        
+                        print(f"   Updated RoomStake record: won={stake_record.won_amount}, returned={stake_record.returned_amount}")
                     
                     # Track for session data (use first authenticated player's earnings for legacy)
                     credited_players.append({
                         'player_id': player_id,
                         'user_id': str(mapped_user_uuid),
                         'gems_earned': gems_earned,
-                        'earnings_usd': float(player_earnings_value)
+                        'earnings_usd': float(player_earnings_value),
+                        'base_gems': base_gems,
+                        'stake_gems': stake_gems,
+                        'is_winner': player_rewards.get('is_winner', False)
                     })
                     
                     # Store for legacy session.calculated_earnings field (use TOTAL gems earned including bonuses)
@@ -2235,11 +2566,13 @@ async def websocket_endpoint(websocket: WebSocket, room_code: str, player_id: st
     await websocket.send_json({"type": "player_list", "players": [p["id"] for p in state["players"]]})
     await websocket.send_json({"type": "topic", "topic": state["topic"]})
     
-    # Send phase with durations
+    # Send phase with durations and num_human_players
+    num_human_players = len([p for p in state['players'] if p['role'] == 'human' and not p['eliminated']])
     phase_msg = {
         "type": "phase",
         "phase": state["phase"].value,
-        "message": f"Currently in {state['phase'].value}"
+        "message": f"Currently in {state['phase'].value}",
+        "num_human_players": num_human_players
     }
     if state["phase"].value == "Discussion":
         phase_msg["discussion_duration"] = room.get('discussion_duration', DISCUSSION_TIME)
@@ -4382,7 +4715,11 @@ async def approve_mturk_payment(
 # ============================================================================
 
 @app.post("/api/rooms/create")
-async def create_room(room_data: dict):
+async def create_room(
+    room_data: dict, 
+    current_user: User = Depends(get_current_user_optional),
+    db: AsyncSession = Depends(get_async_session)
+):
     """
     Create a new matching room.
     
@@ -4393,6 +4730,7 @@ async def create_room(room_data: dict):
             - language: Room language - "english" or "korean" (default "english")
             - discussion_duration: Discussion time in seconds (60, 180, or 240, default 180)
             - voting_duration: Voting time in seconds (30, 60, or 120, default 60)
+            - stake_percentage: Stake percentage for multi-human games (0, 10, 30, 50, 100)
     
     Returns:
         Room creation response with room_code and room_name
@@ -4402,10 +4740,11 @@ async def create_room(room_data: dict):
     language = room_data.get('language', 'english')
     discussion_duration = room_data.get('discussion_duration', 180)
     voting_duration = room_data.get('voting_duration', 60)
+    stake_percentage = room_data.get('stake_percentage', 0)
     
     # Validation
-    if not (1 <= max_humans <= 4):
-        return {"success": False, "error": "max_humans must be between 1 and 4"}
+    if not (1 <= max_humans <= 5):
+        return {"success": False, "error": "max_humans must be between 1 and 5"}
     
     if total_players < max_humans:
         return {"success": False, "error": "total_players must be >= max_humans"}
@@ -4422,6 +4761,21 @@ async def create_room(room_data: dict):
     
     if voting_duration not in [30, 60, 120]:
         return {"success": False, "error": "voting_duration must be 30, 60, or 120 seconds"}
+    
+    # Stake percentage validation
+    if stake_percentage not in [0, 10, 30, 50, 100]:
+        return {"success": False, "error": "stake_percentage must be 0, 10, 30, 50, or 100"}
+    
+    # Multi-human room validation: Must have at least 250 gems
+    if max_humans > 1:
+        if not current_user:
+            return {"success": False, "error": "Authentication required to create multi-human rooms"}
+        
+        if current_user.gem_balance < 250:
+            return {
+                "success": False, 
+                "error": f"Insufficient gems. You need at least 250 gems to create a multi-human room. Your balance: {current_user.gem_balance} gems"
+            }
     
     # Generate unique room code
     room_code = generate_room_code()
@@ -4488,14 +4842,17 @@ async def create_room(room_data: dict):
         'discussion_duration': discussion_duration,  # Store discussion duration
         'voting_duration': voting_duration,  # Store voting duration
         'game_graph': game_graph,  # Room-specific GameGraph with assigned API key
-        'api_key_index': api_key_index  # Track which API key is assigned
+        'api_key_index': api_key_index,  # Track which API key is assigned
+        'stake_percentage': stake_percentage,  # Stake percentage for multi-human games
+        'player_stakes': {},  # Maps player_id -> calculated stake amount (in gems)
+        'minimum_stake': 0  # Minimum stake across all players (recalculated as players join)
     }
     
     # Initialize lock for this room
     if room_code not in room_locks:
         room_locks[room_code] = asyncio.Lock()
     
-    print(f"🎮 Created room {room_code} ({room_name}): {max_humans} humans, {total_players} total, language: {language}, discussion: {discussion_duration}s, voting: {voting_duration}s")
+    print(f"🎮 Created room {room_code} ({room_name}): {max_humans} humans, {total_players} total, language: {language}, discussion: {discussion_duration}s, voting: {voting_duration}s, stake: {stake_percentage}%")
     print(f"🔍 Verifying room dict after creation - discussion_duration: {rooms[room_code].get('discussion_duration')}, voting_duration: {rooms[room_code].get('voting_duration')}")
     
     # Assign a player number for the creator (they'll get it when they join)
@@ -4511,7 +4868,48 @@ async def create_room(room_data: dict):
         "creator_number": creator_number,
         "language": language,
         "discussion_duration": discussion_duration,
-        "voting_duration": voting_duration
+        "voting_duration": voting_duration,
+        "stake_percentage": stake_percentage,
+        "minimum_stake": 0  # Will be calculated as players join
+    }
+
+
+@app.get("/api/rooms/{room_code}/stake_info")
+async def get_stake_info(room_code: str):
+    """
+    Get stake information for a multi-human room.
+    
+    Args:
+        room_code: Room identifier
+    
+    Returns:
+        Stake information including current minimum stake and player stakes
+    """
+    if room_code not in rooms:
+        raise HTTPException(status_code=404, detail="Room not found")
+    
+    room_data = rooms[room_code]
+    max_humans = room_data.get('max_humans', 1)
+    
+    # Single-human games don't have stakes
+    if max_humans == 1:
+        return {
+            "has_stakes": False,
+            "stake_percentage": 0,
+            "minimum_stake": 0,
+            "player_stakes": {}
+        }
+    
+    stake_percentage = room_data.get('stake_percentage', 0)
+    player_stakes = room_data.get('player_stakes', {})
+    minimum_stake = room_data.get('minimum_stake', 0)
+    
+    return {
+        "has_stakes": stake_percentage > 0,
+        "stake_percentage": stake_percentage,
+        "minimum_stake": minimum_stake,
+        "player_stakes": player_stakes,
+        "num_players_joined": len(player_stakes)
     }
 
 
@@ -4540,7 +4938,10 @@ async def list_rooms(page: int = 0, per_page: int = 10):
             'created_at': data['created_at'],
             'language': data.get('language', 'english'),
             'discussion_duration': data.get('discussion_duration', 180),
-            'voting_duration': data.get('voting_duration', 60)
+            'voting_duration': data.get('voting_duration', 60),
+            'stake_percentage': data.get('stake_percentage', 0),
+            'minimum_stake': data.get('minimum_stake', 0),
+            'has_stakes': data.get('max_humans', 1) > 1 and data.get('stake_percentage', 0) > 0
         }
         for code, data in rooms.items()
         if data.get('room_status') == 'waiting'
@@ -4692,6 +5093,28 @@ async def leave_room_endpoint(room_code: str, player_data: dict):
         removed_user_id = player_user_map.pop(player_id)
         print(f"🗑️  Removed {player_id} from player_user_map (user_id: {removed_user_id[:8] if removed_user_id else 'N/A'}...)")
     
+    # Remove from player_stakes and recalculate minimum_stake
+    player_stakes = room.get('player_stakes', {})
+    if player_id in player_stakes:
+        removed_stake = player_stakes.pop(player_id)
+        print(f"💎 Removed {player_id}'s stake ({removed_stake} gems)")
+        
+        # Recalculate minimum stake
+        remaining_stakes = list(player_stakes.values())
+        if remaining_stakes:
+            room['minimum_stake'] = min(remaining_stakes)
+            print(f"💎 Minimum stake recalculated to: {room['minimum_stake']} gems")
+            
+            # Broadcast stake update to remaining players
+            await broadcast_to_room(room_code, {
+                "type": "stake_update",
+                "minimum_stake": room['minimum_stake'],
+                "stake_percentage": room.get('stake_percentage', 0),
+                "num_players": len(player_stakes)
+            })
+        else:
+            room['minimum_stake'] = 0
+    
     # Add to permanently_left set to prevent rejoin
     if 'permanently_left' not in room:
         room['permanently_left'] = set()
@@ -4771,7 +5194,8 @@ async def get_room_state(room_code: str, player_id: str = "StreamlitUser"):
 async def join_room(
     room_code: str, 
     player_data: dict,
-    current_user: User = Depends(get_current_user_optional)
+    current_user: User = Depends(get_current_user_optional),
+    db: AsyncSession = Depends(get_async_session)
 ):
     """
     Join a room for Streamlit client (with matching room system support).
@@ -5025,6 +5449,20 @@ async def join_room(
     
         if len(assigned_humans) >= max_humans:
             return {"success": False, "error": f"Room full ({max_humans} humans max)"}
+        
+        # MULTI-HUMAN ROOM VALIDATION: Check gem balance requirement
+        if max_humans > 1:
+            if not current_user:
+                return {
+                    "success": False, 
+                    "error": "Authentication required to join multi-human rooms"
+                }
+            
+            if current_user.gem_balance < 250:
+                return {
+                    "success": False, 
+                    "error": f"Insufficient gems. You need at least 250 gems to join a multi-human room. Your balance: {current_user.gem_balance} gems"
+                }
     
         # Get state
         state = room['state']
@@ -5076,6 +5514,27 @@ async def join_room(
             room['player_user_map'][player_id] = user_id_str
             print(f"👤 ✅ Player {player_id} joined room {room_code} ({len(room['current_humans'])}/{max_humans}) - Mapped to user {user_id_str[:8]}...")
             print(f"📋 Current player_user_map: {room['player_user_map']}")
+            
+            # Calculate and store stake for multi-human rooms
+            if max_humans > 1:
+                stake_percentage = room.get('stake_percentage', 0)
+                player_stake = int(current_user.gem_balance * stake_percentage / 100)
+                room['player_stakes'][player_id] = player_stake
+                
+                # Recalculate minimum stake across all joined players
+                all_stakes = list(room['player_stakes'].values())
+                if all_stakes:
+                    room['minimum_stake'] = min(all_stakes)
+                    print(f"💎 Player {player_id} stake: {player_stake} gems ({stake_percentage}% of {current_user.gem_balance})")
+                    print(f"💎 Room minimum stake updated to: {room['minimum_stake']} gems")
+                    
+                    # Broadcast stake update to all connected players
+                    await broadcast_to_room(room_code, {
+                        "type": "stake_update",
+                        "minimum_stake": room['minimum_stake'],
+                        "stake_percentage": stake_percentage,
+                        "num_players": len(room['player_stakes'])
+                    })
         else:
             print(f"👤 Player {player_id} joined room {room_code} ({len(room['current_humans'])}/{max_humans}) - Anonymous")
     
@@ -5100,6 +5559,21 @@ async def join_room(
                 if 'broadcast_queue' in result:
                     for msg in result['broadcast_queue']:
                         await broadcast_to_room(room_code, msg)
+                
+                # Deduct stakes before starting the game (multi-human games only)
+                stake_deduction_success = await deduct_stakes(room_code, db)
+                if not stake_deduction_success:
+                    print(f"❌ Stake deduction failed for room {room_code}. Cancelling game start.")
+                    room['room_status'] = 'waiting'
+                    rooms[room_code]['initialized'] = False
+                    await broadcast_to_room(room_code, {
+                        "type": "error",
+                        "message": "Failed to deduct stakes. Game cancelled. Please ensure all players have sufficient gems."
+                    })
+                    return {
+                        "success": False,
+                        "error": "Failed to deduct stakes. Game cancelled."
+                    }
             
                 # Start phases
                 print(f"🚀 Starting game phases - discussion_duration: {room.get('discussion_duration', 'NOT SET')}, voting_duration: {room.get('voting_duration', 'NOT SET')}")
@@ -5173,11 +5647,12 @@ async def send_message(room_code: str, message_data: dict):
 @app.post("/api/rooms/{room_code}/vote")
 async def cast_vote(room_code: str, vote_data: dict):
     """
-    Cast a vote from Streamlit client.
+    Cast votes from Streamlit client.
     
     Args:
         room_code: Room identifier
         vote_data: Dict with 'player_id' and 'voted_for' fields
+                  voted_for can be a single string (legacy) or list of strings (multi-human)
     
     Returns:
         Success status
@@ -5188,6 +5663,10 @@ async def cast_vote(room_code: str, vote_data: dict):
     player_id = vote_data.get('player_id', 'StreamlitUser')
     voted_for = vote_data.get('voted_for')
     
+    # Convert single vote to list for consistency
+    if not isinstance(voted_for, list):
+        voted_for = [voted_for] if voted_for else []
+    
     state = rooms[room_code]['state']
     
     # Check if in voting phase
@@ -5197,6 +5676,27 @@ async def cast_vote(room_code: str, vote_data: dict):
     # Check if already voted (enforce single vote per player)
     if player_id in state.get('votes', {}):
         return {"error": "Already voted"}
+    
+    # Validate vote count for multi-human games
+    human_players = [p for p in state['players'] if p['role'] == 'human' and not p['eliminated']]
+    num_humans = len(human_players)
+    
+    if num_humans > 1:
+        # Multi-human game: must vote for exactly N-1 humans
+        expected_votes = num_humans - 1
+        if len(voted_for) != expected_votes:
+            return {
+                "error": f"Must vote for exactly {expected_votes} players in multi-human games. You selected {len(voted_for)}."
+            }
+        
+        # Validate: cannot vote for self
+        if player_id in voted_for:
+            return {"error": "Cannot vote for yourself"}
+        
+        # Validate: all voted players exist and are not eliminated
+        for vote in voted_for:
+            if not any(p['id'] == vote and not p['eliminated'] for p in state['players']):
+                return {"error": f"Invalid vote target: {vote}"}
     
     # Track player activity
     update_player_activity(rooms[room_code], player_id)

@@ -10,6 +10,7 @@ import { useGame } from '../context/GameContext';
 import { useLanguage } from '../context/LanguageContext';
 import { useAuth } from '../contexts/AuthContext';
 import { useHeartbeat } from '../hooks/useHeartbeat';
+import walletAPI from '../services/walletAPI';
 import RoomCard from '../components/RoomCard';
 import CreateRoomModal from '../components/CreateRoomModal';
 import MTurkAutoLogin from '../components/MTurkAutoLogin';
@@ -31,6 +32,7 @@ const LobbyPage = () => {
   const [adminRoomStats, setAdminRoomStats] = useState(null);
   const [showEmail, setShowEmail] = useState(false);
   const [emailCopied, setEmailCopied] = useState(false);
+  const [gemBalance, setGemBalance] = useState(0);
 
   // Send heartbeat to track this user as online
   useHeartbeat();
@@ -88,6 +90,23 @@ const LobbyPage = () => {
     }
   };
 
+  const loadGemBalance = async () => {
+    // Only load for authenticated users
+    if (!isAuthenticated) {
+      setGemBalance(0);
+      return;
+    }
+    
+    try {
+      const data = await walletAPI.getWalletBalance();
+      setGemBalance(data.gem_balance || 0);
+    } catch (error) {
+      console.debug('Error loading gem balance:', error);
+      setGemBalance(0);
+      // Silently fail - don't disrupt user experience
+    }
+  };
+
   useEffect(() => {
     // Check server health
     roomAPI.healthCheck()
@@ -97,7 +116,8 @@ const LobbyPage = () => {
     loadRooms();
     loadOnlineUsers();
     loadAdminRoomStats();
-  }, [page, user]);
+    loadGemBalance();
+  }, [page, user, isAuthenticated]);
 
   // Auto-refresh every 30 seconds (reduced to save bandwidth)
   useEffect(() => {
@@ -105,9 +125,10 @@ const LobbyPage = () => {
       loadRooms();
       loadOnlineUsers();
       loadAdminRoomStats();
+      loadGemBalance();
     }, 30000);
     return () => clearInterval(interval);
-  }, [page, user]);
+  }, [page, user, isAuthenticated]);
 
   const handleJoinRoom = (room) => {
     selectRoom(room);
@@ -184,36 +205,6 @@ const LobbyPage = () => {
           <div className="flex items-center justify-between">
             <div>
               <h1 className="text-4xl font-bold text-white mb-2">{t('lobby.title')}</h1>
-              
-              {/* Contact Email - Fancy Design */}
-              <div className="flex items-center gap-2 mt-2">
-                <button
-                  onClick={() => setShowEmail(!showEmail)}
-                  className="inline-flex items-center gap-2 px-4 py-2 bg-white bg-opacity-20 backdrop-blur-sm rounded-full hover:bg-opacity-30 transition-all group"
-                >
-                  <Mail className="w-4 h-4 text-blue-200 group-hover:text-white transition-colors" />
-                  <span className="text-sm font-medium text-blue-100 group-hover:text-white transition-colors">
-                    Contact
-                  </span>
-                </button>
-                
-                {showEmail && (
-                  <div className="inline-flex items-center gap-2 px-4 py-2 bg-white bg-opacity-20 backdrop-blur-sm rounded-full animate-in fade-in slide-in-from-left-2 duration-300">
-                    <span className="text-sm font-mono text-white">benchay@kaist.ac.kr</span>
-                    <button
-                      onClick={handleCopyEmail}
-                      className="p-1.5 hover:bg-white hover:bg-opacity-20 rounded-full transition-all"
-                      title="Copy email"
-                    >
-                      {emailCopied ? (
-                        <Check className="w-4 h-4 text-green-300" />
-                      ) : (
-                        <Copy className="w-4 h-4 text-blue-200 hover:text-white" />
-                      )}
-                    </button>
-                  </div>
-                )}
-              </div>
               
               {/* Online Users Count */}
               <div className="flex items-center gap-2 mt-2">
@@ -403,7 +394,12 @@ const LobbyPage = () => {
         {rooms.length > 0 && (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {rooms.map((room) => (
-              <RoomCard key={room.room_code} room={room} onJoin={handleJoinRoom} />
+              <RoomCard 
+                key={room.room_code} 
+                room={room} 
+                onJoin={handleJoinRoom}
+                userGemBalance={gemBalance}
+              />
             ))}
           </div>
         )}
@@ -430,6 +426,36 @@ const LobbyPage = () => {
             </button>
           </div>
         )}
+
+        {/* Contact Email - Bottom of Page */}
+        <div className="flex justify-center items-center gap-2 mt-8 mb-6">
+          <button
+            onClick={() => setShowEmail(!showEmail)}
+            className="inline-flex items-center gap-2 px-4 py-2 bg-white bg-opacity-20 backdrop-blur-sm rounded-full hover:bg-opacity-30 transition-all group"
+          >
+            <Mail className="w-4 h-4 text-blue-200 group-hover:text-white transition-colors" />
+            <span className="text-sm font-medium text-blue-100 group-hover:text-white transition-colors">
+              Contact
+            </span>
+          </button>
+          
+          {showEmail && (
+            <div className="inline-flex items-center gap-2 px-4 py-2 bg-white bg-opacity-20 backdrop-blur-sm rounded-full animate-in fade-in slide-in-from-left-2 duration-300">
+              <span className="text-sm font-mono text-white">benchay@kaist.ac.kr</span>
+              <button
+                onClick={handleCopyEmail}
+                className="p-1.5 hover:bg-white hover:bg-opacity-20 rounded-full transition-all"
+                title="Copy email"
+              >
+                {emailCopied ? (
+                  <Check className="w-4 h-4 text-green-300" />
+                ) : (
+                  <Copy className="w-4 h-4 text-blue-200 hover:text-white" />
+                )}
+              </button>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Create Room Modal */}

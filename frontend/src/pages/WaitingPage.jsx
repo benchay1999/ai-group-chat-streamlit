@@ -3,7 +3,7 @@
  * Wait for players to join before game starts
  */
 
-import { useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useGame } from '../context/GameContext';
 import { useRoomPolling } from '../hooks/useRoomPolling';
@@ -14,6 +14,7 @@ const WaitingPage = () => {
   const navigate = useNavigate();
   const { roomCode, playerId, leaveRoom, saveActiveSession, clearActiveSession } = useGame();
   const { roomInfo, loading, error } = useRoomPolling(roomCode, 2000, !!roomCode);
+  const [stakeInfo, setStakeInfo] = useState(null);
 
   // Save active session when component mounts (user is waiting in room)
   useEffect(() => {
@@ -21,6 +22,34 @@ const WaitingPage = () => {
       saveActiveSession(roomCode, playerId, 'waiting');
     }
   }, [roomCode, playerId, saveActiveSession]);
+
+  // Fetch stake info for multi-human rooms
+  useEffect(() => {
+    const fetchStakeInfo = async () => {
+      if (!roomCode || !roomInfo) return;
+      
+      // Only fetch for multi-human rooms
+      if (roomInfo.max_humans > 1) {
+        try {
+          const response = await fetch(`${import.meta.env.VITE_API_URL}/api/rooms/${roomCode}/stake_info`, {
+            headers: {
+              'Authorization': `Bearer ${localStorage.getItem('access_token')}`
+            }
+          });
+          const data = await response.json();
+          setStakeInfo(data);
+        } catch (error) {
+          console.debug('Error fetching stake info:', error);
+        }
+      }
+    };
+    
+    fetchStakeInfo();
+    
+    // Poll every 3 seconds
+    const interval = setInterval(fetchStakeInfo, 3000);
+    return () => clearInterval(interval);
+  }, [roomCode, roomInfo]);
 
   // Redirect if no room code
   useEffect(() => {
@@ -137,6 +166,41 @@ const WaitingPage = () => {
                 {roomInfo.total_players - maxHumans}
               </p>
             </div>
+            
+            {/* Stake Information for Multi-Human Rooms */}
+            {roomInfo.max_humans > 1 && stakeInfo && (
+              <>
+                <div className="col-span-2 border-t border-gray-300 pt-3 mt-3">
+                  <span className="text-gray-600 block mb-2 font-semibold">💎 Stake Information</span>
+                </div>
+                <div>
+                  <span className="text-gray-600">Stake %:</span>
+                  <p className={`font-semibold ${
+                    stakeInfo.stake_percentage === 0 ? 'text-gray-600' :
+                    stakeInfo.stake_percentage <= 10 ? 'text-green-600' :
+                    stakeInfo.stake_percentage <= 30 ? 'text-yellow-600' :
+                    stakeInfo.stake_percentage <= 50 ? 'text-orange-600' :
+                    'text-red-600'
+                  }`}>
+                    {stakeInfo.stake_percentage}%
+                  </p>
+                </div>
+                <div>
+                  <span className="text-gray-600">Min Stake:</span>
+                  <p className="font-bold text-indigo-600">
+                    {stakeInfo.minimum_stake > 0 ? `${stakeInfo.minimum_stake} gems` : 'Calculating...'}
+                  </p>
+                </div>
+                {stakeInfo.stake_percentage > 0 && (
+                  <div className="col-span-2 bg-yellow-50 border border-yellow-200 rounded p-3 text-sm">
+                    <p className="text-yellow-800">
+                      <strong>⚠️ Stakes Active:</strong> Each player risks the minimum stake. 
+                      Win by getting the most votes AND identifying all other humans correctly!
+                    </p>
+                  </div>
+                )}
+              </>
+            )}
           </div>
         </div>
 

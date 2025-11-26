@@ -56,7 +56,7 @@ class GameState(TypedDict):
     topic: str
     
     # Voting
-    votes: Dict[str, str]  # voter_id -> voted_for_id
+    votes: Dict[str, List[str]]  # voter_id -> [list of voted_for_ids] (multi-vote support for multi-human games)
     
     # AI-specific data
     ai_personalities: Dict[str, str]  # ai_id -> personality
