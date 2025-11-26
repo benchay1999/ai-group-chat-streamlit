@@ -1185,12 +1185,16 @@ async def complete_voting(room_code: str):
     Args:
         room_code: Room identifier
     """
+    print(f"🟢🟢🟢 COMPLETE_VOTING CALLED for room {room_code} 🟢🟢🟢")
+    
     if room_code not in rooms:
+        print(f"⚠️ Room {room_code} not found in rooms dict, returning")
         return
     
     state = rooms[room_code]['state']
     
     if state['phase'] != Phase.VOTING:
+        print(f"⚠️ Room {room_code} not in voting phase (current: {state['phase']}), returning")
         return
     
     print(f"🏁 Completing voting for room {room_code}")
@@ -1255,7 +1259,28 @@ async def complete_voting(room_code: str):
     rooms[room_code]['state'] = state
     
     # Save stats at end
-    await save_session_stats(room_code, state)
+    try:
+        await save_session_stats(room_code, state)
+    except Exception as save_error:
+        # Log the error
+        print(f"❌❌❌ CRITICAL: save_session_stats failed for room {room_code}")
+        print(f"   Error: {save_error}")
+        import traceback
+        traceback.print_exc()
+        
+        # Broadcast error to frontend so players can see it
+        error_message = f"⚠️ ERROR: Failed to save game session. Error: {str(save_error)[:200]}"
+        try:
+            await broadcast_to_room(room_code, {
+                "type": "system_message",
+                "message": error_message,
+                "severity": "error"
+            })
+        except Exception as broadcast_err:
+            print(f"❌ Also failed to broadcast error: {broadcast_err}")
+        
+        # Re-raise so we can see it in logs
+        raise
 
 
 async def schedule_correction_message(room_code: str, ai_id: str, correction_text: str, ai_sender: str, messages_before_correction: int):
@@ -1760,16 +1785,24 @@ async def save_session_stats(room_code: str, state: dict, current_user: Optional
     Returns:
         Dictionary with session stats including completion_key
     """
+    print(f"🔴🔴🔴 SAVE_SESSION_STATS CALLED for room {room_code} 🔴🔴🔴")
+    print(f"   State keys: {list(state.keys())}")
+    print(f"   Players: {[p['id'] for p in state.get('players', [])]}")
+    print(f"   Votes: {state.get('votes', {})}")
+    
     root = os.path.dirname(os.path.dirname(__file__))
     out_dir = os.path.join(root, 'group-chat-stats')
     os.makedirs(out_dir, exist_ok=True)
     
     # Calculate vote counts
+    print(f"📊 Calculating vote counts...")
     vote_counts: Dict[str, int] = {}
     for _, target in state.get('votes', {}).items():
         vote_counts[target] = vote_counts.get(target, 0) + 1
+    print(f"   Vote counts: {vote_counts}")
     
     # Prepare stats payload for JSON file
+    print(f"📝 Preparing stats payload...")
     payload = {
         'room_code': room_code,
         'topic': state.get('topic'),
@@ -1784,13 +1817,22 @@ async def save_session_stats(room_code: str, state: dict, current_user: Optional
         'winner': state.get('winner'),
         'winning_players': state.get('winning_players', [])
     }
+    print(f"✅ Payload prepared successfully")
     
     # Save to JSON file
+    print(f"💾 Saving JSON file...")
     fname = f"{room_code}-{int(_time.time())}.json"
     path = os.path.join(out_dir, fname)
-    with open(path, 'w') as f:
-        json.dump(payload, f, ensure_ascii=False, indent=2)
-    rooms[room_code]['last_stats_path'] = path
+    try:
+        with open(path, 'w') as f:
+            json.dump(payload, f, ensure_ascii=False, indent=2)
+        rooms[room_code]['last_stats_path'] = path
+        print(f"✅ JSON file saved: {path}")
+    except Exception as json_error:
+        print(f"❌ FAILED to save JSON file: {json_error}")
+        import traceback
+        traceback.print_exc()
+        raise
     
     # Extract session metadata
     room_data = rooms.get(room_code, {})
@@ -1857,20 +1899,37 @@ async def save_session_stats(room_code: str, state: dict, current_user: Optional
             
             # Calculate and distribute gems using new gem reward system
             player_user_map = room_data.get('player_user_map', {})
+            
+            # CRITICAL VALIDATION: Check if player_user_map is populated
+            print(f"=" * 80)
+            print(f"📊 SAVE SESSION STATS - Room {room_code}")
+            print(f"=" * 80)
             print(f"💎 Starting gem distribution using calculate_game_rewards for {len(player_user_map)} players")
+            print(f"📋 player_user_map contents: {player_user_map}")
+            
+            if not player_user_map:
+                print(f"⚠️ WARNING: player_user_map is EMPTY for room {room_code}!")
+                print(f"   Room data keys: {list(room_data.keys())}")
+                print(f"   Players in state: {[p['id'] + ' (' + p['role'] + ')' for p in state.get('players', [])]}")
+                print(f"   This is expected for anonymous games, but unusual for multi-human games")
             
             # Call the comprehensive reward calculation function
+            print(f"🔄 Calling calculate_game_rewards...")
             rewards = await calculate_game_rewards(room_code, room_data, state, db)
+            print(f"✅ calculate_game_rewards completed. Rewards calculated for {len(rewards)} players")
+            print(f"📊 Rewards breakdown: {rewards}")
             
             # Track successfully credited players for session data
             credited_players = []
             
             # Check if debug mode
             is_debug_mode = (discussion_duration == 60 or voting_duration == 30)
+            print(f"🐛 Debug mode check: discussion={discussion_duration}s, voting={voting_duration}s, is_debug={is_debug_mode}")
             if is_debug_mode:
                 print(f"🐛 Debug mode detected - skipping all gem distributions")
             
             # Process each human player based on calculated rewards
+            print(f"👥 Processing {len([p for p in state.get('players', []) if p.get('role') == 'human'])} human players for gem credits...")
             for player in state.get('players', []):
                 if player.get('role') != 'human':
                     continue
@@ -1878,9 +1937,11 @@ async def save_session_stats(room_code: str, state: dict, current_user: Optional
                 player_id = player['id']
                 mapped_user_id_str = player_user_map.get(player_id)
                 
+                print(f"  🔹 Player {player_id}: mapped_user_id = {mapped_user_id_str}")
+                
                 # Skip unauthenticated players
                 if not mapped_user_id_str:
-                    print(f"⚠️ Player {player_id} is not authenticated, skipping gem credit")
+                    print(f"     ⚠️ No user mapping found - skipping gem credit (anonymous player)")
                     continue
                 
                 # Get reward details from calculated rewards
@@ -1896,8 +1957,9 @@ async def save_session_stats(room_code: str, state: dict, current_user: Optional
                 total_gems = player_rewards['total_gems']
                 base_gems = player_rewards['base_gems']
                 stake_gems = player_rewards['stake_gems']
+                is_winner = player_rewards.get('is_winner', False)
                 
-                print(f"💎 Reward for {player_id}: {total_gems} gems (base: {base_gems}, stake: {stake_gems})")
+                print(f"     💎 Rewards: total={total_gems}, base={base_gems}, stake={stake_gems}, winner={is_winner}")
                 
                 # Calculate legacy earnings value for database compatibility
                 player_earnings_value = total_gems / 1000.0  # Convert gems to USD equivalent
@@ -1907,22 +1969,26 @@ async def save_session_stats(room_code: str, state: dict, current_user: Optional
                     # CRITICAL FIX: Convert string UUID to UUID object for SQL comparison
                     try:
                         mapped_user_uuid = uuid_lib.UUID(mapped_user_id_str)
+                        print(f"     ✅ UUID conversion successful: {mapped_user_uuid}")
                     except (ValueError, AttributeError) as uuid_err:
-                        print(f"❌ Invalid UUID format for player {player_id}: {mapped_user_id_str}, error: {uuid_err}")
+                        print(f"     ❌ Invalid UUID format: {mapped_user_id_str}, error: {uuid_err}")
                         continue
                     
+                    print(f"     🔍 Querying database for user {mapped_user_uuid}...")
                     user_result = await db.execute(
                         sql_select(User).where(User.id == mapped_user_uuid)
                     )
                     db_user = user_result.scalar_one_or_none()
                     
                     if not db_user:
-                        print(f"❌ User with UUID {mapped_user_uuid} not found in database")
+                        print(f"     ❌ User with UUID {mapped_user_uuid} not found in database")
                         continue
+                    
+                    print(f"     ✅ User found: {db_user.user_id}, current balance: {db_user.gem_balance} gems")
                     
                     # Skip debug mode games
                     if is_debug_mode:
-                        print(f"🐛 Debug mode - skipping gem credit for {player_id}")
+                        print(f"     🐛 Debug mode - skipping gem credit for {player_id}")
                         continue
                     
                     # Use calculated gems from reward system
@@ -1940,6 +2006,10 @@ async def save_session_stats(room_code: str, state: dict, current_user: Optional
                     # Note: Stakes were already deducted at game start
                     # This credits back base gems + any stake winnings (or just base if lost stakes)
                     old_balance = db_user.gem_balance
+                    old_total_earned = db_user.total_gems_earned
+                    old_total_games = db_user.total_games
+                    
+                    print(f"     💰 Crediting gems to user...")
                     db_user.gem_balance += gems_earned
                     
                     # Only add to total_gems_earned if positive (don't count stake losses)
@@ -1948,10 +2018,11 @@ async def save_session_stats(room_code: str, state: dict, current_user: Optional
                     
                     db_user.total_games += 1  # INCREMENT TOTAL GAMES COUNTER
                     
-                    print(f"💎 Credited {gems_earned} gems to user {db_user.user_id}")
-                    print(f"   Balance: {old_balance} → {db_user.gem_balance} gems")
-                    print(f"   Total games played: {db_user.total_games}")
-                    print(f"   Breakdown - Base: {base_gems}, Stakes: {stake_gems}")
+                    print(f"     ✅ Gems credited successfully to user {db_user.user_id}")
+                    print(f"        Balance: {old_balance} → {db_user.gem_balance} gems ({gems_earned:+d})")
+                    print(f"        Total earned: {old_total_earned} → {db_user.total_gems_earned}")
+                    print(f"        Total games: {old_total_games} → {db_user.total_games}")
+                    print(f"        Breakdown - Base: {base_gems}, Stakes: {stake_gems}")
                     
                     # Update RoomStake record with final amounts (if exists)
                     stake_result = await db.execute(
@@ -2005,13 +2076,23 @@ async def save_session_stats(room_code: str, state: dict, current_user: Optional
                         print(f"📊 Session calculated_earnings set to ${calculated_earnings_value} ({gems_earned} gems total) for player {player_id}")
                         
                 except Exception as e:
-                    print(f"❌ Error crediting gems to player {player_id} (user {mapped_user_id_str}): {e}")
-                    print(f"   Stack trace: {traceback.format_exc()}")
+                    print(f"     ❌ ERROR crediting gems to player {player_id} (user {mapped_user_id_str})")
+                    print(f"        Error type: {type(e).__name__}")
+                    print(f"        Error message: {e}")
+                    print(f"        Stack trace:")
+                    print(traceback.format_exc())
+                    # Continue to next player - don't let one player's error stop the whole session save
                     continue
             
-            print(f"✅ Gem credit complete: {len(credited_players)}/{len(player_user_map)} players credited")
+            print(f"=" * 80)
+            print(f"✅ Gem credit phase complete")
+            print(f"   Credited players: {len(credited_players)}/{len(player_user_map)}")
+            if credited_players:
+                print(f"   Successfully credited: {[p['player_id'] for p in credited_players]}")
+            print(f"=" * 80)
             
             # Build session data dict
+            print(f"💾 Building session record...")
             session_data = {
                 "id": session_id,
                 "room_code": room_code,
@@ -2059,10 +2140,17 @@ async def save_session_stats(room_code: str, state: dict, current_user: Optional
                 session_data["mturk_hit_id"] = mturk_context.get('hit_id')
                 print(f"💼 MTurk context saved: worker={mturk_context.get('worker_id')}, assignment={mturk_context.get('assignment_id')}")
             
+            print(f"   Session ID: {session_id}")
+            print(f"   Room: {room_code}")
+            print(f"   Players: {num_humans} human(s), {total_players} total")
+            print(f"   Duration: {discussion_duration}s discussion, {voting_duration}s voting")
+            
             db_session = DBSession(**session_data)
             db.add(db_session)
+            print(f"✅ Session record created and added to transaction")
             
             # Save per-agent token usage
+            print(f"💾 Saving AI agent usage records ({len(agent_token_usage)} agents)...")
             for agent_id, usage in agent_token_usage.items():
                 agent_cost = calculate_cost(
                     usage.get('input', 0),
@@ -2079,31 +2167,35 @@ async def save_session_stats(room_code: str, state: dict, current_user: Optional
                 )
                 db.add(agent_usage_record)
             
+            print(f"✅ AI agent usage records added")
+            
             # Save player-user mappings
             from .database import SessionPlayer
             player_user_map = room_data.get('player_user_map', {})
             
-            print(f"👥 Saving player-user mappings...")
-            print(f"📋 player_user_map from room_data: {player_user_map}")
-            print(f"👥 state['players']: {[p['id'] + ' (' + p['role'] + ')' for p in state.get('players', [])]}")
+            print(f"=" * 80)
+            print(f"👥 Creating SessionPlayer records...")
+            print(f"   player_user_map: {player_user_map}")
+            print(f"   state['players']: {[p['id'] + ' (' + p['role'] + ')' for p in state.get('players', [])]}")
             
+            session_players_created = 0
             for player in state.get('players', []):
                 player_id = player['id']
                 role = player['role']
                 mapped_user_id = player_user_map.get(player_id)
                 
-                print(f"🔍 Processing player {player_id} ({role}): mapped_user_id = {mapped_user_id}")
+                print(f"   🔹 Player {player_id} ({role}): mapped_user_id = {mapped_user_id}")
                 
                 # Convert user_id string to UUID if present
                 user_uuid = None
                 if mapped_user_id:
                     try:
                         user_uuid = uuid_lib.UUID(mapped_user_id)
-                        print(f"✅ Mapped {player_id} ({role}) -> user {user_uuid}")
+                        print(f"      ✅ Mapped to user {user_uuid}")
                     except (ValueError, AttributeError) as e:
-                        print(f"⚠️ Invalid user_id format for player {player_id}: {mapped_user_id}, error: {e}")
+                        print(f"      ⚠️ Invalid user_id format: {mapped_user_id}, error: {e}")
                 else:
-                    print(f"ℹ️  {player_id} ({role}) -> No user mapping (anonymous)")
+                    print(f"      ℹ️  No user mapping (anonymous or AI)")
                 
                 session_player = SessionPlayer(
                     session_id=session_id,
@@ -2112,15 +2204,41 @@ async def save_session_stats(room_code: str, state: dict, current_user: Optional
                     role=role
                 )
                 db.add(session_player)
-                print(f"💾 SessionPlayer added to DB: {player_id}, user_id={user_uuid}")
+                session_players_created += 1
+                print(f"      💾 SessionPlayer record added (user_id={user_uuid})")
             
+            print(f"✅ {session_players_created} SessionPlayer records created")
+            
+            # CRITICAL: Commit all changes (Session, AIAgentUsage, SessionPlayer, User gem balances)
+            print(f"💾 Committing transaction to database...")
             await db.commit()
-            print(f"✅ Session saved to database with ID: {session_id}")
+            print(f"=" * 80)
+            print(f"✅ ✅ ✅ SESSION SAVED SUCCESSFULLY ✅ ✅ ✅")
+            print(f"   Session ID: {session_id}")
+            print(f"   Room: {room_code}")
+            print(f"   Players credited: {len(credited_players)}/{len(player_user_map)}")
+            print(f"   File saved: {path}")
+            print(f"=" * 80)
     except Exception as e:
-        print(f"⚠️  Error saving session to database: {e}")
+        print(f"=" * 80)
+        print(f"❌ ❌ ❌ CRITICAL ERROR: Failed to save session to database ❌ ❌ ❌")
+        print(f"   Room: {room_code}")
+        print(f"   Error: {e}")
+        print(f"=" * 80)
         import traceback
         traceback.print_exc()
-        # Don't fail the game completion if database save fails
+        
+        # Try to rollback the failed transaction
+        try:
+            await db.rollback()
+            print(f"✅ Transaction rolled back successfully")
+        except Exception as rollback_error:
+            print(f"❌ Failed to rollback transaction: {rollback_error}")
+        
+        # RE-RAISE THE EXCEPTION to surface the actual error
+        # This will help us identify what's breaking
+        print(f"🔄 Re-raising exception to surface the error...")
+        raise
     
     # Add completion key to payload
     payload['completion_key'] = completion_key

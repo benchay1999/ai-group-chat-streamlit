@@ -23,6 +23,35 @@ const ChatWindow = ({ chat, typing, currentPlayerId }) => {
       )}
 
       {chat.map((msg, idx) => {
+        // Handle system messages differently
+        if (msg.isSystem) {
+          const severityColors = {
+            error: 'from-red-500 to-red-600 text-white',
+            warning: 'from-yellow-500 to-yellow-600 text-white',
+            info: 'from-blue-500 to-blue-600 text-white',
+          };
+          const bgGradient = severityColors[msg.severity] || severityColors.info;
+          
+          return (
+            <div
+              key={idx}
+              className="flex justify-center animate-fade-in"
+            >
+              <div
+                className={`max-w-2xl rounded-lg p-4 shadow-lg bg-gradient-to-r ${bgGradient} border-2 border-white border-opacity-50`}
+              >
+                <p className="text-xs font-bold mb-2 uppercase tracking-wide opacity-90">
+                  {msg.sender}
+                </p>
+                <p className="text-sm leading-relaxed font-medium">
+                  {msg.message}
+                </p>
+              </div>
+            </div>
+          );
+        }
+        
+        // Handle regular player messages
         const isCurrentPlayer = msg.sender === currentPlayerId;
         const playerColor = getPlayerColor(msg.sender);
         return (

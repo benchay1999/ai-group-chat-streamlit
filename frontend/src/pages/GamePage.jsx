@@ -164,6 +164,26 @@ const GamePage = () => {
         handleLeave();
         break;
 
+      case 'system_message':
+        // Display system/error messages in chat
+        setGameState(prev => ({
+          ...prev,
+          chat: [...prev.chat, { 
+            sender: '⚠️ SYSTEM', 
+            message: data.message,
+            isSystem: true,
+            severity: data.severity || 'info'
+          }],
+        }));
+        
+        // Also show as toast based on severity
+        if (data.severity === 'error') {
+          toast.error(data.message);
+        } else {
+          toast.info(data.message);
+        }
+        break;
+
       default:
         console.log('Unknown message type:', type);
     }
