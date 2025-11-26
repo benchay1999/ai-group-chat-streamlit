@@ -21,8 +21,12 @@ const GameOver = ({ winner, suspect, suspectRole, voteCountsDisplay, onLeave, ro
   const isHumanWin = winner === 'human';  // For single-human games
   const isPlayerWin = !isTie && !isTeamWin;  // Specific player won (multi-human)
   
-  // Get gem reward for this player (can be negative for losses)
-  const playerGemReward = gemRewards && playerId ? (gemRewards[playerId] || 0) : null;
+  // Get gem reward breakdown for this player
+  const playerRewardData = gemRewards && playerId ? gemRewards[playerId] : null;
+  const baseGems = playerRewardData?.base_gems || 0;
+  const stakeChange = playerRewardData?.stake_gems || 0;  // Net stake change (can be negative)
+  const totalCredited = playerRewardData?.total_gems || 0;  // What's actually credited
+  const netChange = playerRewardData?.net_change || totalCredited;  // Net from game start
   
   const [gamificationData, setGamificationData] = useState(null);
   const [showPoints, setShowPoints] = useState(false);
@@ -116,30 +120,50 @@ const GameOver = ({ winner, suspect, suspectRole, voteCountsDisplay, onLeave, ro
             )}
           </div>
 
-          {/* Gem Reward Display */}
-          {user && playerGemReward !== null && (
+          {/* Gem Reward Display with Breakdown */}
+          {user && playerRewardData && (
             <div className={`rounded-lg p-6 mb-6 border-2 ${
-              playerGemReward >= 0 
+              netChange >= 0 
                 ? 'bg-gradient-to-r from-green-50 to-emerald-50 border-green-300'
-                : 'bg-gradient-to-r from-red-50 to-rose-50 border-red-300'
+                : 'bg-gradient-to-r from-red-50 to-rose-50 border-2 border-red-300'
             }`}>
               <div className="text-center">
-                <div className="flex items-center justify-center gap-2 mb-2">
-                  <Coins className={`w-6 h-6 ${playerGemReward >= 0 ? 'text-green-600' : 'text-red-600'}`} />
+                <div className="flex items-center justify-center gap-2 mb-3">
+                  <Coins className={`w-6 h-6 ${netChange >= 0 ? 'text-green-600' : 'text-red-600'}`} />
                   <h3 className="text-lg font-bold text-gray-700">
-                    {playerGemReward >= 0 ? 'Gems Earned' : 'Gems Lost'}
+                    {netChange >= 0 ? 'Gems Earned' : 'Gems Lost'}
                   </h3>
                 </div>
-                <div className={`text-4xl font-bold ${playerGemReward >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                  {playerGemReward >= 0 ? '+' : ''}{playerGemReward} gems
+                
+                {/* Net Change from Game Start to End */}
+                <div className={`text-4xl font-bold mb-4 ${netChange >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                  {netChange >= 0 ? '+' : ''}{netChange} gems
                 </div>
-                <p className="text-sm text-gray-600 mt-2">
-                  {playerGemReward >= 0 
-                    ? 'Added to your wallet!' 
-                    : 'Stakes lost this game'}
-                </p>
-                <p className="text-xs text-gray-500 mt-1">
-                  View detailed breakdown in Dashboard
+                
+                {/* Detailed Breakdown */}
+                <div className="bg-white bg-opacity-60 rounded-lg p-4 space-y-2">
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-gray-700 font-medium">Base Reward:</span>
+                    <span className="text-green-700 font-bold">+{baseGems} gems</span>
+                  </div>
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-gray-700 font-medium">Stakes Won/Lost:</span>
+                    <span className={`font-bold ${stakeChange >= 0 ? 'text-green-700' : 'text-red-700'}`}>
+                      {stakeChange >= 0 ? '+' : ''}{stakeChange} gems
+                    </span>
+                  </div>
+                  <div className="border-t-2 border-gray-300 pt-2 flex items-center justify-between font-bold">
+                    <span className="text-gray-800">Net Total:</span>
+                    <span className={netChange >= 0 ? 'text-green-600' : 'text-red-600'}>
+                      {netChange >= 0 ? '+' : ''}{netChange} gems
+                    </span>
+                  </div>
+                </div>
+                
+                <p className="text-xs text-gray-500 mt-3">
+                  {netChange >= 0 
+                    ? 'Total added to your wallet from this game' 
+                    : 'Net change from game start to finish'}
                 </p>
               </div>
             </div>

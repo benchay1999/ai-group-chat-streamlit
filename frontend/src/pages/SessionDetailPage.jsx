@@ -159,27 +159,22 @@ const SessionDetailPage = () => {
           </div>
         </div>
 
-        {/* Gem Reward Card */}
+        {/* Gem Reward Card with Breakdown */}
         {session.gem_earned !== null && session.gem_earned !== undefined && (
           <div className={`rounded-lg shadow p-6 mb-8 ${
             session.gem_earned >= 0 
               ? 'bg-gradient-to-r from-green-50 to-emerald-50 border-2 border-green-300'
               : 'bg-gradient-to-r from-red-50 to-rose-50 border-2 border-red-300'
           }`}>
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600 mb-1">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex-1">
+                <p className="text-sm font-medium text-gray-600 mb-2">
                   {session.gem_earned >= 0 ? 'Gems Earned' : 'Gems Lost'}
                 </p>
                 <p className={`text-4xl font-bold ${
                   session.gem_earned >= 0 ? 'text-green-600' : 'text-red-600'
                 }`}>
                   {session.gem_earned >= 0 ? '+' : ''}{session.gem_earned} gems
-                </p>
-                <p className="text-sm text-gray-600 mt-2">
-                  {session.gem_earned >= 0 
-                    ? 'You won this game!' 
-                    : 'Stakes lost in this game'}
                 </p>
               </div>
               <div className={`w-16 h-16 rounded-full flex items-center justify-center ${
@@ -188,6 +183,35 @@ const SessionDetailPage = () => {
                 <span className="text-3xl">{session.gem_earned >= 0 ? '💎' : '💔'}</span>
               </div>
             </div>
+            
+            {/* Breakdown if available */}
+            {session.gem_breakdown && (
+              <div className="bg-white bg-opacity-60 rounded-lg p-4 space-y-2 mt-3">
+                <p className="text-xs font-semibold text-gray-600 uppercase mb-2">Breakdown</p>
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-gray-700">Base Reward:</span>
+                  <span className="text-green-700 font-bold">+{session.gem_breakdown.base_gems} gems</span>
+                </div>
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-gray-700">Stakes Won/Lost:</span>
+                  <span className={`font-bold ${session.gem_breakdown.stake_gems >= 0 ? 'text-green-700' : 'text-red-700'}`}>
+                    {session.gem_breakdown.stake_gems >= 0 ? '+' : ''}{session.gem_breakdown.stake_gems} gems
+                  </span>
+                </div>
+                <div className="border-t-2 border-gray-300 pt-2 flex items-center justify-between font-bold">
+                  <span className="text-gray-800">Net Change:</span>
+                  <span className={session.gem_breakdown.net_change >= 0 ? 'text-green-600' : 'text-red-600'}>
+                    {session.gem_breakdown.net_change >= 0 ? '+' : ''}{session.gem_breakdown.net_change} gems
+                  </span>
+                </div>
+              </div>
+            )}
+            
+            <p className="text-sm text-gray-600 mt-3">
+              {session.gem_earned >= 0 
+                ? 'You won this game!' 
+                : 'Stakes lost in this game'}
+            </p>
           </div>
         )}
 

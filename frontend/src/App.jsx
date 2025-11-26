@@ -24,6 +24,7 @@ import ProfilePage from './pages/ProfilePage';
 import Wallet from './components/Wallet';
 import CashoutConfirm from './pages/CashoutConfirm';
 import LeaderboardPage from './pages/LeaderboardPage';
+import GemsInfoPage from './pages/GemsInfoPage';
 
 function App() {
   return (
@@ -37,6 +38,7 @@ function App() {
               <Route path="/" element={<Navigate to="/lobby" replace />} />
               <Route path="/lobby" element={<LobbyPage />} />
               <Route path="/leaderboard" element={<LeaderboardPage />} />
+              <Route path="/gems-info" element={<GemsInfoPage />} />
               <Route path="/join" element={<JoinPage />} />
               <Route path="/waiting" element={<WaitingPage />} />
               <Route path="/game" element={<GamePage />} />

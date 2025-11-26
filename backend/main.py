@@ -1078,9 +1078,10 @@ async def calculate_game_rewards(
         rewards[player_id]['votes_received'] = vote_counts.get(player_id, 0)
     
     if num_humans == 1:
-        # SINGLE-HUMAN GAME: Simple winner-takes-all
-        # Winner = player with most votes
-        # Reward: 50 gems (no stakes in single-human games)
+        # SINGLE-HUMAN GAME: Participation-based
+        # Everyone gets base gems (participation fee)
+        # Winner is tracked but doesn't affect rewards
+        # No stakes in single-human games
         
         if vote_counts:
             max_votes = max(vote_counts.values())
@@ -1088,17 +1089,14 @@ async def calculate_game_rewards(
         else:
             winners = []
         
+        # Everyone gets base gems (participation fee)
         for player_id in human_player_ids:
-            if player_id in winners:
-                rewards[player_id]['base_gems'] = 50
-                rewards[player_id]['total_gems'] = 50
-                rewards[player_id]['is_winner'] = True
-            else:
-                # Losers get 0 in single-human games
-                rewards[player_id]['base_gems'] = 0
-                rewards[player_id]['total_gems'] = 0
+            rewards[player_id]['base_gems'] = 50
+            rewards[player_id]['stake_gems'] = 0  # No stakes
+            rewards[player_id]['total_gems'] = 50
+            rewards[player_id]['is_winner'] = (player_id in winners)  # Track winner for display
         
-        print(f"💎 Single-human game rewards: {rewards}")
+        print(f"💎 Single-human game rewards (participation-based): {rewards}")
         
     else:
         # MULTI-HUMAN GAME: Complex with partial credit
@@ -1121,64 +1119,65 @@ async def calculate_game_rewards(
         player_stakes = room_data.get('player_stakes', {})
         
         if stake_percentage > 0 and player_stakes:
-            # Calculate minimum stake (what each loser contributes)
+            # Calculate minimum stake (what each player risked)
             minimum_stake = room_data.get('minimum_stake', 0)
             
-            # Total pot = minimum_stake * (num_humans - num_winners)
-            # If there are ties, winners split the pot
             num_winners = len(top_voted_players)
             num_losers = num_humans - num_winners
             
             if num_winners > 0 and num_losers > 0:
-                total_pot = minimum_stake * num_losers
-                base_pot_per_winner = total_pot / num_winners
+                # NEW LOGIC: Ensures winners never lose gems
+                # Step 1: All winners get their stakes back (guaranteed refund)
+                # Step 2: Loser stakes are pooled and split equally among winners
+                # Step 3: Each winner gets (accuracy%) of their share
+                
+                loser_stakes_pool = minimum_stake * num_losers
+                max_share_per_winner = loser_stakes_pool / num_winners  # Equal division ceiling
+                
+                print(f"💎 Stake distribution:")
+                print(f"   Loser pool: {loser_stakes_pool} gems ({num_losers} losers × {minimum_stake})")
+                print(f"   Max per winner: {max_share_per_winner} gems ({num_winners} winners)")
                 
                 # For each winner, calculate identification accuracy
+                total_distributed = 0
                 for winner_id in top_voted_players:
                     votes_needed = num_humans - 1
                     winner_votes = state['votes'].get(winner_id, [])
                     if not isinstance(winner_votes, list):
                         winner_votes = [winner_votes] if winner_votes else []
                     
-                    # Calculate correct identifications
+                    # Calculate correct identifications (voted for other humans, not self)
                     correct_identifications = sum(1 for v in winner_votes if v in human_player_ids and v != winner_id)
                     accuracy = correct_identifications / votes_needed if votes_needed > 0 else 0.0
                     
-                    # Winner gets: their stake back + (accuracy%) * (their share of pot from losers)
-                    stake_winnings = int(accuracy * base_pot_per_winner)
-                    stake_reward = minimum_stake + stake_winnings  # Refund + winnings
+                    # Winner gets:
+                    # 1. Their stake back (guaranteed)
+                    # 2. (accuracy%) * (their equal share of loser pool)
+                    stake_refund = minimum_stake
+                    stake_winnings = int(accuracy * max_share_per_winner)
+                    total_stake_reward = stake_refund + stake_winnings
                     
                     rewards[winner_id]['identification_accuracy'] = accuracy
-                    rewards[winner_id]['stake_gems'] = stake_reward
+                    rewards[winner_id]['stake_gems'] = total_stake_reward
                     rewards[winner_id]['is_winner'] = True
                     
-                    print(f"💎 Winner {winner_id}: {correct_identifications}/{votes_needed} correct ({accuracy*100:.1f}%), wins {stake_winnings} gems (+ {minimum_stake} refund = {stake_reward} total)")
-                
-                # Calculate total stakes collected from pot (excluding refunds)
-                # total_stakes_distributed = winnings only, not including refunds
-                total_stakes_distributed_from_pot = sum(rewards[w]['stake_gems'] - minimum_stake for w in top_voted_players)
-                uncollected_stakes = total_pot - total_stakes_distributed_from_pot
-                
-                # Return uncollected stakes to losers proportionally
-                loser_ids = [pid for pid in human_player_ids if pid not in top_voted_players]
-                if uncollected_stakes > 0 and loser_ids:
-                    # Calculate each loser's original stake
-                    total_loser_stakes = sum(player_stakes.get(lid, minimum_stake) for lid in loser_ids)
+                    total_distributed += stake_winnings
                     
-                    for loser_id in loser_ids:
-                        loser_stake = player_stakes.get(loser_id, minimum_stake)
-                        proportion = loser_stake / total_loser_stakes if total_loser_stakes > 0 else 1.0 / len(loser_ids)
-                        returned_amount = int(proportion * uncollected_stakes)
-                        
-                        # Loser gets partial refund from uncollected stakes
-                        rewards[loser_id]['stake_gems'] = returned_amount
-                        net_loss = minimum_stake - returned_amount
-                        
-                        print(f"💎 Loser {loser_id}: Lost {minimum_stake} gems, returned {returned_amount} gems (net loss: -{net_loss})")
-                else:
-                    # No uncollected stakes, losers get nothing back
-                    for loser_id in loser_ids:
-                        rewards[loser_id]['stake_gems'] = 0
+                    print(f"   Winner {winner_id}:")
+                    print(f"     Accuracy: {correct_identifications}/{votes_needed} = {accuracy*100:.1f}%")
+                    print(f"     Refund: {stake_refund} gems (guaranteed)")
+                    print(f"     Winnings: {stake_winnings} gems ({accuracy*100:.1f}% of {max_share_per_winner})")
+                    print(f"     Total: {total_stake_reward} gems")
+                
+                # Calculate residual (goes to house)
+                residual = loser_stakes_pool - total_distributed
+                print(f"   Residual to house: {residual} gems")
+                
+                # Losers get NOTHING back
+                loser_ids = [pid for pid in human_player_ids if pid not in top_voted_players]
+                for loser_id in loser_ids:
+                    rewards[loser_id]['stake_gems'] = 0  # Get nothing back
+                    print(f"   Loser {loser_id}: Lost {minimum_stake} gems, returned 0 gems")
             elif num_winners > 0 and num_losers == 0:
                 # Everyone tied - no stakes change hands, refund stakes to everyone
                 # Since stakes were deducted at game start, we need to credit them back
@@ -1308,6 +1307,10 @@ async def complete_voting(room_code: str):
     state['phase'] = Phase.GAME_OVER
     rooms[room_code]['state'] = state
     
+    # CRITICAL: Mark room as completed so it doesn't count as "operating"
+    rooms[room_code]['room_status'] = 'completed'
+    print(f"✅ Room {room_code} marked as COMPLETED")
+    
     # Broadcast voting result
     await broadcast_to_room(room_code, {
         "type": "voting_result",
@@ -1330,18 +1333,36 @@ async def complete_voting(room_code: str):
     try:
         # Calculate gem rewards before saving (we need this for frontend display)
         room_data = rooms.get(room_code, {})
+        minimum_stake = room_data.get('minimum_stake', 0)
+        
         from .database import async_session_maker
         async with async_session_maker() as db:
             rewards = await calculate_game_rewards(room_code, room_data, state, db)
-            # Extract total gems for each player
+            # Extract full breakdown for each player
+            # For display: show stake change relative to what was deducted at game start
             for player_id, reward_data in rewards.items():
-                gem_rewards[player_id] = reward_data.get('total_gems', 0)
+                stake_gems_credited = reward_data.get('stake_gems', 0)
+                
+                # Calculate stake display value (net change from game start)
+                # Losers: got 0 back, lost minimum_stake → display -minimum_stake
+                # Winners: got refund + winnings → display stake_gems_credited - minimum_stake
+                stake_display = stake_gems_credited - minimum_stake if minimum_stake > 0 else stake_gems_credited
+                
+                gem_rewards[player_id] = {
+                    'base_gems': reward_data.get('base_gems', 0),
+                    'stake_gems': stake_display,  # Net change (can be negative)
+                    'stake_deducted': minimum_stake,  # What was taken at start
+                    'stake_returned': stake_gems_credited,  # What came back at end
+                    'total_gems': reward_data.get('total_gems', 0),  # What's credited
+                    'net_change': reward_data.get('total_gems', 0) - minimum_stake,  # True net from start to end
+                    'is_winner': reward_data.get('is_winner', False)
+                }
         
         # Now save the session (which will credit the gems)
         await save_session_stats(room_code, state)
         
-        # Broadcast gem rewards to players
-        print(f"💎 Broadcasting gem rewards: {gem_rewards}")
+        # Broadcast gem rewards to players with full breakdown
+        print(f"💎 Broadcasting gem rewards breakdown: {gem_rewards}")
         await broadcast_to_room(room_code, {
             "type": "gem_rewards",
             "rewards": gem_rewards
@@ -2189,11 +2210,26 @@ async def save_session_stats(room_code: str, state: dict, current_user: Optional
                 print(f"   Successfully credited: {[p['player_id'] for p in credited_players]}")
             print(f"=" * 80)
             
-            # Update payload with gem rewards (for JSON file storage)
-            payload['gem_rewards'] = {
-                player_id: rewards.get(player_id, {}).get('total_gems', 0)
-                for player_id in [p['id'] for p in state.get('players', []) if p['role'] == 'human']
-            }
+            # Update payload with gem rewards (for JSON file storage) - FULL BREAKDOWN
+            payload['gem_rewards'] = {}
+            for player_id in [p['id'] for p in state.get('players', []) if p['role'] == 'human']:
+                reward = rewards.get(player_id, {})
+                stake_returned = reward.get('stake_gems', 0)
+                
+                # Calculate display values
+                stake_display = stake_returned - minimum_stake if minimum_stake > 0 else stake_returned
+                total_gems = reward.get('total_gems', 0)
+                net_change = total_gems - minimum_stake if minimum_stake > 0 else total_gems
+                
+                payload['gem_rewards'][player_id] = {
+                    'base_gems': reward.get('base_gems', 0),
+                    'stake_gems': stake_display,  # Net stake change (negative for losers)
+                    'stake_deducted': minimum_stake,  # What was taken at start
+                    'stake_returned': stake_returned,  # What came back at end
+                    'total_gems': total_gems,  # What's credited
+                    'net_change': net_change,  # True net from start to end
+                    'is_winner': reward.get('is_winner', False)
+                }
             payload['credited_players'] = credited_players  # Store detailed credit info
             
             # Build session data dict
@@ -3608,17 +3644,42 @@ async def get_user_earnings(
                 print(f"   Session {idx}: {actual_gems} gems (estimated from average)")
         
         if idx == 0:  # Most recent game
-            last_game_gems = actual_gems
-            print(f"✅ Last game gems set to: {last_game_gems}")
+            last_game_gems = display_amount  # Use net_change for accurate display
+            print(f"✅ Last game gems set to: {last_game_gems} (net change)")
         
         # Track highest EARNING (not loss)
         if actual_gems > highest_earning_gems:
             highest_earning_gems = actual_gems
         
+        # For chart display, use net_change if available (accounts for stake deduction)
+        # Try to get net_change from the gem_rewards data
+        display_amount = actual_gems
+        try:
+            if session.stats_file_path and os.path.exists(session.stats_file_path):
+                with open(session.stats_file_path, 'r') as f:
+                    stats_data = json.load(f)
+                    gem_rewards = stats_data.get('gem_rewards', {})
+                    
+                    # Find user's player
+                    from .database import SessionPlayer
+                    player_result = await db.execute(
+                        select(SessionPlayer).where(
+                            SessionPlayer.session_id == session.id,
+                            SessionPlayer.user_id == current_user.id
+                        )
+                    )
+                    user_player = player_result.scalar_one_or_none()
+                    if user_player and user_player.player_id in gem_rewards:
+                        reward_data = gem_rewards[user_player.player_id]
+                        if isinstance(reward_data, dict) and 'net_change' in reward_data:
+                            display_amount = reward_data['net_change']
+        except Exception:
+            pass  # Use actual_gems as fallback
+        
         # Store sessions with gem amounts for trend chart (can be negative)
         recent_sessions.append({
             "date": session.completed_at.isoformat(),
-            "amount": actual_gems,  # Can be negative for losses
+            "amount": display_amount,  # Net change from game start (can be negative)
             "status": "completed"
         })
     
@@ -4377,7 +4438,13 @@ async def list_sessions(
                     )
                     user_player = player_result.scalar_one_or_none()
                     if user_player and user_player.player_id in gem_rewards:
-                        session_data["gem_earned"] = gem_rewards[user_player.player_id]
+                        reward_data = gem_rewards[user_player.player_id]
+                        # Handle both old format (number) and new format (dict with breakdown)
+                        if isinstance(reward_data, dict):
+                            # Use net_change for accurate display (accounts for stake deduction)
+                            session_data["gem_earned"] = reward_data.get('net_change', reward_data.get('total_gems', 0))
+                        else:
+                            session_data["gem_earned"] = reward_data  # Old format
         except Exception as gem_load_error:
             print(f"⚠️ Could not load gem_earned for session {s.id}: {gem_load_error}")
         
@@ -4517,13 +4584,20 @@ async def get_session_detail(
         except Exception as e:
             print(f"Error getting player mappings: {e}")
     
-    # Get gem earned for this specific user
+    # Get gem earned for this specific user (full breakdown)
     gem_earned = None
+    gem_breakdown = None
     if current_user_player_id and stats_data:
         gem_rewards = stats_data.get('gem_rewards', {})
         if current_user_player_id in gem_rewards:
-            gem_earned = gem_rewards[current_user_player_id]
-            print(f"💎 User {current_user.user_id} earned {gem_earned} gems as {current_user_player_id}")
+            reward_data = gem_rewards[current_user_player_id]
+            # Handle both old format (just number) and new format (breakdown)
+            if isinstance(reward_data, dict):
+                gem_breakdown = reward_data
+                gem_earned = reward_data.get('net_change', reward_data.get('total_gems', 0))  # Use net_change for display
+            else:
+                gem_earned = reward_data  # Old format (just a number)
+            print(f"💎 User {current_user.user_id} net change: {gem_earned} gems as {current_user_player_id}")
     
     return {
         "id": str(session.id),
@@ -4549,7 +4623,8 @@ async def get_session_detail(
         "mturk_bonus_sent": bool(session.mturk_bonus_sent),
         # Gem economy information
         "calculated_earnings": float(session.calculated_earnings) if session.calculated_earnings else None,
-        "gem_earned": gem_earned  # Actual gems won/lost (can be negative)
+        "gem_earned": gem_earned,  # Actual gems won/lost (can be negative)
+        "gem_breakdown": gem_breakdown  # Full breakdown: base_gems, stake_gems, total_gems
     }
 
 
@@ -4769,23 +4844,43 @@ async def get_admin_room_stats(
     Returns:
         Room operation statistics including solo-human and multi-human breakdowns
     """
-    in_progress_rooms = []
+    # Count rooms that are actually operating (in_progress or waiting with players)
+    operating_rooms = []
     for room_code, room_data in rooms.items():
-        if room_data.get('room_status') == 'in_progress':
-            in_progress_rooms.append({
+        room_status = room_data.get('room_status', '')
+        
+        # Only count rooms that are truly active
+        # in_progress = game is running
+        # waiting = game hasn't started but has players
+        if room_status == 'in_progress':
+            operating_rooms.append({
                 'room_code': room_code,
                 'max_humans': room_data.get('max_humans'),
-                'total_players': room_data.get('total_players')
+                'total_players': room_data.get('total_players'),
+                'status': room_status
             })
+        elif room_status == 'waiting':
+            # Only count waiting rooms that have at least 1 player
+            assigned_humans = room_data.get('assigned_humans', [])
+            if len(assigned_humans) > 0:
+                operating_rooms.append({
+                    'room_code': room_code,
+                    'max_humans': room_data.get('max_humans'),
+                    'total_players': room_data.get('total_players'),
+                    'status': room_status
+                })
     
     # Count solo-human rooms (max_humans == 1)
-    solo_human_count = len([r for r in in_progress_rooms if r['max_humans'] == 1])
-    total_operating = len(in_progress_rooms)
+    solo_human_count = len([r for r in operating_rooms if r['max_humans'] == 1])
+    total_operating = len(operating_rooms)
+    
+    print(f"📊 Admin room stats: {total_operating} operating ({solo_human_count} solo, {total_operating - solo_human_count} multi)")
     
     return {
         "total_operating": total_operating,
         "solo_human_count": solo_human_count,
-        "multi_human_count": total_operating - solo_human_count
+        "multi_human_count": total_operating - solo_human_count,
+        "rooms": operating_rooms  # For debugging
     }
 
 

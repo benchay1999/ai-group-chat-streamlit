@@ -11,7 +11,7 @@ import { sessionsAPI } from '../services/sessionsAPI';
 import { format } from 'date-fns';
 import { 
   ExternalLink, DollarSign, 
-  TrendingUp, Zap, Star, Sparkles, Award, Gem, Wallet, AlertCircle, ArrowRight, Clock, Check
+  TrendingUp, Zap, Star, Sparkles, Award, Gem, Wallet, AlertCircle, ArrowRight, Clock, Check, Coins
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../services/api';
@@ -288,14 +288,23 @@ const DashboardPage = () => {
 
             {/* Call to Action */}
             <div className="text-center">
-              <Link
-                to="/lobby"
-                className="inline-flex items-center gap-3 px-10 py-5 bg-gradient-to-r from-green-500 via-cyan-500 to-blue-500 text-white rounded-xl font-bold text-xl hover:from-green-600 hover:via-cyan-600 hover:to-blue-600 transition-all transform hover:scale-105 shadow-2xl animate-pulse-glow"
-              >
-                <DollarSign className="w-6 h-6" />
-                Earn More
-                <Sparkles className="w-6 h-6" />
-              </Link>
+              <div className="flex items-center justify-center gap-4 flex-wrap">
+                <Link
+                  to="/gems-info"
+                  className="inline-flex items-center gap-2 px-6 py-3 bg-purple-600 text-white rounded-lg font-semibold hover:bg-purple-700 transition-all transform hover:scale-105 shadow-lg"
+                >
+                  <Coins className="w-5 h-5" />
+                  How Gems Work
+                </Link>
+                <Link
+                  to="/lobby"
+                  className="inline-flex items-center gap-3 px-10 py-5 bg-gradient-to-r from-green-500 via-cyan-500 to-blue-500 text-white rounded-xl font-bold text-xl hover:from-green-600 hover:via-cyan-600 hover:to-blue-600 transition-all transform hover:scale-105 shadow-2xl animate-pulse-glow"
+                >
+                  <DollarSign className="w-6 h-6" />
+                  Earn More
+                  <Sparkles className="w-6 h-6" />
+                </Link>
+              </div>
               <p className="text-sm text-gray-400 mt-3">
                 Play games to increase your earnings
               </p>
