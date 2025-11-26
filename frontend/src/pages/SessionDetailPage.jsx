@@ -64,6 +64,31 @@ const SessionDetailPage = () => {
   const voteCounts = stats.vote_counts || {};
   const players = stats.players || [];
 
+  // Prepare display history with gem summary
+  const displayHistory = [...chatHistory];
+  
+  // Inject Gem Summary if available
+  if (session.gem_rewards && Object.keys(session.gem_rewards).length > 0) {
+    const gemSummaryLines = Object.entries(session.gem_rewards).map(([pid, data]) => {
+      // Support both new format (net_change) and old format (total_gems)
+      const amount = data.net_change !== undefined ? data.net_change : (data.total_gems || 0);
+      const sign = amount >= 0 ? '+' : '';
+      const isWinner = data.is_winner ? '🏆 ' : '';
+      return `${isWinner}${pid}: ${sign}${amount} gems`;
+    });
+    
+    if (gemSummaryLines.length > 0) {
+      const gemSummary = gemSummaryLines.join('\n');
+      // Add as a special system message at the end
+      displayHistory.push({
+        sender: 'GAME OVER',
+        message: `💎 REWARDS SUMMARY 💎\n\n${gemSummary}`,
+        timestamp: session.completed_at ? new Date(session.completed_at).getTime() / 1000 : Date.now() / 1000,
+        isSystemReward: true
+      });
+    }
+  }
+
   // Prepare vote data for pie chart
   const voteData = Object.entries(voteCounts).map(([player, count]) => ({
     name: player,
@@ -353,8 +378,28 @@ const SessionDetailPage = () => {
         <div className="bg-white rounded-lg shadow p-6">
           <h2 className="text-lg font-semibold text-gray-900 mb-4">Chat History</h2>
           <div className="space-y-3 max-h-[600px] overflow-y-auto">
-            {chatHistory.length > 0 ? (
-              chatHistory.map((msg, index) => {
+            {displayHistory.length > 0 ? (
+              displayHistory.map((msg, index) => {
+                // Handle special system reward message
+                if (msg.isSystemReward) {
+                  return (
+                    <div key={index} className="p-4 rounded-lg bg-gradient-to-r from-gray-900 to-gray-800 border-l-4 border-yellow-400 shadow-md my-4">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="font-bold text-yellow-400 text-sm uppercase tracking-wide flex items-center gap-2">
+                          <Trophy className="w-4 h-4" />
+                          {msg.sender}
+                        </span>
+                        <span className="text-xs text-gray-400 font-medium">
+                          {format(new Date(msg.timestamp * 1000), 'HH:mm:ss')}
+                        </span>
+                      </div>
+                      <pre className="text-white font-medium leading-relaxed whitespace-pre-wrap font-mono text-sm">
+                        {msg.message}
+                      </pre>
+                    </div>
+                  );
+                }
+
                 const playerColor = getPlayerColor(msg.sender);
                 
                 return (

@@ -209,6 +209,7 @@ class SessionPlayer(Base):
     user_id = Column(UUID(as_uuid=True), ForeignKey('users.id', ondelete='CASCADE'), nullable=True, index=True)
     player_id = Column(String(50), nullable=False)  # e.g., "Player 3", "You"
     role = Column(String(20), nullable=False)  # "human" or "ai"
+    gems_earned = Column(Integer, nullable=True)  # Gems credited/debited for this player (can be negative for losses)
     
     # Relationships
     session = relationship("Session", backref="players_map")

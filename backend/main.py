@@ -1300,6 +1300,13 @@ async def calculate_game_rewards(
                 # Since stakes were deducted at game start, we need to credit them back
                 for player_id in human_player_ids:
                     rewards[player_id]['stake_gems'] = minimum_stake  # Refund the deducted stake
+        else:
+            # No stakes - just mark winners for display purposes
+            # Even without stakes, we want to show who won (got most votes)
+            if top_voted_players:
+                print(f"💎 No stakes game - marking winners: {top_voted_players}")
+                for player_id in top_voted_players:
+                     rewards[player_id]['is_winner'] = True
         
         # Calculate total gems
         for player_id in human_player_ids:
@@ -2191,6 +2198,10 @@ async def save_session_stats(room_code: str, state: dict, current_user: Optional
             # Track successfully credited players for session data
             credited_players = []
             
+            # Calculate minimum stake once for net change calculation
+            stake_percentage = room_data.get('stake_percentage', 0)
+            minimum_stake = room_data.get('minimum_stake', 0) if stake_percentage > 0 else 0
+            
             # Process each human player based on calculated rewards
             print(f"👥 Processing {len([p for p in state.get('players', []) if p.get('role') == 'human'])} human players for gem credits...")
             for player in state.get('players', []):
@@ -2324,6 +2335,10 @@ async def save_session_stats(room_code: str, state: dict, current_user: Optional
                         print(f"   Updated RoomStake record: won={stake_record.won_amount}, returned={stake_record.returned_amount}")
                     
                     # Track for session data (use first authenticated player's earnings for legacy)
+                    # Calculate net change (Profit/Loss) for accurate reporting
+                    # gems_earned is Gross (credited amount), but user cares about Net
+                    net_change = gems_earned - minimum_stake
+                    
                     credited_players.append({
                         'player_id': player_id,
                         'user_id': str(mapped_user_uuid),
@@ -2331,6 +2346,7 @@ async def save_session_stats(room_code: str, state: dict, current_user: Optional
                         'earnings_usd': float(player_earnings_value),
                         'base_gems': base_gems,
                         'stake_gems': stake_gems,
+                        'net_change': net_change,  # Store net change for accurate SessionPlayer record
                         'is_winner': player_rewards.get('is_winner', False)
                     })
                     
@@ -2492,15 +2508,25 @@ async def save_session_stats(room_code: str, state: dict, current_user: Optional
                 else:
                     print(f"      ℹ️  No user mapping (anonymous or AI)")
                 
+                # Find gems_earned for this player from credited_players list
+                player_gems = None
+                for credited_player in credited_players:
+                    if credited_player['player_id'] == player_id:
+                        # Use net_change (Profit/Loss) for SessionPlayer record so dashboard shows accurate P/L
+                        player_gems = credited_player.get('net_change', credited_player['gems_earned'])
+                        print(f"      💎 Gems Net Change: {player_gems}")
+                        break
+                
                 session_player = SessionPlayer(
                     session_id=session_id,
                     user_id=user_uuid,
                     player_id=player_id,
-                    role=role
+                    role=role,
+                    gems_earned=player_gems
                 )
                 db.add(session_player)
                 session_players_created += 1
-                print(f"      💾 SessionPlayer record added (user_id={user_uuid})")
+                print(f"      💾 SessionPlayer record added (user_id={user_uuid}, gems_earned={player_gems})")
             
             print(f"✅ {session_players_created} SessionPlayer records created")
             
@@ -3831,13 +3857,31 @@ async def get_user_earnings(
         
         # Fallback estimation if actual gems not available
         if actual_gems is None:
-            # METHOD 1: Use calculated_earnings if available
-            if hasattr(session, 'calculated_earnings') and session.calculated_earnings:
+            # METHOD 1: Try SessionPlayer.gems_earned (per-player accurate value)
+            try:
+                from .database import SessionPlayer
+                player_result = await db.execute(
+                    select(SessionPlayer).where(
+                        SessionPlayer.session_id == session.id,
+                        SessionPlayer.user_id == current_user.id
+                    )
+                )
+                user_player = player_result.scalar_one_or_none()
+                if user_player and user_player.gems_earned is not None:
+                    actual_gems = user_player.gems_earned
+                    display_amount = actual_gems
+                    print(f"   Session {idx}: {actual_gems} gems (from SessionPlayer.gems_earned)")
+            except Exception as sp_error:
+                print(f"   Session {idx}: Could not query SessionPlayer: {sp_error}")
+            
+            # METHOD 2: Use calculated_earnings if available (legacy fallback)
+            if actual_gems is None and hasattr(session, 'calculated_earnings') and session.calculated_earnings:
                 actual_gems = int(float(session.calculated_earnings) * GEMS_PER_DOLLAR)
                 display_amount = actual_gems
-                print(f"   Session {idx}: {actual_gems} gems (from calculated_earnings)")
-            # METHOD 2: Use average
-            else:
+                print(f"   Session {idx}: {actual_gems} gems (from calculated_earnings - legacy)")
+            
+            # METHOD 3: Use average (last resort)
+            if actual_gems is None:
                 actual_gems = avg_gems_per_game
                 display_amount = actual_gems
                 print(f"   Session {idx}: {actual_gems} gems (estimated from average)")
