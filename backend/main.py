@@ -3610,6 +3610,7 @@ async def get_user_earnings(
     for idx, session in enumerate(sessions):
         # Try to load actual gems earned/lost from JSON file
         actual_gems = None
+        display_amount = None  # Initialize here
         
         try:
             if session.stats_file_path and os.path.exists(session.stats_file_path):
@@ -3627,8 +3628,15 @@ async def get_user_earnings(
                     )
                     user_player = player_result.scalar_one_or_none()
                     if user_player and user_player.player_id in gem_rewards:
-                        actual_gems = gem_rewards[user_player.player_id]
-                        print(f"   Session {idx}: {actual_gems} gems (ACTUAL from JSON)")
+                        reward_data = gem_rewards[user_player.player_id]
+                        # Handle both old and new format
+                        if isinstance(reward_data, dict):
+                            display_amount = reward_data.get('net_change', reward_data.get('total_gems', 0))
+                            actual_gems = display_amount
+                        else:
+                            actual_gems = reward_data
+                            display_amount = actual_gems
+                        print(f"   Session {idx}: {display_amount} gems (net change from JSON)")
         except Exception as gem_load_error:
             print(f"   Session {idx}: Could not load actual gems: {gem_load_error}")
         
@@ -3637,11 +3645,17 @@ async def get_user_earnings(
             # METHOD 1: Use calculated_earnings if available
             if hasattr(session, 'calculated_earnings') and session.calculated_earnings:
                 actual_gems = int(float(session.calculated_earnings) * GEMS_PER_DOLLAR)
+                display_amount = actual_gems
                 print(f"   Session {idx}: {actual_gems} gems (from calculated_earnings)")
             # METHOD 2: Use average
             else:
                 actual_gems = avg_gems_per_game
+                display_amount = actual_gems
                 print(f"   Session {idx}: {actual_gems} gems (estimated from average)")
+        
+        # Ensure display_amount is set
+        if display_amount is None:
+            display_amount = actual_gems if actual_gems is not None else 0
         
         if idx == 0:  # Most recent game
             last_game_gems = display_amount  # Use net_change for accurate display

@@ -285,20 +285,36 @@ const GemsInfoPage = () => {
                 <div className="bg-gray-800 rounded p-4">
                   <div className="text-cyan-400 font-bold mb-2">For Winners:</div>
                   <div className="space-y-1 text-gray-300">
+                    <div className="text-gray-400">// 1. Pool from losers</div>
                     <div>loser_pool = minimum_stake × num_losers</div>
                     <div>max_share = loser_pool ÷ num_winners</div>
-                    <div>accuracy = correct_votes ÷ (num_humans - 1)</div>
-                    <div className="mt-2 text-green-400">stake_winnings = accuracy × max_share</div>
+                    
+                    <div className="mt-3 text-gray-400">// 2. Calculate voting accuracy</div>
+                    <div>votes_needed = num_humans - 1</div>
+                    <div className="text-gray-500 text-xs">  // Must vote for all OTHER humans</div>
+                    <div>correct_votes = count(voted for other humans)</div>
+                    <div className="text-gray-500 text-xs">  // Not self, not AI</div>
+                    <div className="text-purple-400 mt-1">accuracy = correct_votes / votes_needed</div>
+                    <div className="text-gray-500 text-xs">  // Returns decimal: 0.0 to 1.0</div>
+                    <div className="text-gray-500 text-xs">  // Example: 2/2 = 1.0 = 100%</div>
+                    
+                    <div className="mt-3 text-gray-400">// 3. Calculate rewards</div>
                     <div className="text-yellow-400">stake_refund = minimum_stake</div>
-                    <div className="text-white font-bold mt-2">TOTAL = 100 + refund + winnings</div>
+                    <div className="text-gray-500 text-xs">  // Always returned ✅</div>
+                    <div className="text-green-400 mt-1">stake_winnings = int(accuracy × max_share)</div>
+                    <div className="text-gray-500 text-xs">  // Proportional to accuracy</div>
+                    <div className="text-white font-bold mt-2 pt-2 border-t border-gray-600">TOTAL = 100 + refund + winnings</div>
                   </div>
                 </div>
 
                 <div className="bg-gray-800 rounded p-4">
                   <div className="text-red-400 font-bold mb-2">For Losers:</div>
                   <div className="space-y-1 text-gray-300">
-                    <div className="text-white">TOTAL = 100 + 0</div>
-                    <div className="text-red-400">Net change = 100 - minimum_stake (negative)</div>
+                    <div>stake_refund = 0</div>
+                    <div>stake_winnings = 0</div>
+                    <div className="text-white font-bold mt-1 pt-1 border-t border-gray-600">TOTAL = 100 + 0 = 100 gems</div>
+                    <div className="text-red-400 mt-2">Net change = 100 - minimum_stake</div>
+                    <div className="text-gray-500 text-xs">  // Always negative ❌</div>
                   </div>
                 </div>
               </div>

@@ -291,7 +291,7 @@ const LobbyPage = () => {
       {/* Main Content */}
       <div className="max-w-7xl mx-auto px-6 py-8">
         {/* Game Description Banner */}
-        <div className="mb-8 bg-gradient-to-r from-purple-500 via-pink-500 to-blue-500 rounded-2xl p-8 text-white shadow-2xl transform hover:scale-105 transition-all duration-300">
+        <div className="mb-6 bg-gradient-to-r from-purple-500 via-pink-500 to-blue-500 rounded-2xl p-8 text-white shadow-2xl transform hover:scale-105 transition-all duration-300">
           <div className="flex items-start gap-6">
             <div className="flex-shrink-0">
               <div className="w-16 h-16 bg-white bg-opacity-20 rounded-xl flex items-center justify-center backdrop-blur-sm">
@@ -318,6 +318,35 @@ const LobbyPage = () => {
                 </div>
               </div>
             </div>
+          </div>
+        </div>
+
+        {/* Play-to-Earn Info Box */}
+        <div className="mb-8 bg-gradient-to-r from-green-500 via-emerald-500 to-teal-500 rounded-xl p-6 text-white shadow-xl">
+          <div className="flex items-center justify-between gap-6">
+            <div className="flex items-start gap-4 flex-1">
+              <div className="w-12 h-12 bg-white bg-opacity-25 rounded-xl flex items-center justify-center backdrop-blur-sm flex-shrink-0">
+                <span className="text-3xl">💎</span>
+              </div>
+              <div className="flex-1">
+                <h3 className="text-xl font-bold mb-2 flex items-center gap-2">
+                  Play to Earn Real Money
+                  <span className="px-2 py-0.5 bg-yellow-400 text-yellow-900 text-xs font-bold rounded-full animate-pulse">NEW</span>
+                </h3>
+                <p className="text-sm opacity-95 leading-relaxed">
+                  Earn <strong>Gems</strong> by playing and convert them to <strong>real USD</strong> via MTurk! 
+                  Your conversations help us research human-AI interaction while you get rewarded. 
+                  Win more by being human-like! 🎮💰
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={() => navigate('/gems-info')}
+              className="flex items-center gap-2 px-5 py-3 bg-white text-green-700 rounded-lg font-bold hover:bg-green-50 transition-all transform hover:scale-105 shadow-lg flex-shrink-0"
+            >
+              <Award className="w-5 h-5" />
+              How It Works
+            </button>
           </div>
         </div>
 
