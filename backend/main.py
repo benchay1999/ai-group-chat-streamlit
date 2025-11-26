@@ -777,10 +777,23 @@ async def run_discussion_phase(room_code: str):
                 "status": "stop"
             })
         
-        state['pending_ai_votes'] = [
-            p['id'] for p in state['players']
-            if p['role'] == 'ai' and not p['eliminated']
-        ]
+        # Count human players to determine voting rules
+        num_human_players = len([p for p in state['players'] if p['role'] == 'human' and not p['eliminated']])
+        
+        # AI agents only vote in SINGLE-HUMAN games
+        # In multi-human games, only humans vote
+        if num_human_players == 1:
+            # Single-human game: AI agents participate in voting
+            state['pending_ai_votes'] = [
+                p['id'] for p in state['players']
+                if p['role'] == 'ai' and not p['eliminated']
+            ]
+            print(f"🤖 Single-human game: {len(state['pending_ai_votes'])} AI agents will vote")
+        else:
+            # Multi-human game: only humans vote, AI agents don't vote
+            state['pending_ai_votes'] = []
+            print(f"👥 Multi-human game ({num_human_players} humans): Only humans vote, AI agents will not vote")
+        
         state['votes'] = {}
         
         # Save state BEFORE broadcasting to ensure checks see VOTING phase
@@ -788,7 +801,6 @@ async def run_discussion_phase(room_code: str):
         
         # Broadcast phase change with voting duration and num_human_players
         voting_duration = rooms[room_code].get('voting_duration', VOTING_TIME)
-        num_human_players = len([p for p in state['players'] if p['role'] == 'human' and not p['eliminated']])
         await broadcast_to_room(room_code, {
             "type": "phase",
             "phase": "Voting",
@@ -801,7 +813,10 @@ async def run_discussion_phase(room_code: str):
         
         # Start voting phase
         asyncio.create_task(run_voting_phase(room_code))
-        asyncio.create_task(process_ai_votes(room_code))
+        
+        # Only trigger AI voting for single-human games
+        if num_human_players == 1:
+            asyncio.create_task(process_ai_votes(room_code))
 
 
 async def run_voting_phase(room_code: str):
@@ -867,9 +882,16 @@ async def process_ai_votes(room_code: str):
             for msg in result['broadcast_queue']:
                 await broadcast_to_room(room_code, msg)
         
-        # Check if voting complete
+        # Check if voting complete (all players who should vote have voted)
+        # In single-human games: All active players vote (humans + AIs)
+        # In multi-human games: Only humans vote (handled in pending_ai_votes being empty)
         active_players = [p['id'] for p in state['players'] if not p['eliminated']]
-        if len(state['votes']) >= len(active_players):
+        num_humans = len([p for p in state['players'] if p['role'] == 'human' and not p['eliminated']])
+        
+        # Single-human game: all active players vote
+        required_votes = len(active_players)
+        
+        if len(state['votes']) >= required_votes:
             await complete_voting(room_code)
             break
 
@@ -1214,6 +1236,9 @@ async def complete_voting(room_code: str):
             # Backward compatibility: single vote
             vote_counts[target_list] = vote_counts.get(target_list, 0) + 1
     
+    # Determine winner based on game type
+    num_humans = len([p for p in state['players'] if p['role'] == 'human' and not p['eliminated']])
+    
     suspect = None
     if vote_counts:
         max_votes = max(vote_counts.values())
@@ -1223,20 +1248,49 @@ async def complete_voting(room_code: str):
     if not suspect:
         ai_ids = [p['id'] for p in state['players'] if p['role'] == 'ai']
         suspect = random.choice(ai_ids) if ai_ids else None
+    
     suspect_role = None
     for p in state['players']:
         if p['id'] == suspect:
             suspect_role = p['role']
             break
-    # Humans win if suspect is actually a human (most human-like); otherwise AIs win
+    
     state['selected_suspect'] = suspect
     state['suspect_role'] = suspect_role
-    winning_team = 'human' if suspect_role == 'human' else 'ai'
-    state['winner'] = winning_team
     
-    # Store list of winning player IDs for more specific winner info
-    winning_players = [p['id'] for p in state.get('players', []) if p.get('role') == winning_team]
-    state['winning_players'] = winning_players
+    # MULTI-HUMAN GAME: Winner is the human player(s) with most votes
+    if num_humans > 1:
+        # Get only human players' vote counts
+        human_ids = [p['id'] for p in state['players'] if p['role'] == 'human' and not p['eliminated']]
+        human_vote_counts = {pid: vote_counts.get(pid, 0) for pid in human_ids}
+        
+        if human_vote_counts:
+            max_human_votes = max(human_vote_counts.values())
+            winners = [pid for pid, cnt in human_vote_counts.items() if cnt == max_human_votes]
+            
+            if len(winners) > 1:
+                # Multiple humans tied for most votes
+                state['winner'] = 'tie'
+                state['winning_players'] = winners
+                print(f"🎭 Multi-human game result: TIE between {winners} (each with {max_human_votes} votes)")
+            else:
+                # Single winner
+                state['winner'] = winners[0]  # Specific player ID
+                state['winning_players'] = winners
+                print(f"🏆 Multi-human game result: {winners[0]} wins with {max_human_votes} votes")
+        else:
+            # No votes at all - tie
+            state['winner'] = 'tie'
+            state['winning_players'] = human_ids
+            print(f"🎭 Multi-human game result: TIE (no votes)")
+    else:
+        # SINGLE-HUMAN GAME: Team-based (human vs AI)
+        # Humans win if suspect is actually a human (most human-like); otherwise AIs win
+        winning_team = 'human' if suspect_role == 'human' else 'ai'
+        state['winner'] = winning_team
+        winning_players = [p['id'] for p in state.get('players', []) if p.get('role') == winning_team]
+        state['winning_players'] = winning_players
+        print(f"🎮 Single-human game result: {winning_team} team wins")
     
     state['phase'] = Phase.GAME_OVER
     rooms[room_code]['state'] = state
@@ -1258,9 +1312,28 @@ async def complete_voting(room_code: str):
             await broadcast_to_room(room_code, msg)
     rooms[room_code]['state'] = state
     
-    # Save stats at end
+    # Save stats at end and get gem rewards
+    gem_rewards = {}  # Will store player_id -> gem_amount
     try:
+        # Calculate gem rewards before saving (we need this for frontend display)
+        room_data = rooms.get(room_code, {})
+        from .database import async_session_maker
+        async with async_session_maker() as db:
+            rewards = await calculate_game_rewards(room_code, room_data, state, db)
+            # Extract total gems for each player
+            for player_id, reward_data in rewards.items():
+                gem_rewards[player_id] = reward_data.get('total_gems', 0)
+        
+        # Now save the session (which will credit the gems)
         await save_session_stats(room_code, state)
+        
+        # Broadcast gem rewards to players
+        print(f"💎 Broadcasting gem rewards: {gem_rewards}")
+        await broadcast_to_room(room_code, {
+            "type": "gem_rewards",
+            "rewards": gem_rewards
+        })
+        
     except Exception as save_error:
         # Log the error
         print(f"❌❌❌ CRITICAL: save_session_stats failed for room {room_code}")
@@ -1797,8 +1870,19 @@ async def save_session_stats(room_code: str, state: dict, current_user: Optional
     # Calculate vote counts
     print(f"📊 Calculating vote counts...")
     vote_counts: Dict[str, int] = {}
-    for _, target in state.get('votes', {}).items():
-        vote_counts[target] = vote_counts.get(target, 0) + 1
+    for _, target_list in state.get('votes', {}).items():
+        # Skip empty votes
+        if not target_list:
+            continue
+        # Handle both list votes (multi-human) and single votes (backward compatibility)
+        if isinstance(target_list, list):
+            # Multi-human game: count each voted player
+            for target in target_list:
+                if target:  # Skip empty strings in the list
+                    vote_counts[target] = vote_counts.get(target, 0) + 1
+        else:
+            # Backward compatibility: single vote (string)
+            vote_counts[target_list] = vote_counts.get(target_list, 0) + 1
     print(f"   Vote counts: {vote_counts}")
     
     # Prepare stats payload for JSON file
@@ -5833,8 +5917,22 @@ async def cast_vote(room_code: str, vote_data: dict):
     })
     
     # Check if all votes are in
-    active_players = [p['id'] for p in state['players'] if not p['eliminated']]
-    if len(state['votes']) >= len(active_players):
+    # In multi-human games: only humans vote
+    # In single-human games: all active players vote
+    active_player_ids = [p['id'] for p in state['players'] if not p['eliminated']]
+    human_player_ids = [p['id'] for p in state['players'] if p['role'] == 'human' and not p['eliminated']]
+    
+    if num_humans > 1:
+        # Multi-human game: wait for all humans to vote
+        required_votes = len(human_player_ids)
+        print(f"📊 Multi-human voting check: {len(state['votes'])}/{required_votes} humans voted")
+    else:
+        # Single-human game: wait for all active players (human + AIs) to vote
+        required_votes = len(active_player_ids)
+        print(f"📊 Single-human voting check: {len(state['votes'])}/{required_votes} players voted")
+    
+    if len(state['votes']) >= required_votes:
+        print(f"✅ All required votes received, completing voting...")
         await complete_voting(room_code)
     
     return {"success": True}

@@ -184,6 +184,15 @@ const GamePage = () => {
         }
         break;
 
+      case 'gem_rewards':
+        // Store gem rewards for display in game over screen
+        setGameState(prev => ({
+          ...prev,
+          gem_rewards: data.rewards,
+        }));
+        console.log('💎 Received gem rewards:', data.rewards);
+        break;
+
       default:
         console.log('Unknown message type:', type);
     }
@@ -283,6 +292,8 @@ const GamePage = () => {
         voteCountsDisplay={voteCountsDisplay}
         onLeave={handleLeave}
         roomCode={roomCode}
+        gemRewards={gameState.gem_rewards}
+        playerId={playerId}
       />
     );
   }
