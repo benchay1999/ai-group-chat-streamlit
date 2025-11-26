@@ -119,8 +119,6 @@ const GemsInfoPage = () => {
                 <ol className="list-decimal list-inside space-y-2 ml-2">
                   <li>System calculates each player's stake (balance × percentage)</li>
                   <li>Finds the <strong className="text-cyan-400">minimum stake</strong> across all players</li>
-                  <li><strong className="text-red-400">Deducts</strong> minimum stake from ALL players immediately</li>
-                  <li>Creates stake record in database</li>
                 </ol>
                 
                 <div className="bg-gray-800 rounded p-3 mt-4 font-mono text-xs">
@@ -163,15 +161,15 @@ const GemsInfoPage = () => {
                   <ol className="list-decimal list-inside space-y-2 text-sm">
                     <li><strong className="text-green-400">Stake refund</strong>: Get your stake back (guaranteed)</li>
                     <li><strong className="text-cyan-400">Loser pool</strong>: All loser stakes combined</li>
-                    <li><strong className="text-yellow-400">Equal division</strong>: Pool ÷ number of winners</li>
+                    <li><strong className="text-yellow-400">Equal division</strong>: Pool divided by number of winners</li>
                     <li><strong className="text-purple-400">Accuracy bonus</strong>: You get (accuracy% × your share)</li>
                   </ol>
                   
                   <div className="bg-gray-800 rounded p-3 mt-4 font-mono text-xs">
                     <div className="text-cyan-400">stake_refund = minimum_stake (always returned)</div>
                     <div className="text-yellow-400">loser_pool = minimum_stake × num_losers</div>
-                    <div className="text-green-400">your_share = loser_pool ÷ num_winners</div>
-                    <div className="text-purple-400">accuracy = correct_votes ÷ (num_humans - 1)</div>
+                    <div className="text-green-400">your_share = loser_pool divided by num_winners</div>
+                    <div className="text-purple-400">accuracy = correct_votes divided by (num_humans - 1)</div>
                     <div className="text-white mt-2">stake_winnings = accuracy × your_share</div>
                     <div className="text-green-400 font-bold mt-2">TOTAL = refund + winnings</div>
                   </div>

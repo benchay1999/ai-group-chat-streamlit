@@ -8,10 +8,11 @@ import api from './api';
 export const sessionsAPI = {
   /**
    * List sessions for current user
+   * @param {Object} params - Query parameters for filtering (Admin only)
    * @returns {Promise} List of sessions
    */
-  listSessions: async () => {
-    const response = await api.get('/api/sessions');
+  listSessions: async (params = {}) => {
+    const response = await api.get('/api/sessions', { params });
     return response.data;
   },
 

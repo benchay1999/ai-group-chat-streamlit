@@ -15,7 +15,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import os
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, update, desc
+from sqlalchemy import select, update, desc, func
 import uuid as uuid_lib
 
 from .langgraph_game import (
@@ -4609,13 +4609,29 @@ async def redeem_cashout(
 
 @app.get("/api/sessions")
 async def list_sessions(
+    participant_name: Optional[str] = None,
+    winner_name: Optional[str] = None,
+    language: Optional[str] = None,
+    discussion_duration: Optional[int] = None,
+    voting_duration: Optional[int] = None,
+    num_human_players: Optional[int] = None,
+    total_players: Optional[int] = None,
+    sort_by: Optional[str] = None,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_async_session)
 ):
     """
-    List sessions for current user. Admins see all sessions.
+    List sessions for current user. Admins see all sessions with filtering options.
     
     Args:
+        participant_name: Filter by participant username (Admin only)
+        winner_name: Filter by winner username (Admin only)
+        language: Filter by game language
+        discussion_duration: Filter by discussion duration
+        voting_duration: Filter by voting duration
+        num_human_players: Filter by number of human players
+        total_players: Filter by total players
+        sort_by: Sort order (e.g., 'highest_reward')
         current_user: Current authenticated user
         db: Database session
     
@@ -4623,10 +4639,51 @@ async def list_sessions(
         List of sessions
     """
     if current_user.role == UserRole.ADMIN:
-        # Admins see all sessions
-        result = await db.execute(
-            select(DBSession).order_by(desc(DBSession.completed_at))
-        )
+        # Admins see all sessions with optional filters
+        from .database import SessionPlayer
+        from sqlalchemy.orm import aliased
+        
+        query = select(DBSession)
+        
+        # 1. Participant Filter
+        if participant_name:
+            p_player = aliased(SessionPlayer)
+            p_user = aliased(User)
+            query = query.join(p_player, p_player.session_id == DBSession.id)\
+                         .join(p_user, p_player.user_id == p_user.id)\
+                         .where(p_user.user_id.ilike(f"%{participant_name}%"))
+        
+        # 2. Winner Filter (User who participated and earned > 0 gems)
+        if winner_name:
+            w_player = aliased(SessionPlayer)
+            w_user = aliased(User)
+            query = query.join(w_player, w_player.session_id == DBSession.id)\
+                         .join(w_user, w_player.user_id == w_user.id)\
+                         .where(w_user.user_id.ilike(f"%{winner_name}%"))\
+                         .where(w_player.gems_earned > 0)
+        
+        # 3. Game Type Filters
+        if language:
+            query = query.where(DBSession.language == language)
+        if discussion_duration is not None:
+            query = query.where(DBSession.discussion_duration == discussion_duration)
+        if voting_duration is not None:
+            query = query.where(DBSession.voting_duration == voting_duration)
+        if num_human_players is not None:
+            query = query.where(DBSession.num_human_players == num_human_players)
+        if total_players is not None:
+            query = query.where(DBSession.total_players == total_players)
+            
+        # 4. Sorting
+        if sort_by == 'highest_reward':
+            # Sort by max gems earned in the session
+            subq = select(func.max(SessionPlayer.gems_earned)).where(SessionPlayer.session_id == DBSession.id).scalar_subquery()
+            query = query.order_by(desc(subq))
+        else:
+            # Default sort: Most recent first
+            query = query.order_by(desc(DBSession.completed_at))
+            
+        result = await db.execute(query.distinct())
     else:
         # Regular users see sessions where they're the owner OR where they played
         from .database import SessionPlayer

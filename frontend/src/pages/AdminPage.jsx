@@ -9,7 +9,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { sessionsAPI } from '../services/sessionsAPI';
 import { mturkAPI } from '../services/mturkAPI';
 import { format } from 'date-fns';
-import { DollarSign, Clock, CheckCircle, Users, ArrowLeft, Zap, Award, ExternalLink } from 'lucide-react';
+import { DollarSign, Clock, CheckCircle, Users, ArrowLeft, Zap, Award, ExternalLink, Search, Filter, X } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 const AdminPage = () => {
@@ -18,16 +18,82 @@ const AdminPage = () => {
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
   const [updatingSession, setUpdatingSession] = useState(null);
+  
+  // Filter State
+  const [filters, setFilters] = useState({
+    participant_name: '',
+    winner_name: '',
+    language: '',
+    discussion_duration: '',
+    voting_duration: '',
+    num_human_players: '',
+    total_players: '',
+    sort_by: ''
+  });
 
   useEffect(() => {
     loadData();
   }, []);
 
-  const loadData = async () => {
+  const handleFilterChange = (e) => {
+    const { name, value } = e.target;
+    setFilters(prev => ({
+      ...prev,
+      [name]: value
+    }));
+  };
+  
+  const applyFilters = () => {
+    loadData();
+  };
+  
+  const clearFilters = () => {
+    setFilters({
+      participant_name: '',
+      winner_name: '',
+      language: '',
+      discussion_duration: '',
+      voting_duration: '',
+      num_human_players: '',
+      total_players: '',
+      sort_by: ''
+    });
+    // Trigger reload after state update (using a timeout or effect would be better, 
+    // but calling loadData with empty object works for immediate action)
+    setTimeout(() => {
+       // We need to pass empty filters manually or wait for state. 
+       // Since loadData reads state, let's just trigger it.
+       // Ideally loadData should accept optional params to override state, 
+       // but reading state is fine if we wait for next tick or use explicit clear.
+    }, 0);
+    // Actually, better to just reload with cleared object
+    loadData({
+      participant_name: '',
+      winner_name: '',
+      language: '',
+      discussion_duration: '',
+      voting_duration: '',
+      num_human_players: '',
+      total_players: '',
+      sort_by: ''
+    });
+  };
+
+  const loadData = async (overrideFilters = null) => {
     try {
       setLoading(true);
+      
+      // Use overrideFilters if provided (for clear button), otherwise use state
+      const currentFilters = overrideFilters || filters;
+      
+      // Remove empty filters
+      const activeFilters = {};
+      Object.keys(currentFilters).forEach(key => {
+        if (currentFilters[key]) activeFilters[key] = currentFilters[key];
+      });
+
       const [sessionsData, dashboardData] = await Promise.all([
-        sessionsAPI.listSessions(),
+        sessionsAPI.listSessions(activeFilters),
         sessionsAPI.getAdminDashboard(),
       ]);
       setSessions(sessionsData.sessions);
@@ -139,6 +205,126 @@ const AdminPage = () => {
       </header>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Filters Section */}
+        <div className="bg-white rounded-lg shadow-lg mb-8 p-6">
+          <div className="flex items-center gap-2 mb-4 text-gray-800">
+            <Filter className="w-5 h-5" />
+            <h2 className="text-lg font-semibold">Filter Sessions</h2>
+          </div>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            {/* Participant Name */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Participant Name</label>
+              <input
+                type="text"
+                name="participant_name"
+                value={filters.participant_name}
+                onChange={handleFilterChange}
+                className="w-full rounded-md border-gray-300 shadow-sm focus:border-purple-500 focus:ring-purple-500 sm:text-sm p-2 border"
+                placeholder="Search user..."
+              />
+            </div>
+            
+            {/* Winner Name */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Winner Name</label>
+              <input
+                type="text"
+                name="winner_name"
+                value={filters.winner_name}
+                onChange={handleFilterChange}
+                className="w-full rounded-md border-gray-300 shadow-sm focus:border-purple-500 focus:ring-purple-500 sm:text-sm p-2 border"
+                placeholder="Search winner..."
+              />
+            </div>
+
+            {/* Language */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Language</label>
+              <select
+                name="language"
+                value={filters.language}
+                onChange={handleFilterChange}
+                className="w-full rounded-md border-gray-300 shadow-sm focus:border-purple-500 focus:ring-purple-500 sm:text-sm p-2 border"
+              >
+                <option value="">Any Language</option>
+                <option value="english">English</option>
+                <option value="chinese">Chinese</option>
+                <option value="korean">Korean</option>
+                <option value="spanish">Spanish</option>
+                <option value="japanese">Japanese</option>
+              </select>
+            </div>
+
+            {/* Sort By */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Sort By</label>
+              <select
+                name="sort_by"
+                value={filters.sort_by}
+                onChange={handleFilterChange}
+                className="w-full rounded-md border-gray-300 shadow-sm focus:border-purple-500 focus:ring-purple-500 sm:text-sm p-2 border"
+              >
+                <option value="">Most Recent</option>
+                <option value="highest_reward">Highest Reward</option>
+              </select>
+            </div>
+
+            {/* Discussion Duration */}
+            <div>
+               <label className="block text-sm font-medium text-gray-700 mb-1">Discussion Duration</label>
+               <select
+                  name="discussion_duration"
+                  value={filters.discussion_duration}
+                  onChange={handleFilterChange}
+                  className="w-full rounded-md border-gray-300 shadow-sm focus:border-purple-500 focus:ring-purple-500 sm:text-sm p-2 border"
+               >
+                 <option value="">Any Duration</option>
+                 <option value="60">Debug (60s)</option>
+                 <option value="300">5 Minutes (300s)</option>
+                 <option value="420">7 Minutes (420s)</option>
+                 <option value="600">10 Minutes (600s)</option>
+               </select>
+            </div>
+
+             {/* Num Human Players */}
+             <div>
+               <label className="block text-sm font-medium text-gray-700 mb-1">Human Players</label>
+               <select
+                  name="num_human_players"
+                  value={filters.num_human_players}
+                  onChange={handleFilterChange}
+                  className="w-full rounded-md border-gray-300 shadow-sm focus:border-purple-500 focus:ring-purple-500 sm:text-sm p-2 border"
+               >
+                 <option value="">Any</option>
+                 <option value="1">1 Player</option>
+                 <option value="2">2 Players</option>
+                 <option value="3">3 Players</option>
+                 <option value="4">4 Players</option>
+                 <option value="5">5 Players</option>
+               </select>
+            </div>
+          </div>
+
+          <div className="flex justify-end gap-3 mt-6">
+            <button
+              onClick={clearFilters}
+              className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 flex items-center gap-2"
+            >
+              <X className="w-4 h-4" />
+              Clear
+            </button>
+            <button
+              onClick={applyFilters}
+              className="px-4 py-2 text-sm font-medium text-white bg-purple-600 rounded-md hover:bg-purple-700 flex items-center gap-2"
+            >
+              <Search className="w-4 h-4" />
+              Apply Filters
+            </button>
+          </div>
+        </div>
+
         {/* Sessions Table */}
         <div className="bg-white rounded-lg shadow-lg overflow-hidden">
           <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
