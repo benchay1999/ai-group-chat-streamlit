@@ -159,6 +159,38 @@ const SessionDetailPage = () => {
           </div>
         </div>
 
+        {/* Gem Reward Card */}
+        {session.gem_earned !== null && session.gem_earned !== undefined && (
+          <div className={`rounded-lg shadow p-6 mb-8 ${
+            session.gem_earned >= 0 
+              ? 'bg-gradient-to-r from-green-50 to-emerald-50 border-2 border-green-300'
+              : 'bg-gradient-to-r from-red-50 to-rose-50 border-2 border-red-300'
+          }`}>
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-gray-600 mb-1">
+                  {session.gem_earned >= 0 ? 'Gems Earned' : 'Gems Lost'}
+                </p>
+                <p className={`text-4xl font-bold ${
+                  session.gem_earned >= 0 ? 'text-green-600' : 'text-red-600'
+                }`}>
+                  {session.gem_earned >= 0 ? '+' : ''}{session.gem_earned} gems
+                </p>
+                <p className="text-sm text-gray-600 mt-2">
+                  {session.gem_earned >= 0 
+                    ? 'You won this game!' 
+                    : 'Stakes lost in this game'}
+                </p>
+              </div>
+              <div className={`w-16 h-16 rounded-full flex items-center justify-center ${
+                session.gem_earned >= 0 ? 'bg-green-200' : 'bg-red-200'
+              }`}>
+                <span className="text-3xl">{session.gem_earned >= 0 ? '💎' : '💔'}</span>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Player Identification Card */}
         {session.current_user_player_id && (
           <div className="bg-blue-50 border-2 border-blue-200 rounded-lg p-6 mb-8">
@@ -278,12 +310,16 @@ const SessionDetailPage = () => {
             <div className="mt-4 pt-4 border-t border-gray-200">
               <p className="text-sm font-medium text-gray-700 mb-2">Vote Details:</p>
               <div className="space-y-1">
-                {Object.entries(votes).map(([voter, target]) => (
-                  <div key={voter} className="text-sm text-gray-600">
-                    <span className="font-medium">{voter}</span> voted for{' '}
-                    <span className="font-medium">{target}</span>
-                  </div>
-                ))}
+                {Object.entries(votes).map(([voter, target]) => {
+                  // Handle both list votes (multi-human) and single votes
+                  const targets = Array.isArray(target) ? target : [target];
+                  return (
+                    <div key={voter} className="text-sm text-gray-600">
+                      <span className="font-medium">{voter}</span> voted for{' '}
+                      <span className="font-medium">{targets.join(', ')}</span>
+                    </div>
+                  );
+                })}
               </div>
             </div>
           </div>

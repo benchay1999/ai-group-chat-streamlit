@@ -1238,33 +1238,19 @@ async def complete_voting(room_code: str):
     
     # Determine winner based on game type
     num_humans = len([p for p in state['players'] if p['role'] == 'human' and not p['eliminated']])
+    human_ids = [p['id'] for p in state['players'] if p['role'] == 'human' and not p['eliminated']]
     
-    suspect = None
-    if vote_counts:
-        max_votes = max(vote_counts.values())
-        candidates = [pid for pid, cnt in vote_counts.items() if cnt == max_votes]
-        suspect = random.choice(candidates) if len(candidates) > 1 else candidates[0]
-    # Default fallback if no votes: choose a random AI
-    if not suspect:
-        ai_ids = [p['id'] for p in state['players'] if p['role'] == 'ai']
-        suspect = random.choice(ai_ids) if ai_ids else None
-    
-    suspect_role = None
-    for p in state['players']:
-        if p['id'] == suspect:
-            suspect_role = p['role']
-            break
-    
-    state['selected_suspect'] = suspect
-    state['suspect_role'] = suspect_role
-    
-    # MULTI-HUMAN GAME: Winner is the human player(s) with most votes
+    # MULTI-HUMAN GAME: Winner is the human player(s) with most votes FROM OTHER HUMANS
     if num_humans > 1:
-        # Get only human players' vote counts
-        human_ids = [p['id'] for p in state['players'] if p['role'] == 'human' and not p['eliminated']]
+        print(f"🎭 Multi-human game: Determining winner among {num_humans} humans")
+        
+        # In multi-human games, only votes FOR human players count
+        # AI agents are not candidates for winning
         human_vote_counts = {pid: vote_counts.get(pid, 0) for pid in human_ids}
         
-        if human_vote_counts:
+        print(f"   Human vote counts: {human_vote_counts}")
+        
+        if human_vote_counts and max(human_vote_counts.values()) > 0:
             max_human_votes = max(human_vote_counts.values())
             winners = [pid for pid, cnt in human_vote_counts.items() if cnt == max_human_votes]
             
@@ -1272,25 +1258,52 @@ async def complete_voting(room_code: str):
                 # Multiple humans tied for most votes
                 state['winner'] = 'tie'
                 state['winning_players'] = winners
-                print(f"🎭 Multi-human game result: TIE between {winners} (each with {max_human_votes} votes)")
+                state['selected_suspect'] = winners[0]  # Show one for display
+                state['suspect_role'] = 'human'
+                print(f"   🤝 TIE between {winners} (each with {max_human_votes} votes)")
             else:
-                # Single winner
+                # Single winner - the human with most votes
                 state['winner'] = winners[0]  # Specific player ID
                 state['winning_players'] = winners
-                print(f"🏆 Multi-human game result: {winners[0]} wins with {max_human_votes} votes")
+                state['selected_suspect'] = winners[0]
+                state['suspect_role'] = 'human'
+                print(f"   🏆 WINNER: {winners[0]} with {max_human_votes} votes")
         else:
-            # No votes at all - tie
+            # No votes or all zeros - everyone ties
             state['winner'] = 'tie'
             state['winning_players'] = human_ids
-            print(f"🎭 Multi-human game result: TIE (no votes)")
+            state['selected_suspect'] = human_ids[0] if human_ids else None
+            state['suspect_role'] = 'human'
+            print(f"   🤝 TIE (no votes cast)")
+            
     else:
         # SINGLE-HUMAN GAME: Team-based (human vs AI)
+        # Most voted player determines the outcome
+        suspect = None
+        if vote_counts:
+            max_votes = max(vote_counts.values())
+            candidates = [pid for pid, cnt in vote_counts.items() if cnt == max_votes]
+            suspect = random.choice(candidates) if len(candidates) > 1 else candidates[0]
+        # Default fallback if no votes: choose a random AI
+        if not suspect:
+            ai_ids = [p['id'] for p in state['players'] if p['role'] == 'ai']
+            suspect = random.choice(ai_ids) if ai_ids else None
+        
+        suspect_role = None
+        for p in state['players']:
+            if p['id'] == suspect:
+                suspect_role = p['role']
+                break
+        
+        state['selected_suspect'] = suspect
+        state['suspect_role'] = suspect_role
+        
         # Humans win if suspect is actually a human (most human-like); otherwise AIs win
         winning_team = 'human' if suspect_role == 'human' else 'ai'
         state['winner'] = winning_team
         winning_players = [p['id'] for p in state.get('players', []) if p.get('role') == winning_team]
         state['winning_players'] = winning_players
-        print(f"🎮 Single-human game result: {winning_team} team wins")
+        print(f"🎮 Single-human game result: {winning_team} team wins (suspect: {suspect})")
     
     state['phase'] = Phase.GAME_OVER
     rooms[room_code]['state'] = state
@@ -1899,7 +1912,8 @@ async def save_session_stats(room_code: str, state: dict, current_user: Optional
         'selected_suspect': state.get('selected_suspect'),
         'suspect_role': state.get('suspect_role'),
         'winner': state.get('winner'),
-        'winning_players': state.get('winning_players', [])
+        'winning_players': state.get('winning_players', []),
+        'gem_rewards': {}  # Will be populated after calculating rewards
     }
     print(f"✅ Payload prepared successfully")
     
@@ -2174,6 +2188,13 @@ async def save_session_stats(room_code: str, state: dict, current_user: Optional
             if credited_players:
                 print(f"   Successfully credited: {[p['player_id'] for p in credited_players]}")
             print(f"=" * 80)
+            
+            # Update payload with gem rewards (for JSON file storage)
+            payload['gem_rewards'] = {
+                player_id: rewards.get(player_id, {}).get('total_gems', 0)
+                for player_id in [p['id'] for p in state.get('players', []) if p['role'] == 'human']
+            }
+            payload['credited_players'] = credited_players  # Store detailed credit info
             
             # Build session data dict
             print(f"💾 Building session record...")
@@ -3551,36 +3572,53 @@ async def get_user_earnings(
     recent_sessions = []
     
     for idx, session in enumerate(sessions):
-        # Try multiple methods to estimate gems (in order of reliability)
-        estimated_gems = 0
+        # Try to load actual gems earned/lost from JSON file
+        actual_gems = None
         
-        # METHOD 1: Use calculated_earnings if available (includes bonuses per fix)
-        if hasattr(session, 'calculated_earnings') and session.calculated_earnings:
-            estimated_gems = int(float(session.calculated_earnings) * GEMS_PER_DOLLAR)
-            print(f"   Session {idx}: {estimated_gems} gems (from calculated_earnings=${session.calculated_earnings})")
+        try:
+            if session.stats_file_path and os.path.exists(session.stats_file_path):
+                with open(session.stats_file_path, 'r') as f:
+                    stats_data = json.load(f)
+                    gem_rewards = stats_data.get('gem_rewards', {})
+                    
+                    # Find which player was this user
+                    from .database import SessionPlayer
+                    player_result = await db.execute(
+                        select(SessionPlayer).where(
+                            SessionPlayer.session_id == session.id,
+                            SessionPlayer.user_id == current_user.id
+                        )
+                    )
+                    user_player = player_result.scalar_one_or_none()
+                    if user_player and user_player.player_id in gem_rewards:
+                        actual_gems = gem_rewards[user_player.player_id]
+                        print(f"   Session {idx}: {actual_gems} gems (ACTUAL from JSON)")
+        except Exception as gem_load_error:
+            print(f"   Session {idx}: Could not load actual gems: {gem_load_error}")
         
-        # METHOD 2: For new sessions without calculated_earnings, estimate from total_gems_earned
-        elif idx == 0 and total_games > 0:
-            # For the most recent game, use the average as best estimate
-            estimated_gems = avg_gems_per_game
-            print(f"   Session {idx}: {estimated_gems} gems (estimated from average)")
-        
-        # METHOD 3: Fallback to average for older sessions
-        else:
-            estimated_gems = avg_gems_per_game
-            print(f"   Session {idx}: {estimated_gems} gems (fallback to average)")
+        # Fallback estimation if actual gems not available
+        if actual_gems is None:
+            # METHOD 1: Use calculated_earnings if available
+            if hasattr(session, 'calculated_earnings') and session.calculated_earnings:
+                actual_gems = int(float(session.calculated_earnings) * GEMS_PER_DOLLAR)
+                print(f"   Session {idx}: {actual_gems} gems (from calculated_earnings)")
+            # METHOD 2: Use average
+            else:
+                actual_gems = avg_gems_per_game
+                print(f"   Session {idx}: {actual_gems} gems (estimated from average)")
         
         if idx == 0:  # Most recent game
-            last_game_gems = estimated_gems
+            last_game_gems = actual_gems
             print(f"✅ Last game gems set to: {last_game_gems}")
         
-        if estimated_gems > highest_earning_gems:
-            highest_earning_gems = estimated_gems
+        # Track highest EARNING (not loss)
+        if actual_gems > highest_earning_gems:
+            highest_earning_gems = actual_gems
         
-        # Store sessions with gem amounts for trend chart
+        # Store sessions with gem amounts for trend chart (can be negative)
         recent_sessions.append({
             "date": session.completed_at.isoformat(),
-            "amount": estimated_gems,
+            "amount": actual_gems,  # Can be negative for losses
             "status": "completed"
         })
     
@@ -4302,25 +4340,51 @@ async def list_sessions(
     
     sessions = result.scalars().all()
     
+    # Load gem rewards for each session from JSON files
+    session_list = []
+    for s in sessions:
+        session_data = {
+            "id": str(s.id),
+            "room_code": s.room_code,
+            "completion_key": s.completion_key,
+            "language": s.language,
+            "total_players": s.total_players,
+            "num_human_players": s.num_human_players,
+            "discussion_duration": s.discussion_duration,
+            "voting_duration": s.voting_duration,
+            "completed_at": s.completed_at.isoformat(),
+            "payment_status": s.payment_status.value,
+            "payment_amount": float(s.payment_amount) if s.payment_amount else None,
+            "calculated_earnings": float(getattr(s, 'calculated_earnings', None)) if getattr(s, 'calculated_earnings', None) else None,
+            "claimed_at": s.claimed_at.isoformat() if s.claimed_at else None,
+            "gem_earned": None  # Will be loaded from JSON if available
+        }
+        
+        # Try to load gem_rewards from JSON file for this user
+        try:
+            if s.stats_file_path and os.path.exists(s.stats_file_path):
+                with open(s.stats_file_path, 'r') as f:
+                    stats_data = json.load(f)
+                    gem_rewards = stats_data.get('gem_rewards', {})
+                    
+                    # Find which player was this user
+                    from .database import SessionPlayer
+                    player_result = await db.execute(
+                        select(SessionPlayer).where(
+                            SessionPlayer.session_id == s.id,
+                            SessionPlayer.user_id == current_user.id
+                        )
+                    )
+                    user_player = player_result.scalar_one_or_none()
+                    if user_player and user_player.player_id in gem_rewards:
+                        session_data["gem_earned"] = gem_rewards[user_player.player_id]
+        except Exception as gem_load_error:
+            print(f"⚠️ Could not load gem_earned for session {s.id}: {gem_load_error}")
+        
+        session_list.append(session_data)
+    
     return {
-        "sessions": [
-            {
-                "id": str(s.id),
-                "room_code": s.room_code,
-                "completion_key": s.completion_key,
-                "language": s.language,
-                "total_players": s.total_players,
-                "num_human_players": s.num_human_players,
-                "discussion_duration": s.discussion_duration,
-                "voting_duration": s.voting_duration,
-                "completed_at": s.completed_at.isoformat(),
-                "payment_status": s.payment_status.value,
-                "payment_amount": float(s.payment_amount) if s.payment_amount else None,
-                "calculated_earnings": float(getattr(s, 'calculated_earnings', None)) if getattr(s, 'calculated_earnings', None) else None,
-                "claimed_at": s.claimed_at.isoformat() if s.claimed_at else None
-            }
-            for s in sessions
-        ]
+        "sessions": session_list
     }
 
 
@@ -4453,6 +4517,14 @@ async def get_session_detail(
         except Exception as e:
             print(f"Error getting player mappings: {e}")
     
+    # Get gem earned for this specific user
+    gem_earned = None
+    if current_user_player_id and stats_data:
+        gem_rewards = stats_data.get('gem_rewards', {})
+        if current_user_player_id in gem_rewards:
+            gem_earned = gem_rewards[current_user_player_id]
+            print(f"💎 User {current_user.user_id} earned {gem_earned} gems as {current_user_player_id}")
+    
     return {
         "id": str(session.id),
         "room_code": session.room_code,
@@ -4476,7 +4548,8 @@ async def get_session_detail(
         "mturk_payment_sent": bool(session.mturk_payment_sent),
         "mturk_bonus_sent": bool(session.mturk_bonus_sent),
         # Gem economy information
-        "calculated_earnings": float(session.calculated_earnings) if session.calculated_earnings else None
+        "calculated_earnings": float(session.calculated_earnings) if session.calculated_earnings else None,
+        "gem_earned": gem_earned  # Actual gems won/lost (can be negative)
     }
 
 

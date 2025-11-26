@@ -224,15 +224,17 @@ const DashboardPage = () => {
               <div className="bg-gray-800 bg-opacity-50 backdrop-blur-sm rounded-xl p-6 border border-gray-700">
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-sm text-gray-400 font-medium">Last Game</span>
-                  <Zap className="w-5 h-5 text-blue-500" />
+                  <Zap className={`w-5 h-5 ${(earnings?.last_game_gems || 0) >= 0 ? 'text-green-500' : 'text-red-500'}`} />
                 </div>
                 <div className="flex items-baseline gap-2">
-                  <div className="text-3xl font-bold text-blue-400">
+                  <div className="text-3xl font-bold">
                     <EarningsCounter 
                       target={earnings?.last_game_gems || 0}
                       decimals={0}
                       prefix=""
-                      glowColor="blue"
+                      suffix=""
+                      glowColor="auto"
+                      showSign={true}
                     />
                   </div>
                   <span className="text-sm text-gray-400">gems</span>
@@ -276,8 +278,11 @@ const DashboardPage = () => {
             {/* Earnings Chart */}
             {earnings?.recent_sessions && Array.isArray(earnings.recent_sessions) && earnings.recent_sessions.length > 0 && (
               <div className="bg-gray-800 bg-opacity-30 backdrop-blur-sm rounded-xl p-6 border border-gray-700 mb-8">
-                <h3 className="text-lg font-semibold text-white mb-4">Recent Games (Gems Earned)</h3>
+                <h3 className="text-lg font-semibold text-white mb-4">Recent Games (Gems Won/Lost)</h3>
                 <EarningsChart data={earnings.recent_sessions.slice(0, 10).reverse()} />
+                <p className="text-xs text-gray-400 mt-3 text-center">
+                  Green = Gems won • Red = Gems lost
+                </p>
               </div>
             )}
 
@@ -510,7 +515,20 @@ const DashboardPage = () => {
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="flex flex-col gap-1">
-                          {session.payment_amount ? (
+                          {/* Show gem earned/lost if available */}
+                          {session.gem_earned !== null && session.gem_earned !== undefined ? (
+                            <div className="flex items-center gap-2">
+                              <span
+                                className={`text-lg font-bold ${
+                                  session.gem_earned >= 0
+                                    ? 'text-green-400'
+                                    : 'text-red-400'
+                                }`}
+                              >
+                                {session.gem_earned >= 0 ? '+' : ''}{session.gem_earned} gems
+                              </span>
+                            </div>
+                          ) : session.payment_amount ? (
                             <div className="flex items-center gap-2">
                               <span
                                 className={`text-lg font-bold ${
