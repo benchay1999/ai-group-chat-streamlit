@@ -193,6 +193,15 @@ const GamePage = () => {
         console.log('💎 Received gem rewards:', data.rewards);
         break;
 
+      case 'timer_sync':
+        // Server-synchronized timer update (every 5 seconds)
+        setGameState(prev => ({
+          ...prev,
+          timer: data.time_remaining,
+          serverSynced: true,
+        }));
+        break;
+
       default:
         console.log('Unknown message type:', type);
     }
@@ -201,7 +210,7 @@ const GamePage = () => {
   // Initialize WebSocket
   const { status: wsStatus } = useWebSocket(roomCode, playerId, handleWebSocketMessage);
 
-  // Timer countdown
+  // Timer countdown (client-side, gets synced with server every 5 seconds)
   useEffect(() => {
     if (gameState.timer <= 0 || !['Discussion', 'Voting'].includes(gameState.phase)) {
       return;
@@ -211,6 +220,7 @@ const GamePage = () => {
       setGameState(prev => ({
         ...prev,
         timer: Math.max(0, prev.timer - 1),
+        serverSynced: false,  // Mark as client-calculated until next server sync
       }));
     }, 1000);
 

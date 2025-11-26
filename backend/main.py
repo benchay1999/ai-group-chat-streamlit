@@ -54,7 +54,8 @@ app = FastAPI(title="AI Group Chat API", version="2.0.0")
 
 # CORS Configuration - Production-safe
 # Get allowed origins from environment variable, default to localhost for development
-allowed_origins_str = os.getenv('CORS_ALLOWED_ORIGINS', 'http://localhost:5173,http://localhost:3000')
+default_origins = 'http://localhost:5173,http://localhost:3000,https://ai-group-chat.netlify.app'
+allowed_origins_str = os.getenv('CORS_ALLOWED_ORIGINS', default_origins)
 allowed_origins = [origin.strip() for origin in allowed_origins_str.split(',')]
 
 # Security validation: Never allow wildcard origins
@@ -77,6 +78,8 @@ if os.getenv('MTURK_ENVIRONMENT') == 'production':
 else:
     # In development/sandbox, allow localhost origins
     print(f"🔓 CORS configured for development with origins: {allowed_origins}")
+
+print(f"🌐 CORS allowed origins: {allowed_origins}")
 
 app.add_middleware(
     CORSMiddleware,
@@ -738,6 +741,7 @@ async def run_discussion_phase(room_code: str):
     Run the discussion phase for a room.
     Manages timer and triggers voting phase.
     Also enables proactive agent engagement.
+    Broadcasts server time remaining every 5 seconds for synchronization.
     
     Args:
         room_code: Room identifier
@@ -746,10 +750,40 @@ async def run_discussion_phase(room_code: str):
     discussion_time = rooms[room_code].get('discussion_duration', DISCUSSION_TIME)
     print(f"⏱️ Starting discussion phase for room {room_code}: {discussion_time} seconds")
     
+    # Store phase start time for accurate tracking
+    phase_start = _time.time()
+    rooms[room_code]['phase_start_time'] = phase_start
+    
     # Start proactive engagement task
     engagement_task = asyncio.create_task(proactive_agent_engagement(room_code))
     
-    await asyncio.sleep(discussion_time)
+    # Countdown with periodic broadcasts for synchronization
+    # Use actual wall clock time to avoid drift from sleep inaccuracies
+    while True:
+        # Calculate elapsed time from wall clock (accurate)
+        elapsed = _time.time() - phase_start
+        remaining = max(0, discussion_time - elapsed)
+        
+        # Exit if time is up
+        if remaining <= 0:
+            break
+        
+        # Broadcast current server time to all clients
+        await broadcast_to_room(room_code, {
+            "type": "timer_sync",
+            "phase": "Discussion",
+            "time_remaining": int(remaining)  # Round to int for display
+        })
+        
+        # Sleep for up to 5 seconds (or remaining time if less)
+        sleep_duration = min(5.0, remaining)
+        await asyncio.sleep(sleep_duration)
+        
+        # Check if room still exists
+        if room_code not in rooms:
+            engagement_task.cancel()
+            return
+    
     print(f"⏱️ Discussion time ({discussion_time}s) elapsed for room {room_code}, transitioning to voting")
     
     # Cancel proactive engagement when discussion ends
@@ -809,6 +843,13 @@ async def run_discussion_phase(room_code: str):
             "num_human_players": num_human_players
         })
         
+        # Immediately send timer sync for phase transition (FIX: Prevent timer desync during phase change)
+        await broadcast_to_room(room_code, {
+            "type": "timer_sync",
+            "phase": "Voting",
+            "time_remaining": int(voting_duration)
+        })
+        
         print(f"✅ Phase transition complete: DISCUSSION → VOTING in room {room_code}")
         
         # Start voting phase
@@ -823,6 +864,7 @@ async def run_voting_phase(room_code: str):
     """
     Run the voting phase for a room.
     Manages timer and triggers elimination.
+    Broadcasts server time remaining every 5 seconds for synchronization.
     
     Args:
         room_code: Room identifier
@@ -831,7 +873,36 @@ async def run_voting_phase(room_code: str):
     voting_time = rooms[room_code].get('voting_duration', VOTING_TIME)
     print(f"🗳️ Starting voting phase for room {room_code}: {voting_time} seconds")
     
-    await asyncio.sleep(voting_time)
+    # Store phase start time for accurate tracking
+    phase_start = _time.time()
+    rooms[room_code]['phase_start_time'] = phase_start
+    
+    # Countdown with periodic broadcasts for synchronization
+    # Use actual wall clock time to avoid drift from sleep inaccuracies
+    while True:
+        # Calculate elapsed time from wall clock (accurate)
+        elapsed = _time.time() - phase_start
+        remaining = max(0, voting_time - elapsed)
+        
+        # Exit if time is up
+        if remaining <= 0:
+            break
+        
+        # Broadcast current server time to all clients
+        await broadcast_to_room(room_code, {
+            "type": "timer_sync",
+            "phase": "Voting",
+            "time_remaining": int(remaining)  # Round to int for display
+        })
+        
+        # Sleep for up to 5 seconds (or remaining time if less)
+        sleep_duration = min(5.0, remaining)
+        await asyncio.sleep(sleep_duration)
+        
+        # Check if room still exists
+        if room_code not in rooms:
+            return
+    
     print(f"🗳️ Voting time ({voting_time}s) elapsed for room {room_code}, completing game")
     
     if room_code not in rooms:
@@ -898,11 +969,15 @@ async def process_ai_votes(room_code: str):
 
 async def deduct_stakes(room_code: str, db: AsyncSession) -> bool:
     """
-    Deduct stakes from all players when game starts (multi-human games only).
+    Deduct stakes from all players (multi-human games only).
+    
+    IMPORTANT: This function does NOT commit the transaction.
+    The caller MUST commit the transaction to finalize deductions.
+    This allows atomic deduction + reward crediting in one transaction.
     
     Args:
         room_code: Room identifier
-        db: Database session
+        db: Database session (must be managed by caller)
     
     Returns:
         True if successful, False if any deduction failed
@@ -989,16 +1064,12 @@ async def deduct_stakes(room_code: str, db: AsyncSession) -> bool:
             
             print(f"💎 Deducted {minimum_stake} gems from {user.user_id} ({player_id}), new balance: {user.gem_balance}")
         
-        # Commit all deductions atomically
-        await db.commit()
-        print(f"✅ Successfully deducted stakes for {len(deduction_records)} players in room {room_code}")
+        # DON'T commit here - let the caller commit atomically with rewards
+        # await db.commit()  # REMOVED - caller must commit
+        print(f"✅ Stake deductions prepared for {len(deduction_records)} players (not committed yet)")
         
-        # Broadcast stake deduction to all players
-        await broadcast_to_room(room_code, {
-            "type": "stakes_deducted",
-            "minimum_stake": minimum_stake,
-            "num_players": len(deduction_records)
-        })
+        # Don't broadcast yet - wait until transaction commits
+        # The caller will broadcast after successful commit
         
         return True
         
@@ -1331,35 +1402,45 @@ async def complete_voting(room_code: str):
     # Save stats at end and get gem rewards
     gem_rewards = {}  # Will store player_id -> gem_amount
     try:
-        # Calculate gem rewards before saving (we need this for frontend display)
         room_data = rooms.get(room_code, {})
         minimum_stake = room_data.get('minimum_stake', 0)
         
+        # Calculate rewards first (for frontend display)
         from .database import async_session_maker
-        async with async_session_maker() as db:
-            rewards = await calculate_game_rewards(room_code, room_data, state, db)
+        async with async_session_maker() as temp_db:
+            rewards = await calculate_game_rewards(room_code, room_data, state, temp_db)
             # Extract full breakdown for each player
-            # For display: show stake change relative to what was deducted at game start
+            # NEW: Stakes are deducted and credited in the same transaction above
+            # So total_gems already includes the net result
             for player_id, reward_data in rewards.items():
                 stake_gems_credited = reward_data.get('stake_gems', 0)
+                base_gems = reward_data.get('base_gems', 0)
+                total_gems = reward_data.get('total_gems', 0)
                 
-                # Calculate stake display value (net change from game start)
-                # Losers: got 0 back, lost minimum_stake → display -minimum_stake
-                # Winners: got refund + winnings → display stake_gems_credited - minimum_stake
-                stake_display = stake_gems_credited - minimum_stake if minimum_stake > 0 else stake_gems_credited
+                # Calculate for display
+                # In multi-human games: total_gems = base + stake_reward
+                # Net change = total_gems - minimum_stake (what they risked)
+                if minimum_stake > 0:
+                    # Multi-human game with stakes
+                    stake_display = stake_gems_credited - minimum_stake  # Net stake result
+                    net_change = total_gems - minimum_stake  # Net change (base + stakes - deduction)
+                else:
+                    # Single-human game (no stakes)
+                    stake_display = 0
+                    net_change = total_gems  # Just the base gems
                 
                 gem_rewards[player_id] = {
-                    'base_gems': reward_data.get('base_gems', 0),
-                    'stake_gems': stake_display,  # Net change (can be negative)
-                    'stake_deducted': minimum_stake,  # What was taken at start
-                    'stake_returned': stake_gems_credited,  # What came back at end
-                    'total_gems': reward_data.get('total_gems', 0),  # What's credited
-                    'net_change': reward_data.get('total_gems', 0) - minimum_stake,  # True net from start to end
+                    'base_gems': base_gems,
+                    'stake_gems': stake_display,  # Net stake change (can be negative)
+                    'stake_amount': minimum_stake,  # What was at risk
+                    'stake_returned': stake_gems_credited,  # What they got back
+                    'total_gems': total_gems,  # What's credited (includes deduction already)
+                    'net_change': net_change,  # True net profit/loss
                     'is_winner': reward_data.get('is_winner', False)
                 }
         
-        # Now save the session (which will credit the gems)
-        await save_session_stats(room_code, state)
+        # Now save the session (which will credit the gems AND deduct stakes atomically)
+        await save_session_stats(room_code, state, deduct_stakes_first=True)
         
         # Broadcast gem rewards to players with full breakdown
         print(f"💎 Broadcasting gem rewards breakdown: {gem_rewards}")
@@ -1879,7 +1960,7 @@ async def process_ai_messages(room_code: str):
         await asyncio.gather(*tasks, return_exceptions=True)
 
 
-async def save_session_stats(room_code: str, state: dict, current_user: Optional[User] = None) -> dict:
+async def save_session_stats(room_code: str, state: dict, current_user: Optional[User] = None, deduct_stakes_first: bool = False) -> dict:
     """
     Save session statistics to both group-chat-stats directory and PostgreSQL database.
     Generates a completion key for Mechanical Turk compensation tracking.
@@ -2016,6 +2097,21 @@ async def save_session_stats(room_code: str, state: dict, current_user: Optional
                     'already_existed': True
                 }
             
+            # CRITICAL: Deduct stakes FIRST if requested (after voting, before rewards)
+            # This makes the entire operation atomic: deduct + credit in ONE transaction
+            if deduct_stakes_first:
+                max_humans = room_data.get('max_humans', 1)
+                minimum_stake = room_data.get('minimum_stake', 0)
+                
+                if max_humans > 1 and minimum_stake > 0:
+                    print(f"💎 Deducting stakes in atomic transaction with rewards")
+                    stake_success = await deduct_stakes(room_code, db)
+                    if not stake_success:
+                        print(f"❌ Stake deduction failed - rolling back entire transaction")
+                        await db.rollback()
+                        raise Exception("Failed to deduct stakes - transaction rolled back")
+                    print(f"✅ Stakes deducted (not committed yet - will commit with rewards)")
+            
             # Calculate and distribute gems using new gem reward system
             player_user_map = room_data.get('player_user_map', {})
             
@@ -2122,13 +2218,18 @@ async def save_session_stats(room_code: str, state: dict, current_user: Optional
                         gems_earned = 100000
                     
                     # Credit/debit gems to user's balance (ATOMIC OPERATION)
-                    # Note: Stakes were already deducted at game start
-                    # This credits back base gems + any stake winnings (or just base if lost stakes)
+                    # NEW: Stakes are deducted in complete_voting() just before this function
+                    # So the net operation here is:
+                    #   - Deduction happened just before (in complete_voting)
+                    #   - Now we credit the total reward
+                    #   - Net effect = -stake + reward
                     old_balance = db_user.gem_balance
                     old_total_earned = db_user.total_gems_earned
                     old_total_games = db_user.total_games
                     
                     print(f"     💰 Crediting gems to user...")
+                    print(f"        Current balance: {old_balance} gems")
+                    print(f"        Adding: {gems_earned} gems")
                     db_user.gem_balance += gems_earned
                     
                     # Only add to total_gems_earned if positive (don't count stake losses)
@@ -2215,19 +2316,24 @@ async def save_session_stats(room_code: str, state: dict, current_user: Optional
             for player_id in [p['id'] for p in state.get('players', []) if p['role'] == 'human']:
                 reward = rewards.get(player_id, {})
                 stake_returned = reward.get('stake_gems', 0)
+                base_gems = reward.get('base_gems', 0)
+                total_gems = reward.get('total_gems', 0)
                 
                 # Calculate display values
-                stake_display = stake_returned - minimum_stake if minimum_stake > 0 else stake_returned
-                total_gems = reward.get('total_gems', 0)
-                net_change = total_gems - minimum_stake if minimum_stake > 0 else total_gems
+                if minimum_stake > 0:
+                    stake_display = stake_returned - minimum_stake
+                    net_change = total_gems - minimum_stake
+                else:
+                    stake_display = 0
+                    net_change = total_gems
                 
                 payload['gem_rewards'][player_id] = {
-                    'base_gems': reward.get('base_gems', 0),
+                    'base_gems': base_gems,
                     'stake_gems': stake_display,  # Net stake change (negative for losers)
-                    'stake_deducted': minimum_stake,  # What was taken at start
-                    'stake_returned': stake_returned,  # What came back at end
-                    'total_gems': total_gems,  # What's credited
-                    'net_change': net_change,  # True net from start to end
+                    'stake_amount': minimum_stake,  # What was at risk
+                    'stake_returned': stake_returned,  # What came back
+                    'total_gems': total_gems,  # What's credited (net after deduction)
+                    'net_change': net_change,  # True net profit/loss
                     'is_winner': reward.get('is_winner', False)
                 }
             payload['credited_players'] = credited_players  # Store detailed credit info
@@ -2814,6 +2920,14 @@ async def websocket_endpoint(websocket: WebSocket, room_code: str, player_id: st
         # Start discussion phase
         asyncio.create_task(run_discussion_phase(room_code))
         
+        # Immediately send timer sync for initial discussion phase (FIX: Prevent timer desync at game start)
+        discussion_duration = rooms[room_code].get('discussion_duration', DISCUSSION_TIME)
+        await broadcast_to_room(room_code, {
+            "type": "timer_sync",
+            "phase": "Discussion",
+            "time_remaining": int(discussion_duration)
+        })
+        
         # Trigger active decision-making for initial AI responses
         # AIs will individually decide if they should start the conversation
         await asyncio.sleep(1.75)  # Small delay for realism
@@ -2838,6 +2952,24 @@ async def websocket_endpoint(websocket: WebSocket, room_code: str, player_id: st
     elif state["phase"].value == "Voting":
         phase_msg["voting_duration"] = room.get('voting_duration', VOTING_TIME)
     await websocket.send_json(phase_msg)
+    
+    # Send current timer state if in an active phase (FIX: Timer sync for mid-phase joins)
+    if state["phase"].value in ["Discussion", "Voting"] and 'phase_start_time' in room:
+        phase_start = room['phase_start_time']
+        if state["phase"].value == "Discussion":
+            total_duration = room.get('discussion_duration', DISCUSSION_TIME)
+        else:
+            total_duration = room.get('voting_duration', VOTING_TIME)
+        
+        elapsed = _time.time() - phase_start
+        remaining = max(0, int(total_duration - elapsed))
+        
+        await websocket.send_json({
+            "type": "timer_sync",
+            "phase": state["phase"].value,
+            "time_remaining": remaining
+        })
+        print(f"⏱️ Sent initial timer sync to {player_id}: {remaining}s remaining in {state['phase'].value}")
     
     # Send chat history
     for msg in state["chat_history"]:
@@ -2994,6 +3126,15 @@ async def start_game(room_code: str):
         
         # Start phases
         asyncio.create_task(run_discussion_phase(room_code))
+        
+        # Immediately send timer sync for initial discussion phase (FIX: Prevent timer desync at game start)
+        discussion_duration = rooms[room_code].get('discussion_duration', DISCUSSION_TIME)
+        await broadcast_to_room(room_code, {
+            "type": "timer_sync",
+            "phase": "Discussion",
+            "time_remaining": int(discussion_duration)
+        })
+        
         # Trigger active decision-making for AI responses
         await asyncio.sleep(1)  # Small delay
         asyncio.create_task(trigger_agent_decisions(room_code))
@@ -5705,6 +5846,15 @@ async def join_room(
                         
                             # Start phases
                             asyncio.create_task(run_discussion_phase(room_code))
+                            
+                            # Immediately send timer sync for initial discussion phase (FIX: Prevent timer desync at game start)
+                            discussion_duration = room.get('discussion_duration', DISCUSSION_TIME)
+                            await broadcast_to_room(room_code, {
+                                "type": "timer_sync",
+                                "phase": "Discussion",
+                                "time_remaining": int(discussion_duration)
+                            })
+                            
                             await asyncio.sleep(0.75)
                             asyncio.create_task(trigger_agent_decisions(room_code))
                     
@@ -5808,6 +5958,15 @@ async def join_room(
         
             # Start phases
             asyncio.create_task(run_discussion_phase(room_code))
+            
+            # Immediately send timer sync for initial discussion phase (FIX: Prevent timer desync at game start)
+            discussion_duration = rooms[room_code].get('discussion_duration', DISCUSSION_TIME)
+            await broadcast_to_room(room_code, {
+                "type": "timer_sync",
+                "phase": "Discussion",
+                "time_remaining": int(discussion_duration)
+            })
+            
             # Trigger active decision-making for AI responses
             await asyncio.sleep(0.75)  # Small delay
             asyncio.create_task(trigger_agent_decisions(room_code))
@@ -5944,24 +6103,25 @@ async def join_room(
                     for msg in result['broadcast_queue']:
                         await broadcast_to_room(room_code, msg)
                 
-                # Deduct stakes before starting the game (multi-human games only)
-                stake_deduction_success = await deduct_stakes(room_code, db)
-                if not stake_deduction_success:
-                    print(f"❌ Stake deduction failed for room {room_code}. Cancelling game start.")
-                    room['room_status'] = 'waiting'
-                    rooms[room_code]['initialized'] = False
-                    await broadcast_to_room(room_code, {
-                        "type": "error",
-                        "message": "Failed to deduct stakes. Game cancelled. Please ensure all players have sufficient gems."
-                    })
-                    return {
-                        "success": False,
-                        "error": "Failed to deduct stakes. Game cancelled."
-                    }
+                # CHANGED: Don't deduct stakes at game start anymore
+                # Stakes will only be deducted AFTER voting completes successfully
+                # This protects players from losing gems due to technical failures
+                print(f"💎 Stakes configured but NOT deducted yet (will deduct after successful voting)")
+                print(f"   Minimum stake: {room.get('minimum_stake', 0)} gems per player")
+                print(f"   Stakes at risk (not charged): {room.get('player_stakes', {})}")
             
                 # Start phases
                 print(f"🚀 Starting game phases - discussion_duration: {room.get('discussion_duration', 'NOT SET')}, voting_duration: {room.get('voting_duration', 'NOT SET')}")
                 asyncio.create_task(run_discussion_phase(room_code))
+                
+                # Immediately send timer sync for initial discussion phase (FIX: Prevent timer desync at game start)
+                discussion_duration = room.get('discussion_duration', DISCUSSION_TIME)
+                await broadcast_to_room(room_code, {
+                    "type": "timer_sync",
+                    "phase": "Discussion",
+                    "time_remaining": int(discussion_duration)
+                })
+                
                 # Trigger active decision-making for AI responses
                 await asyncio.sleep(0.75)  # Small delay
                 asyncio.create_task(trigger_agent_decisions(room_code))
@@ -6053,34 +6213,52 @@ async def cast_vote(room_code: str, vote_data: dict):
     
     state = rooms[room_code]['state']
     
+    # Detailed logging for vote submission
+    print(f"🗳️ Vote submission from {player_id} in room {room_code}")
+    print(f"   Voted for: {voted_for}")
+    print(f"   Current phase: {state['phase']}")
+    print(f"   Current votes: {state.get('votes', {})}")
+    
     # Check if in voting phase
     if state['phase'] != Phase.VOTING:
-        return {"error": "Not in voting phase"}
+        error_msg = f"Not in voting phase (current: {state['phase'].value})"
+        print(f"   ❌ {error_msg}")
+        return {"error": error_msg}
     
     # Check if already voted (enforce single vote per player)
     if player_id in state.get('votes', {}):
-        return {"error": "Already voted"}
+        error_msg = "Already voted"
+        print(f"   ❌ {error_msg}")
+        return {"error": error_msg}
     
     # Validate vote count for multi-human games
     human_players = [p for p in state['players'] if p['role'] == 'human' and not p['eliminated']]
     num_humans = len(human_players)
     
+    print(f"   Human players: {[p['id'] for p in human_players]}")
+    print(f"   All players: {[(p['id'], p['role']) for p in state['players']]}")
+    
     if num_humans > 1:
         # Multi-human game: must vote for exactly N-1 humans
         expected_votes = num_humans - 1
         if len(voted_for) != expected_votes:
-            return {
-                "error": f"Must vote for exactly {expected_votes} players in multi-human games. You selected {len(voted_for)}."
-            }
+            error_msg = f"Must vote for exactly {expected_votes} players in multi-human games. You selected {len(voted_for)}."
+            print(f"   ❌ {error_msg}")
+            return {"error": error_msg}
         
         # Validate: cannot vote for self
         if player_id in voted_for:
-            return {"error": "Cannot vote for yourself"}
+            error_msg = "Cannot vote for yourself"
+            print(f"   ❌ {error_msg}")
+            return {"error": error_msg}
         
         # Validate: all voted players exist and are not eliminated
         for vote in voted_for:
             if not any(p['id'] == vote and not p['eliminated'] for p in state['players']):
-                return {"error": f"Invalid vote target: {vote}"}
+                error_msg = f"Invalid vote target: {vote} (not found or eliminated)"
+                print(f"   ❌ {error_msg}")
+                print(f"   Available players: {[p['id'] for p in state['players'] if not p['eliminated']]}")
+                return {"error": error_msg}
     
     # Track player activity
     update_player_activity(rooms[room_code], player_id)
