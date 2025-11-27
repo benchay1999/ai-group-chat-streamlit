@@ -678,7 +678,7 @@ class GameGraph:
             
             system_prompt = (
                 f"당신은 {ai_id}입니다. 성격: {personality}.\n"
-                "당신의 목표는 가능한 한 인간 사용자처럼 행동하고 그룹 대화에 자연스럽게 참여하는 것입니다.\n\n"
+                "당신의 목표는 가능한 한 인간 사용자처럼 행동하고 그룹 대화에 자연스럽게 참여하는 것입니다. 당신의 답변은 짧아야 합니다. 이는 실제 인간 채팅을 모방하기 위한 것입니다.\n\n"
                 f"현재 주제: {state['topic']}\n"
                 f"{strategic_context}\n{timing_context}\n\n"
                 "지금 응답해야 하는지 신중하게 결정하세요. 다음 중 하나 이상이 강하게 해당되지 않는 한 응답하지 않는 것을 선호하세요:\n"
@@ -799,17 +799,18 @@ class GameGraph:
 🎭 당신의 성격: {personality}
 행동 특성: {behavioral_note}
 
-중요: 당신은 독특한 성격을 가진 사람입니다. 다른 플레이어들과 다르게 행동하세요.
+중요: 당신은 독특한 성격을 가진 사람입니다. 다른 플레이어들과 다르게 행동하세요. 당신의 답변은 짧아야 합니다. 이는 실제 인간 채팅을 모방하기 위한 것입니다.
 {personality.split(',')[0]} 사람이 어떻게 말하고 행동할지 생각하세요.
 
 인간처럼 자연스럽게 행동하세요:
 1. 때때로 오타를 만드세요 (확률: ~{int(imperfection_profile['typo_probability']*100)}%, 하지만 강제하지 마세요)
 2. 당신의 성격에 맞는 문법과 스타일을 사용하세요
-3. 네티즌 용어는 자연스럽게 느껴질 때만 사용하세요 (확률: ~{int(imperfection_profile['netspeak_probability']*100)}%)
+3. 네티즌 용어는 자연스럽게 느껴질 때만 사용하세요 (사용할 확률: ~{int(imperfection_profile['netspeak_probability']*100)}%)
    - 확률은 가이드일 뿐입니다 - 강제로 사용하지 마세요
    - 문맥에 맞을 때만, 자연스럽게 사용하세요
    - 모든 메시지에 은어를 넣지 마세요
 4. 메시지를 여러 개의 짧은 청크로 나누어 생각하는 것처럼 보이게 하세요
+5. 오타를 냈을 때, 웬만하면 그것을 수정하지 마세요 (수정할 확률: ~{int(imperfection_profile['self_correction_probability']*100)}%). 대부분의 오타는 수정하지 않고 그냥 두세요.
 
 청킹 예시 (성격에 맞게 조정하세요):
 "아 그거" -- chunk 1
@@ -822,7 +823,7 @@ JSON 형식으로만 응답하세요:
 {
   "chunks": ["청크1", "청크2", ...],
   "has_typo": true/false,
-  "correction": "오타가 있으면 수정 메시지 (예: '*의미했어요'). 없으면 빈 문자열"
+  "correction": "오타가 있고, 정말로 수정하고 싶을 때만 수정 메시지 작성 (확률 10%). 대부분의 경우 빈 문자열이어야 함"
 }
 
 청크는 1-4개 사이여야 합니다. 각 청크는 짧고 자연스러워야 합니다.
@@ -841,7 +842,7 @@ JSON 형식으로만 응답하세요:
 🎭 Your Personality: {personality}
 Behavioral traits: {behavioral_note}
 
-CRITICAL: You are a unique individual with a distinct personality. Act differently from other players.
+CRITICAL: You are a unique individual with a distinct personality. Act differently from other players. Your response should not be long. This is to mimic actual human chatting in group chats.
 Think about how someone who is "{personality.split(',')[0]}" would speak and behave.
 
 Act naturally like a human:
@@ -853,6 +854,7 @@ Act naturally like a human:
    - Don't put slang in every single message
    - Many messages should have NO netspeak at all
 4. Split your message into short "thinking aloud" chunks (1-4 chunks total)
+5. If you make a typo, rarely correct it (probability: ~{int(imperfection_profile['self_correction_probability']*100)}%). Most typos should be left uncorrected.
 
 Chunking examples (adapt to your personality):
 "hey" -- chunk 1
@@ -869,7 +871,7 @@ Output ONLY valid JSON in this format:
 {
   "chunks": ["chunk1", "chunk2", ...],
   "has_typo": true/false,
-  "correction": "if has_typo is true, provide a correction message (e.g., '*meant', '*I mean'). Otherwise empty string"
+  "correction": "if has_typo is true AND you decide to fix it (low chance), provide a correction message (e.g., '*meant'). Otherwise empty string"
 }
 
 Keep chunks between 1-4 total. Each chunk should be short and natural.
@@ -881,7 +883,7 @@ Never use em dashes. Don't reveal you're an AI.
             "You are participating in a group-chat. "
             f"Your personality is: {personality}\n\n"
             "Your objectives:\n"
-            "1. Act and chat like a REAL human with YOUR specific personality.\n"
+            "1. Act and chat like a REAL human with YOUR specific personality. Also, your response should not be long. This is to mimic actual human chatting in group chats.\n"
             "2. Be DISTINCTIVE - don't act like the other players.\n"
             "3. Keep the conversation engaging and interesting.\n\n"
             + topic_clause + "\n"
@@ -1116,7 +1118,8 @@ async def process_human_message(state: GameState, message: str, player_id: str) 
     
     # Don't pre-populate pending_ai_messages here
     # Let trigger_agent_decisions() handle it in main.py for consistency
-    new_state["pending_ai_messages"] = []
+    # CRITICAL: Do NOT clear pending_ai_messages here. If an AI decided to speak
+    # before the human message arrived, we want to let them speak (race condition handling).
     
     return new_state
 

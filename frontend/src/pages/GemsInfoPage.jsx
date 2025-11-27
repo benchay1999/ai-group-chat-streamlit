@@ -103,7 +103,7 @@ const GemsInfoPage = () => {
                 To join multi-player games, you need <strong className="text-white">minimum 250 gems</strong>.
               </p>
               <p className="text-sm text-gray-400">
-                Stakes are calculated as a percentage of your balance (10%, 30%, 50%, or 100%). 
+                Stakes are calculated as a percentage of your balance (0%, 10%, 30%, 50%, or 100%). 
                 All players risk the <strong>minimum stake</strong> (lowest among all players).
               </p>
             </div>
@@ -127,7 +127,7 @@ const GemsInfoPage = () => {
                   <div className="text-green-400">Player B: 900 gems × 10% = 90 stake</div>
                   <div className="text-green-400">Player C: 800 gems × 10% = 80 stake</div>
                   <div className="text-yellow-400 mt-2">minimum_stake = 80 gems</div>
-                  <div className="text-red-400 mt-2">All players lose 80 gems immediately</div>
+                  <div className="text-red-400 mt-2">All players pay 80 gems for the game (this is done immediately after the voting phase ends)</div>
                 </div>
               </div>
             </div>
@@ -147,7 +147,7 @@ const GemsInfoPage = () => {
                     <span>All participants:</span>
                     <span className="text-green-400 font-bold text-lg">+100 gems</span>
                   </div>
-                  <p className="text-xs text-gray-400 mt-2">Guaranteed participation reward</p>
+                  <p className="text-xs text-gray-400 mt-2">Guaranteed participation reward (requires voting)</p>
                 </div>
               </div>
 
@@ -159,14 +159,14 @@ const GemsInfoPage = () => {
                 <div className="bg-blue-900 bg-opacity-30 rounded p-4 border-l-4 border-blue-500 mb-4">
                   <h5 className="font-bold text-blue-300 mb-3">🏆 Winners (Most Votes)</h5>
                   <ol className="list-decimal list-inside space-y-2 text-sm">
-                    <li><strong className="text-green-400">Stake refund</strong>: Get your stake back (guaranteed)</li>
+                    <li><strong className="text-green-400">Stake refund</strong>: Get your stake back (if you voted)</li>
                     <li><strong className="text-cyan-400">Loser pool</strong>: All loser stakes combined</li>
                     <li><strong className="text-yellow-400">Equal division</strong>: Pool divided by number of winners</li>
-                    <li><strong className="text-purple-400">Accuracy bonus</strong>: You get (accuracy% × your share)</li>
+                    <li><strong className="text-purple-400">Accuracy bonus</strong>: You get (accuracy% × your share of the loser pool)</li>
                   </ol>
                   
                   <div className="bg-gray-800 rounded p-3 mt-4 font-mono text-xs">
-                    <div className="text-cyan-400">stake_refund = minimum_stake (always returned)</div>
+                    <div className="text-cyan-400">stake_refund = minimum_stake (if voted)</div>
                     <div className="text-yellow-400">loser_pool = minimum_stake × num_losers</div>
                     <div className="text-green-400">your_share = loser_pool divided by num_winners</div>
                     <div className="text-purple-400">accuracy = correct_votes divided by (num_humans - 1)</div>
@@ -181,10 +181,28 @@ const GemsInfoPage = () => {
                   <div className="text-sm space-y-2">
                     <div className="flex items-center justify-between">
                       <span>Stakes returned:</span>
-                      <span className="text-red-400 font-bold">0 gems</span>
+                      <span className="text-red-400 font-bold">-(minimum_stake) gems</span>
                     </div>
                     <p className="text-gray-400 text-xs mt-2">
                       Losers forfeit their stakes entirely. These go to the winner pool.
+                    </p>
+                  </div>
+                </div>
+
+                {/* Voting Penalty Warning */}
+                <div className="bg-red-900 bg-opacity-40 rounded-lg p-6 border border-red-500 mt-6">
+                  <h3 className="text-xl font-bold text-white mb-3 flex items-center gap-2">
+                    <AlertCircle className="w-5 h-5 text-red-400" />
+                    ⚠️ Voting Penalty (No Vote = No Reward)
+                  </h3>
+                  <div className="space-y-2 text-sm text-gray-300">
+                    <p>You <strong>MUST vote</strong> during the voting phase to earn rewards.</p>
+                    <ul className="list-disc list-inside space-y-1 ml-2">
+                      <li><strong className="text-red-400">Base Gems:</strong> Forfeited (0 gems) if you don't vote.</li>
+                      <li><strong className="text-red-400">Stake Refund:</strong> Forfeited (0 gems) if you don't vote, even if you win!</li>
+                    </ul>
+                    <p className="text-xs text-gray-400 mt-2">
+                      Don't go AFK! Make sure to cast your vote to protect your stake and earn gems.
                     </p>
                   </div>
                 </div>

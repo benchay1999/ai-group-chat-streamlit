@@ -756,7 +756,7 @@ async def proactive_agent_engagement(room_code: str):
             break
         
         # Wait for a period before checking (stagger checks to avoid conflicts)
-        await asyncio.sleep(random.uniform(8, 15))
+        await asyncio.sleep(random.uniform(4, 8))
         
         if room_code not in rooms:
             break
@@ -1188,6 +1188,11 @@ async def calculate_game_rewards(
     for player_id in human_player_ids:
         rewards[player_id]['votes_received'] = vote_counts.get(player_id, 0)
     
+    # Identify players who actually cast a vote
+    voters = state.get('votes', {})
+    voted_player_ids = set(voters.keys())
+    print(f"🗳️ Players who voted: {voted_player_ids}")
+    
     if num_humans == 1:
         # SINGLE-HUMAN GAME: Participation-based
         # Everyone gets base gems (participation fee)
@@ -1200,11 +1205,16 @@ async def calculate_game_rewards(
         else:
             winners = []
         
-        # Everyone gets base gems (participation fee)
+        # Everyone gets base gems (participation fee) - IF THEY VOTED
         for player_id in human_player_ids:
-            rewards[player_id]['base_gems'] = 50
+            if player_id in voted_player_ids:
+                rewards[player_id]['base_gems'] = 50
+            else:
+                print(f"⚠️ Player {player_id} did not vote - forfeiting base gems")
+                rewards[player_id]['base_gems'] = 0
+            
             rewards[player_id]['stake_gems'] = 0  # No stakes
-            rewards[player_id]['total_gems'] = 50
+            rewards[player_id]['total_gems'] = rewards[player_id]['base_gems']
             rewards[player_id]['is_winner'] = (player_id in winners)  # Track winner for display
         
         print(f"💎 Single-human game rewards (participation-based): {rewards}")
@@ -1214,9 +1224,13 @@ async def calculate_game_rewards(
         # Base reward: 100 gems for all participants
         # Stakes: Calculated based on voting accuracy
         
-        # All humans get base gems
+        # All humans get base gems - IF THEY VOTED
         for player_id in human_player_ids:
-            rewards[player_id]['base_gems'] = 100
+            if player_id in voted_player_ids:
+                rewards[player_id]['base_gems'] = 100
+            else:
+                print(f"⚠️ Player {player_id} did not vote - forfeiting base gems")
+                rewards[player_id]['base_gems'] = 0
         
         # Find player(s) with most votes
         if vote_counts:
@@ -1262,9 +1276,14 @@ async def calculate_game_rewards(
                     accuracy = correct_identifications / votes_needed if votes_needed > 0 else 0.0
                     
                     # Winner gets:
-                    # 1. Their stake back (guaranteed)
+                    # 1. Their stake back (guaranteed IF THEY VOTED)
                     # 2. (accuracy%) * (their equal share of loser pool)
-                    stake_refund = minimum_stake
+                    if winner_id in voted_player_ids:
+                        stake_refund = minimum_stake
+                    else:
+                        print(f"   ⚠️ Winner {winner_id} did not vote - forfeiting stake refund")
+                        stake_refund = 0
+                        
                     stake_winnings = int(accuracy * max_share_per_winner)
                     total_stake_reward = stake_refund + stake_winnings
                     
@@ -1276,7 +1295,7 @@ async def calculate_game_rewards(
                     
                     print(f"   Winner {winner_id}:")
                     print(f"     Accuracy: {correct_identifications}/{votes_needed} = {accuracy*100:.1f}%")
-                    print(f"     Refund: {stake_refund} gems (guaranteed)")
+                    print(f"     Refund: {stake_refund} gems (guaranteed if voted)")
                     print(f"     Winnings: {stake_winnings} gems ({accuracy*100:.1f}% of {max_share_per_winner})")
                     print(f"     Total: {total_stake_reward} gems")
                 
@@ -1294,12 +1313,18 @@ async def calculate_game_rewards(
                 # Since stakes were deducted at game start, we need to credit them back
                 for player_id in top_voted_players:
                     rewards[player_id]['is_winner'] = True
-                    rewards[player_id]['stake_gems'] = minimum_stake  # Refund the deducted stake
+                    if player_id in voted_player_ids:
+                        rewards[player_id]['stake_gems'] = minimum_stake  # Refund the deducted stake
+                    else:
+                        rewards[player_id]['stake_gems'] = 0 # Penalty for not voting
             elif num_winners == 0:
                 # No one got any votes - no winners, refund stakes to everyone
                 # Since stakes were deducted at game start, we need to credit them back
                 for player_id in human_player_ids:
-                    rewards[player_id]['stake_gems'] = minimum_stake  # Refund the deducted stake
+                    if player_id in voted_player_ids:
+                        rewards[player_id]['stake_gems'] = minimum_stake  # Refund the deducted stake
+                    else:
+                        rewards[player_id]['stake_gems'] = 0 # Penalty for not voting
         else:
             # No stakes - just mark winners for display purposes
             # Even without stakes, we want to show who won (got most votes)
@@ -1946,9 +1971,14 @@ async def trigger_agent_decisions(room_code: str, exclude_agents: list = None):
     
     # Update pending AI messages
     if responding_ais:
-        state['pending_ai_messages'] = responding_ais
+        # Merge with existing pending messages to avoid revoking previous decisions
+        current_pending = state.get('pending_ai_messages', [])
+        # Add new ones that aren't already pending (preserve order)
+        new_pending = current_pending + [ai for ai in responding_ais if ai not in current_pending]
+        
+        state['pending_ai_messages'] = new_pending
         rooms[room_code]['state'] = state
-        print(f"🎯 {len(responding_ais)}/{len(active_ais)} agents decided to respond: {responding_ais}")
+        print(f"🎯 {len(responding_ais)}/{len(active_ais)} agents decided to respond: {responding_ais} (Merged with pending: {current_pending})")
         
         # Trigger the responses
         asyncio.create_task(process_ai_messages(room_code))
@@ -3803,135 +3833,97 @@ async def get_user_earnings(
     
     # Get recent sessions via SessionPlayer table (PROPER USER-SESSION MAPPING)
     # This correctly handles cases where Session.user_id is NULL
+    # OPTIMIZATION: Select gems_earned directly to avoid N+1 queries
     from .database import SessionPlayer
     
     result = await db.execute(
-        select(DBSession)
+        select(DBSession, SessionPlayer.gems_earned)
         .join(SessionPlayer, SessionPlayer.session_id == DBSession.id)
         .where(SessionPlayer.user_id == current_user.id)
         .where(SessionPlayer.role == 'human')  # Only human players, not AI
         .order_by(desc(DBSession.completed_at))
         .limit(10)
     )
-    sessions = result.scalars().all()
+    sessions_data = result.all()
     
-    print(f"📊 Found {len(sessions)} recent sessions for user {current_user.user_id}")
+    print(f"📊 Found {len(sessions_data)} recent sessions for user {current_user.user_id}")
     
-    # Calculate last game amount (IN GEMS) - Use a smarter approach
+    # Calculate last game amount (IN GEMS)
     last_game_gems = 0  # Start with 0, will be updated if we find a recent game
     highest_earning_gems = 0
     recent_sessions = []
     
-    for idx, session in enumerate(sessions):
-        # Try to load actual gems earned/lost from JSON file
-        actual_gems = None
-        display_amount = None  # Initialize here
+    for idx, (session, gems_earned) in enumerate(sessions_data):
+        # PRIMARY SOURCE: SessionPlayer.gems_earned (database truth)
+        # This value represents the NET CHANGE (profit/loss) for the user in this session
+        actual_gems = gems_earned
+        display_amount = gems_earned
         
-        try:
-            if session.stats_file_path and os.path.exists(session.stats_file_path):
-                with open(session.stats_file_path, 'r') as f:
-                    stats_data = json.load(f)
-                    gem_rewards = stats_data.get('gem_rewards', {})
-                    
-                    # Find which player was this user
-                    from .database import SessionPlayer
-                    player_result = await db.execute(
-                        select(SessionPlayer).where(
-                            SessionPlayer.session_id == session.id,
-                            SessionPlayer.user_id == current_user.id
-                        )
-                    )
-                    user_player = player_result.scalar_one_or_none()
-                    if user_player and user_player.player_id in gem_rewards:
-                        reward_data = gem_rewards[user_player.player_id]
-                        # Handle both old and new format
-                        if isinstance(reward_data, dict):
-                            display_amount = reward_data.get('net_change', reward_data.get('total_gems', 0))
-                            actual_gems = display_amount
-                        else:
-                            actual_gems = reward_data
-                            display_amount = actual_gems
-                        print(f"   Session {idx}: {display_amount} gems (net change from JSON)")
-        except Exception as gem_load_error:
-            print(f"   Session {idx}: Could not load actual gems: {gem_load_error}")
-        
-        # Fallback estimation if actual gems not available
+        # Fallback: JSON file (only if database value is missing - legacy support)
         if actual_gems is None:
-            # METHOD 1: Try SessionPlayer.gems_earned (per-player accurate value)
             try:
-                from .database import SessionPlayer
-                player_result = await db.execute(
-                    select(SessionPlayer).where(
-                        SessionPlayer.session_id == session.id,
-                        SessionPlayer.user_id == current_user.id
-                    )
-                )
-                user_player = player_result.scalar_one_or_none()
-                if user_player and user_player.gems_earned is not None:
-                    actual_gems = user_player.gems_earned
-                    display_amount = actual_gems
-                    print(f"   Session {idx}: {actual_gems} gems (from SessionPlayer.gems_earned)")
-            except Exception as sp_error:
-                print(f"   Session {idx}: Could not query SessionPlayer: {sp_error}")
-            
-            # METHOD 2: Use calculated_earnings if available (legacy fallback)
-            if actual_gems is None and hasattr(session, 'calculated_earnings') and session.calculated_earnings:
-                actual_gems = int(float(session.calculated_earnings) * GEMS_PER_DOLLAR)
-                display_amount = actual_gems
-                print(f"   Session {idx}: {actual_gems} gems (from calculated_earnings - legacy)")
-            
-            # METHOD 3: Use average (last resort)
-            if actual_gems is None:
-                actual_gems = avg_gems_per_game
-                display_amount = actual_gems
-                print(f"   Session {idx}: {actual_gems} gems (estimated from average)")
+                if session.stats_file_path and os.path.exists(session.stats_file_path):
+                    with open(session.stats_file_path, 'r') as f:
+                        stats_data = json.load(f)
+                        gem_rewards = stats_data.get('gem_rewards', {})
+                        
+                        # We need to find the player ID again since we don't have it easily here
+                        # But this is a rare fallback path, so a query is acceptable
+                        player_result = await db.execute(
+                            select(SessionPlayer).where(
+                                SessionPlayer.session_id == session.id,
+                                SessionPlayer.user_id == current_user.id
+                            )
+                        )
+                        user_player = player_result.scalar_one_or_none()
+                        
+                        if user_player and user_player.player_id in gem_rewards:
+                            reward_data = gem_rewards[user_player.player_id]
+                            if isinstance(reward_data, dict):
+                                display_amount = reward_data.get('net_change', reward_data.get('total_gems', 0))
+                                actual_gems = display_amount
+                            else:
+                                actual_gems = reward_data
+                                display_amount = actual_gems
+                            print(f"   Session {idx} (fallback): {display_amount} gems from JSON")
+            except Exception as e:
+                print(f"   Session {idx}: Error in fallback loading: {e}")
+
+        # Legacy Fallback: calculated_earnings
+        if actual_gems is None and hasattr(session, 'calculated_earnings') and session.calculated_earnings:
+             actual_gems = int(float(session.calculated_earnings) * GEMS_PER_DOLLAR)
+             display_amount = actual_gems
         
-        # Ensure display_amount is set
+        # Final Fallback: Average
+        if actual_gems is None:
+            actual_gems = avg_gems_per_game
+            display_amount = actual_gems
+            
+        # Ensure we have a value
         if display_amount is None:
-            display_amount = actual_gems if actual_gems is not None else 0
+            display_amount = 0
+            actual_gems = 0
+
+        # Log the value found
+        print(f"   Session {idx}: {display_amount} gems (Source: {'DB' if gems_earned is not None else 'Fallback'})")
         
         if idx == 0:  # Most recent game
-            last_game_gems = display_amount  # Use net_change for accurate display
-            print(f"✅ Last game gems set to: {last_game_gems} (net change)")
+            last_game_gems = display_amount
+            print(f"✅ Last game gems set to: {last_game_gems}")
         
         # Track highest EARNING (not loss)
         if actual_gems > highest_earning_gems:
             highest_earning_gems = actual_gems
         
-        # For chart display, use net_change if available (accounts for stake deduction)
-        # Try to get net_change from the gem_rewards data
-        display_amount = actual_gems
-        try:
-            if session.stats_file_path and os.path.exists(session.stats_file_path):
-                with open(session.stats_file_path, 'r') as f:
-                    stats_data = json.load(f)
-                    gem_rewards = stats_data.get('gem_rewards', {})
-                    
-                    # Find user's player
-                    from .database import SessionPlayer
-                    player_result = await db.execute(
-                        select(SessionPlayer).where(
-                            SessionPlayer.session_id == session.id,
-                            SessionPlayer.user_id == current_user.id
-                        )
-                    )
-                    user_player = player_result.scalar_one_or_none()
-                    if user_player and user_player.player_id in gem_rewards:
-                        reward_data = gem_rewards[user_player.player_id]
-                        if isinstance(reward_data, dict) and 'net_change' in reward_data:
-                            display_amount = reward_data['net_change']
-        except Exception:
-            pass  # Use actual_gems as fallback
-        
-        # Store sessions with gem amounts for trend chart (can be negative)
+        # Store sessions with gem amounts for trend chart
         recent_sessions.append({
             "date": session.completed_at.isoformat(),
-            "amount": display_amount,  # Net change from game start (can be negative)
+            "amount": display_amount,
             "status": "completed"
         })
     
     # FALLBACK: If no sessions found but user has gems, use average
-    if len(sessions) == 0 and total_games > 0:
+    if len(sessions_data) == 0 and total_games > 0:
         last_game_gems = avg_gems_per_game
         print(f"⚠️ No sessions found via SessionPlayer, using average: {last_game_gems} gems")
     
@@ -4707,7 +4699,30 @@ async def list_sessions(
     
     # Load gem rewards for each session from JSON files
     session_list = []
+    
+    # Import for highest_reward query
+    from .database import SessionPlayer
+    
+    # Optimization: Fetch all highest rewards in a single query to avoid N+1
+    highest_rewards_map = {}
+    if sessions:
+        try:
+            session_ids = [s.id for s in sessions]
+            # Query max gems earned per session for the current batch
+            stmt = select(SessionPlayer.session_id, func.max(SessionPlayer.gems_earned))\
+                   .where(SessionPlayer.session_id.in_(session_ids))\
+                   .group_by(SessionPlayer.session_id)
+            
+            rewards_result = await db.execute(stmt)
+            # Map session_id -> max_gems
+            highest_rewards_map = {row[0]: (row[1] or 0) for row in rewards_result.all()}
+        except Exception as e:
+            print(f"Error fetching highest rewards batch: {e}")
+    
     for s in sessions:
+        # Get highest reward for this session from pre-fetched map
+        highest_reward = highest_rewards_map.get(s.id, 0)
+
         session_data = {
             "id": str(s.id),
             "room_code": s.room_code,
@@ -4721,6 +4736,7 @@ async def list_sessions(
             "payment_status": s.payment_status.value,
             "payment_amount": float(s.payment_amount) if s.payment_amount else None,
             "calculated_earnings": float(getattr(s, 'calculated_earnings', None)) if getattr(s, 'calculated_earnings', None) else None,
+            "highest_reward": highest_reward,
             "claimed_at": s.claimed_at.isoformat() if s.claimed_at else None,
             "gem_earned": None  # Will be loaded from JSON if available
         }

@@ -5,6 +5,7 @@
 
 import { useState } from 'react';
 import { useLanguage } from '../context/LanguageContext';
+import { Languages } from 'lucide-react';
 
 const CreateRoomModal = ({ isOpen, onClose, onCreate }) => {
   const { t } = useLanguage();
@@ -125,25 +126,25 @@ const CreateRoomModal = ({ isOpen, onClose, onCreate }) => {
             <div className="flex gap-2">
               <button
                 onClick={() => setRoomLanguage('english')}
-                className={`flex-1 py-2 px-4 rounded-lg font-semibold transition-all ${
+                className={`flex-1 py-2 px-4 rounded-lg font-semibold transition-all flex items-center justify-center gap-2 ${
                   roomLanguage === 'english'
                     ? 'bg-blue-600 text-white'
                     : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
                 }`}
                 disabled={creating}
               >
-                🇺🇸 {t('room.english')}
+                <Languages className="w-4 h-4" /> {t('room.english')}
               </button>
               <button
                 onClick={() => setRoomLanguage('korean')}
-                className={`flex-1 py-2 px-4 rounded-lg font-semibold transition-all ${
+                className={`flex-1 py-2 px-4 rounded-lg font-semibold transition-all flex items-center justify-center gap-2 ${
                   roomLanguage === 'korean'
                     ? 'bg-blue-600 text-white'
                     : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
                 }`}
                 disabled={creating}
               >
-                🇰🇷 {t('room.korean')}
+                <Languages className="w-4 h-4" /> {t('room.korean')}
               </button>
             </div>
           </div>
@@ -328,8 +329,9 @@ const CreateRoomModal = ({ isOpen, onClose, onCreate }) => {
               </div>
               <div className="flex justify-between">
                 <span className="text-gray-600">{t('modal.language')}:</span>
-                <span className="font-semibold text-green-600">
-                  {roomLanguage === 'korean' ? '🇰🇷 ' + t('room.korean') : '🇺🇸 ' + t('room.english')}
+                <span className="font-semibold text-green-600 flex items-center gap-1">
+                  <Languages className="w-3 h-3" />
+                  {roomLanguage === 'korean' ? t('room.korean') : t('room.english')}
                 </span>
               </div>
               <div className="flex justify-between">

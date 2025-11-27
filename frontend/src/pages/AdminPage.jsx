@@ -281,10 +281,9 @@ const AdminPage = () => {
                   className="w-full rounded-md border-gray-300 shadow-sm focus:border-purple-500 focus:ring-purple-500 sm:text-sm p-2 border"
                >
                  <option value="">Any Duration</option>
-                 <option value="60">Debug (60s)</option>
-                 <option value="300">5 Minutes (300s)</option>
-                 <option value="420">7 Minutes (420s)</option>
-                 <option value="600">10 Minutes (600s)</option>
+                 <option value="60">1 Minute (60s)</option>
+                 <option value="180">3 Minutes (180s)</option>
+                 <option value="240">4 Minutes (240s)</option>
                </select>
             </div>
 
@@ -360,10 +359,7 @@ const AdminPage = () => {
                       Completed
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Payment Status
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Amount
+                      Top Reward
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Actions
@@ -404,51 +400,14 @@ const AdminPage = () => {
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                         {format(new Date(session.completed_at), 'MMM d, HH:mm')}
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="flex flex-col gap-1">
-                          {session.payment_status === 'paid' ? (
-                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                              <CheckCircle className="w-3 h-3 mr-1" />
-                              Paid
-                            </span>
-                          ) : (
-                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
-                              <Clock className="w-3 h-3 mr-1" />
-                              Pending
-                            </span>
-                          )}
-                          {session.mturk_worker_id && (
-                            <div className="flex gap-1">
-                              {session.mturk_payment_sent ? (
-                                <span className="inline-flex items-center px-2 py-0.5 rounded text-xs bg-green-50 text-green-700 border border-green-200">
-                                  ✓ Base
-                                </span>
-                              ) : null}
-                              {session.mturk_bonus_sent ? (
-                                <span className="inline-flex items-center px-2 py-0.5 rounded text-xs bg-green-50 text-green-700 border border-green-200">
-                                  ✓ Bonus
-                                </span>
-                              ) : null}
-                            </div>
-                          )}
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="flex flex-col gap-1">
-                          <span className="text-sm text-gray-900 font-medium">
-                            {session.payment_amount ? `$${session.payment_amount}` : '-'}
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        {session.highest_reward ? (
+                          <span className="font-bold text-purple-600">
+                            {session.highest_reward} 💎
                           </span>
-                          {session.calculated_earnings && (
-                            <span className={`text-xs ${
-                              session.payment_amount && 
-                              Math.abs(session.payment_amount - session.calculated_earnings) > 0.01
-                                ? 'text-orange-600 font-medium'
-                                : 'text-gray-500'
-                            }`}>
-                              Suggested: ${session.calculated_earnings}
-                            </span>
-                          )}
-                        </div>
+                        ) : (
+                          <span className="text-gray-400">-</span>
+                        )}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm space-y-1">
                         <div className="flex gap-2 flex-wrap">

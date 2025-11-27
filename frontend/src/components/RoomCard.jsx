@@ -4,6 +4,7 @@
  */
 
 import { useLanguage } from '../context/LanguageContext';
+import { Languages } from 'lucide-react';
 
 const RoomCard = ({ room, onJoin, userGemBalance }) => {
   const { t } = useLanguage();
@@ -34,8 +35,9 @@ const RoomCard = ({ room, onJoin, userGemBalance }) => {
           <span className="px-3 py-1 bg-green-100 text-green-700 text-xs font-semibold rounded-full">
             {t('room.waiting')}
           </span>
-          <span className="px-2 py-0.5 bg-blue-100 text-blue-700 text-xs font-semibold rounded-full">
-            {language === 'korean' ? '🇰🇷 ' + t('room.korean') : '🇺🇸 ' + t('room.english')}
+          <span className="px-2 py-0.5 bg-blue-100 text-blue-700 text-xs font-semibold rounded-full flex items-center gap-1">
+            <Languages className="w-3 h-3" />
+            {language === 'korean' ? t('room.korean') : t('room.english')}
           </span>
         </div>
       </div>

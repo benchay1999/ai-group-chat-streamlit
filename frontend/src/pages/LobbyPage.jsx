@@ -15,7 +15,7 @@ import RoomCard from '../components/RoomCard';
 import CreateRoomModal from '../components/CreateRoomModal';
 import MTurkAutoLogin from '../components/MTurkAutoLogin';
 import toast from 'react-hot-toast';
-import { User, LogIn, Award, Trophy, Mail, Copy, Check } from 'lucide-react';
+import { User, LogIn, Award, Trophy, Mail, Copy, Check, Languages } from 'lucide-react';
 
 const LobbyPage = () => {
   const navigate = useNavigate();
@@ -265,7 +265,7 @@ const LobbyPage = () => {
                 className="flex items-center gap-2 px-4 py-2 bg-white bg-opacity-20 rounded-full hover:bg-opacity-30 transition-all"
                 title="Toggle Language"
               >
-                <span className="text-2xl">{language === 'korean' ? '🇰🇷' : '🇺🇸'}</span>
+                <Languages className="w-4 h-4 text-white" />
                 <span className="text-sm font-semibold text-white">
                   {language === 'korean' ? 'KO' : 'EN'}
                 </span>
