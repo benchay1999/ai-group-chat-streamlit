@@ -9,6 +9,7 @@ grader.py
 results/
 noshare/
 group-chat-stats/
+garbage/
 .env
 # Distribution / packaging
 .Python
