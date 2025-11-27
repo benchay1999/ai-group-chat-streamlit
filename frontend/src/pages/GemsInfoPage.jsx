@@ -81,16 +81,24 @@ const GemsInfoPage = () => {
 
         {/* Multi-Human Games */}
         <div className="bg-gray-800 bg-opacity-50 backdrop-blur-sm rounded-xl p-8 mb-8 border border-gray-700">
-          <div className="flex items-center gap-3 mb-6">
-            <div className="w-12 h-12 bg-orange-500 rounded-xl flex items-center justify-center">
-              <Trophy className="w-6 h-6 text-white" />
+          <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 bg-orange-500 rounded-xl flex items-center justify-center">
+                <Trophy className="w-6 h-6 text-white" />
+              </div>
+              <h2 className="text-3xl font-bold text-white">Multi-Player Games</h2>
             </div>
-            <h2 className="text-3xl font-bold text-white">Multi-Player Games</h2>
+            <span className="px-3 py-1 bg-yellow-500 bg-opacity-20 border border-yellow-500 text-yellow-200 rounded-full text-sm font-semibold">
+              Login Required for Stakes
+            </span>
           </div>
 
           <div className="space-y-6 text-gray-300">
             <p className="text-lg">
               2+ human players competing. Strategic voting with stakes system.
+              <span className="block text-sm text-yellow-400 mt-1 italic">
+                * Anonymous users can only join multi-player games with 0% stakes.
+              </span>
             </p>
 
             {/* Stakes Requirement */}

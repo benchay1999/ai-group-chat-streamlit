@@ -5,10 +5,12 @@
 
 import { useState } from 'react';
 import { useLanguage } from '../context/LanguageContext';
-import { Languages } from 'lucide-react';
+import { useAuth } from '../contexts/AuthContext';
+import { Languages, Lock } from 'lucide-react';
 
 const CreateRoomModal = ({ isOpen, onClose, onCreate }) => {
   const { t } = useLanguage();
+  const { isAuthenticated } = useAuth();
   const [maxHumans, setMaxHumans] = useState(1);
   const [totalPlayers, setTotalPlayers] = useState(5);
   const [roomLanguage, setRoomLanguage] = useState('english');
@@ -65,9 +67,11 @@ const CreateRoomModal = ({ isOpen, onClose, onCreate }) => {
         <div className="space-y-6">
           {/* Max Humans Slider */}
           <div>
-            <label className="block text-sm font-semibold text-gray-700 mb-2">
-              {t('modal.maxHumans')}: {maxHumans}
-            </label>
+            <div className="flex justify-between items-center mb-2">
+              <label className="block text-sm font-semibold text-gray-700">
+                {t('modal.maxHumans')}: {maxHumans}
+              </label>
+            </div>
             <input
               type="range"
               min="1"
@@ -238,9 +242,16 @@ const CreateRoomModal = ({ isOpen, onClose, onCreate }) => {
           {/* Stake Percentage (Multi-Human Only) */}
           {maxHumans > 1 && (
             <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">
-                💎 Stake Percentage
-              </label>
+              <div className="flex justify-between items-center mb-2">
+                <label className="block text-sm font-semibold text-gray-700">
+                  💎 Stake Percentage
+                </label>
+                {!isAuthenticated && stakePercentage > 0 && (
+                  <span className="text-xs bg-yellow-100 text-yellow-800 px-2 py-0.5 rounded-full flex items-center gap-1">
+                    <Lock className="w-3 h-3" /> Login required for stakes
+                  </span>
+                )}
+              </div>
               <div className="flex gap-2">
                 <button
                   onClick={() => setStakePercentage(0)}
@@ -259,8 +270,9 @@ const CreateRoomModal = ({ isOpen, onClose, onCreate }) => {
                     stakePercentage === 10
                       ? 'bg-green-600 text-white'
                       : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-                  }`}
-                  disabled={creating}
+                  } ${!isAuthenticated ? 'opacity-50 cursor-not-allowed' : ''}`}
+                  disabled={creating || !isAuthenticated}
+                  title={!isAuthenticated ? "Login required for stakes" : ""}
                 >
                   10%<br/><span className="text-[10px] opacity-80">Low</span>
                 </button>
@@ -270,8 +282,9 @@ const CreateRoomModal = ({ isOpen, onClose, onCreate }) => {
                     stakePercentage === 30
                       ? 'bg-yellow-600 text-white'
                       : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-                  }`}
-                  disabled={creating}
+                  } ${!isAuthenticated ? 'opacity-50 cursor-not-allowed' : ''}`}
+                  disabled={creating || !isAuthenticated}
+                  title={!isAuthenticated ? "Login required for stakes" : ""}
                 >
                   30%<br/><span className="text-[10px] opacity-80">Med</span>
                 </button>
@@ -281,8 +294,9 @@ const CreateRoomModal = ({ isOpen, onClose, onCreate }) => {
                     stakePercentage === 50
                       ? 'bg-orange-600 text-white'
                       : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-                  }`}
-                  disabled={creating}
+                  } ${!isAuthenticated ? 'opacity-50 cursor-not-allowed' : ''}`}
+                  disabled={creating || !isAuthenticated}
+                  title={!isAuthenticated ? "Login required for stakes" : ""}
                 >
                   50%<br/><span className="text-[10px] opacity-80">High</span>
                 </button>
@@ -292,15 +306,21 @@ const CreateRoomModal = ({ isOpen, onClose, onCreate }) => {
                     stakePercentage === 100
                       ? 'bg-red-600 text-white'
                       : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-                  }`}
-                  disabled={creating}
+                  } ${!isAuthenticated ? 'opacity-50 cursor-not-allowed' : ''}`}
+                  disabled={creating || !isAuthenticated}
+                  title={!isAuthenticated ? "Login required for stakes" : ""}
                 >
                   100%<br/><span className="text-[10px] opacity-80">All-in</span>
                 </button>
               </div>
               <p className="text-xs text-gray-500 mt-1">
-                💎 Minimum 250 gems required to join multi-human rooms
+                💎 Minimum 250 gems required to join staked multi-human rooms
               </p>
+              {!isAuthenticated && (
+                <p className="text-xs text-yellow-600 mt-1 italic">
+                  Anonymous users can only create multi-player games with 0% stakes.
+                </p>
+              )}
             </div>
           )}
 

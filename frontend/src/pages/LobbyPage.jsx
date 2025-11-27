@@ -15,7 +15,7 @@ import RoomCard from '../components/RoomCard';
 import CreateRoomModal from '../components/CreateRoomModal';
 import MTurkAutoLogin from '../components/MTurkAutoLogin';
 import toast from 'react-hot-toast';
-import { User, LogIn, Award, Trophy, Mail, Copy, Check, Languages, Loader } from 'lucide-react';
+import { User, LogIn, Award, Trophy, Mail, Copy, Check, Languages, Loader, AlertCircle, Bug } from 'lucide-react';
 
 const LobbyPage = () => {
   const navigate = useNavigate();
@@ -363,6 +363,11 @@ const LobbyPage = () => {
                   Your conversations help us research human-AI interaction while you get rewarded. 
                   Win more by being human-like! 🎮💰 Well, it is fake money (MTurk Sandbox) at the moment...
                 </p>
+                {!isAuthenticated && (
+                  <p className="text-xs text-yellow-200 mt-2 flex items-center gap-1 font-medium">
+                    <AlertCircle className="w-3 h-3" /> Note: Login required for stakes. Anonymous users can play multi-player games with 0% stakes.
+                  </p>
+                )}
               </div>
             </div>
             <button
@@ -481,7 +486,7 @@ const LobbyPage = () => {
           </div>
         )}
 
-        {/* Contact Email - Bottom of Page */}
+        {/* Contact Email and Bug Report - Bottom of Page */}
         <div className="flex justify-center items-center gap-2 mt-8 mb-6">
           <button
             onClick={() => setShowEmail(!showEmail)}
@@ -509,6 +514,18 @@ const LobbyPage = () => {
               </button>
             </div>
           )}
+
+          <a
+            href="https://github.com/benchay1999/ai-group-chat-streamlit/issues/new"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-2 px-5 py-2.5 bg-white bg-opacity-10 hover:bg-opacity-20 border border-white border-opacity-20 hover:border-opacity-40 backdrop-blur-md rounded-full transition-all duration-300 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 group"
+          >
+            <Bug className="w-4 h-4 text-pink-200 group-hover:text-pink-100 transition-transform duration-300 group-hover:rotate-12" />
+            <span className="text-sm font-semibold text-pink-100 group-hover:text-white transition-colors">
+              Bug report
+            </span>
+          </a>
         </div>
       </div>
 

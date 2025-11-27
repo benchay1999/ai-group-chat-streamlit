@@ -97,16 +97,17 @@ async def create_room(
     if stake_percentage not in [0, 10, 30, 50, 100]:
         return {"success": False, "error": "stake_percentage must be 0, 10, 30, 50, or 100"}
     
-    # Multi-human room validation: Must have at least 250 gems
+    # Multi-human room validation: Must have at least 250 gems IF stakes are involved
     if max_humans > 1:
-        if not current_user:
-            return {"success": False, "error": "Authentication required to create multi-human rooms"}
-        
-        if current_user.gem_balance < 250:
-            return {
-                "success": False, 
-                "error": f"Insufficient gems. You need at least 250 gems to create a multi-human room. Your balance: {current_user.gem_balance} gems"
-            }
+        if stake_percentage > 0:
+            if not current_user:
+                return {"success": False, "error": "Authentication required to create staked multi-human rooms"}
+            
+            if current_user.gem_balance < 250:
+                return {
+                    "success": False, 
+                    "error": f"Insufficient gems. You need at least 250 gems to create a staked multi-human room. Your balance: {current_user.gem_balance} gems"
+                }
     
     # Create room using service logic
     return create_room_logic(
@@ -579,7 +580,9 @@ async def join_room(
             print(f"⚠️ Room {room_code} does NOT exist, creating legacy room")
             # Legacy behavior: Create room if doesn't exist (for old room codes)
             # For legacy rooms, assign random player numbers too
-            total_players = NUM_AI_PLAYERS + 1
+            # Legacy rooms are now explicitly SINGLE-PLAYER ONLY (1 human + N AI)
+            max_humans = 1
+            total_players = NUM_AI_PLAYERS + max_humans
             all_numbers = list(range(1, total_players + 1))
             import random
             random.shuffle(all_numbers)
@@ -622,7 +625,7 @@ async def join_room(
                 'tasks': [],
                 'ai_processing_agents': set(),
                 'room_name': f"Room {room_code}",
-                'max_humans': 4,
+                'max_humans': max_humans,
                 'total_players': total_players,
                 'room_status': 'waiting',
                 'created_at': time.time(),
@@ -688,17 +691,19 @@ async def join_room(
         
         # MULTI-HUMAN ROOM VALIDATION
         if max_humans > 1:
-            if not current_user:
-                return {
-                    "success": False, 
-                    "error": "Authentication required to join multi-human rooms"
-                }
-            
-            if current_user.gem_balance < 250:
-                return {
-                    "success": False, 
-                    "error": f"Insufficient gems. You need at least 250 gems to join a multi-human room. Your balance: {current_user.gem_balance} gems"
-                }
+            stake_percentage = room.get('stake_percentage', 0)
+            if stake_percentage > 0:
+                if not current_user:
+                    return {
+                        "success": False, 
+                        "error": "Authentication required to join staked multi-human rooms"
+                    }
+                
+                if current_user.gem_balance < 250:
+                    return {
+                        "success": False, 
+                        "error": f"Insufficient gems. You need at least 250 gems to join a staked multi-human room. Your balance: {current_user.gem_balance} gems"
+                    }
     
         # Get state
         state = room['state']

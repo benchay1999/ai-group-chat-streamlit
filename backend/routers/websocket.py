@@ -91,7 +91,9 @@ async def websocket_endpoint(websocket: WebSocket, room_code: str, player_id: st
         print(f"🎮 Creating legacy WebSocket room: {room_code}")
         
         # For legacy WebSocket rooms, use proper number assignment
-        total_players = NUM_AI_PLAYERS + 1
+        # Legacy rooms are now explicitly SINGLE-PLAYER ONLY (1 human + N AI)
+        max_humans = 1
+        total_players = NUM_AI_PLAYERS + max_humans
         all_numbers = list(range(1, total_players + 1))
         random.shuffle(all_numbers)
         ai_numbers = all_numbers[:NUM_AI_PLAYERS]
@@ -129,8 +131,8 @@ async def websocket_endpoint(websocket: WebSocket, room_code: str, player_id: st
             'tasks': [],
             'ai_processing_agents': set(),
             'room_name': f"Room {room_code}",
-            'max_humans': 4,
-            'total_players': NUM_AI_PLAYERS + 4,
+            'max_humans': max_humans,
+            'total_players': total_players,
             'room_status': 'in_progress',
             'created_at': _time.time(),
             'creator_id': player_id,
@@ -155,6 +157,22 @@ async def websocket_endpoint(websocket: WebSocket, room_code: str, player_id: st
         print(f"📝 Legacy WebSocket room created - Topic: {state['topic']}")
     else:
         print(f"✅ WebSocket connecting to existing room: {room_code}")
+
+    # Enforce anonymous user restriction:
+    # - Single-player games (max_humans = 1): ALLOWED
+    # - Multi-player games (max_humans > 1) with 0% stakes: ALLOWED
+    # - Multi-player games (max_humans > 1) with > 0% stakes: BLOCKED
+    room_max_humans = rooms[room_code].get('max_humans', 1)
+    room_stake_percentage = rooms[room_code].get('stake_percentage', 0)
+    
+    if room_max_humans > 1 and room_stake_percentage > 0 and not user_id:
+        print(f"⛔ Anonymous user attempted to join staked multi-human room {room_code} (max_humans={room_max_humans}, stake={room_stake_percentage}%)")
+        await websocket.send_json({
+            "type": "error",
+            "message": "Login required for staked multi-player games"
+        })
+        await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+        return
     
     # Add connection
     rooms[room_code]['connections'][player_id] = websocket
