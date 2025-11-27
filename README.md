@@ -1,250 +1,182 @@
-# Human Hunter - A Turing Test-inspired Social Deduction Game
+# Human Hunter - AI Social Deduction Game
 
-## Overview
-This is a web-based game where human players compete against multiple AI agents (configurable, default 4) in a social deduction setting. Players (humans and AIs) vote for who seems most human-like. Humans win if they correctly identify a human; AIs win if they mislead votes toward an AI.
+A web-based Turing Test-inspired game where human players compete against AI agents in a social deduction setting. Players chat, vote, and try to identify who's human and who's AI.
 
-**Architecture**: Built with LangGraph for advanced multi-agent orchestration, providing a graph-based state machine for game flow management.
+## Key Features
 
-## 🎯 NEW: Gem Economy & MTurk Payment Processor
+- **Multi-Agent AI System**: Built with LangGraph for advanced agent orchestration
+- **Real-Time WebSocket Chat**: Instant messaging and game updates
+- **Gem-Based Economy**: Earn gems by playing, cash out via MTurk
+- **Gamification System**: Levels, achievements, streaks, and rewards
+- **MTurk Integration**: Automated payment processing for research participants
+- **Flexible Configuration**: Adjustable AI models, player counts, and game parameters
 
-The game features an internal gem-based economy where MTurk serves as a payment processor:
+## Quick Start
 
-- **💎 Gem Economy**: Players earn gems by playing games (1000 gems = $1.00 USD)
-- **🎮 Performance-Based Rewards**: Earnings based on participation, voting, and correctly identifying AI
-- **💰 Flexible Cash-Outs**: Cash out via MTurk when you reach minimum threshold (default: $2.00)
-- **🔐 Worker-Specific HITs**: Automated, qualification-based HITs only you can see
-- **📊 Wallet Dashboard**: Track your gem balance, earnings history, and cashout status
-- **👥 MTurk Integration**: Link your MTurk Worker ID to enable cashouts
-
-### Payment System Features
-- **🔐 Authentication System**: User registration and login with JWT tokens
-- **🎫 Completion Keys**: Cryptographically-signed proof of participation
-- **💎 Internal Currency**: Gems credited immediately after each game
-- **📈 Gamification**: XP, levels, achievements, and streaks (separate from gems)
-- **📊 Admin Dashboard**: View all sessions, manage users, monitor cashouts
-- **👥 Role-Based Access**: Separate views for participants and researchers
-
-### Future Enhancements (Planned)
-- **Level-Based Bonuses**: Higher-level players earn more gems per game
-- **Achievement Rewards**: Bonus gems for unlocking achievements
-- **Rogue-like Features**: Buy power-ups and multipliers with gems
-- **Daily Bonuses**: Login streaks reward extra gems
-- **Referral System**: Earn bonus gems for referring new players
-- **Leaderboards**: Compete for top earner spots
-
-### Quick Links
-- **Setup Guide**: See [MTURK_SETUP.md](MTURK_SETUP.md) for detailed installation
-- **Implementation Details**: See [IMPLEMENTATION_SUMMARY.md](IMPLEMENTATION_SUMMARY.md)
-- **Game Setup**: Continue reading below for general game setup
-
-## Quick Start ⚡
-
-**Get running in 5 minutes!** See **[QUICKSTART.md](QUICKSTART.md)**
+Get running in 5 minutes:
 
 ```bash
-# 1. Setup
-cp env.example .env && nano .env  # Add your OPENAI_API_KEY
+# 1. Clone and configure
+git clone <repository-url>
+cd ai-group-chat-streamlit
+cp env.example .env
+# Edit .env and add your OPENAI_API_KEY
 
 # 2. Start backend
-./start_local.sh
+cd backend
+pip install -r requirements.txt
+python main.py
 
-# 3. In another terminal, expose via tunnel (choose one)
-./ngrok http 8000 --domain=ai-groupchat.ngrok.io # Option A: ngrok
-ssh -R 80:localhost:8000 nokey@localhost.run   # Option B: localhost.run (no signup!)
-
-# 4. Deploy frontend to Streamlit Cloud with the tunnel URL
+# 3. Start frontend (new terminal)
+cd frontend
+npm install
+npm run dev
 ```
 
----
-
-## Setup
-
-### Prerequisites
-- Python 3.8+
-- An OpenAI API key for AI agents
-- (Optional) Node.js 18+ for React frontend
-
-### Backend Setup
-1. Navigate to the backend directory:
-   ```
-   cd backend
-   ```
-2. Install dependencies:
-   ```
-   pip install -r requirements.txt
-   ```
-3. Set the OpenAI API key as an environment variable:
-   ```
-   export OPENAI_API_KEY='your-api-key-here'
-   ```
-4. Run the backend server:
-   ```
-   uvicorn main:app --reload
-   ```
-
-### Frontend Setup
-
-You can choose between three frontend options:
-
-#### Option 1: React Frontend (WebSocket-based, Real-time)
-1. Navigate to the frontend directory:
-   ```
-   cd frontend
-   ```
-2. Install dependencies:
-   ```
-   npm install
-   ```
-3. Run the frontend development server:
-   ```
-   npm run dev
-   ```
-4. Open your browser at http://localhost:5173
-
-#### Option 2: Streamlit Frontend (Polling-based, Simpler)
-1. From the project root directory:
-   ```
-   pip install -r streamlit_requirements.txt
-   ```
-2. Run the Streamlit app:
-   ```
-   streamlit run streamlit_app.py
-   ```
-3. Your browser will open automatically at http://localhost:8501
-
-#### Option 3: Gradio Frontend (Polling-based, Modern UI) ⭐ NEW
-1. From the project root directory:
-   ```
-   pip install -r requirements.txt
-   ```
-2. Run the Gradio app:
-   ```
-   python gradio_app.py
-   # or use the launcher script:
-   ./run_gradio.sh
-   ```
-3. Open your browser at http://localhost:7860
-
-**Note**: All frontends connect to the same backend and can coexist. Choose based on your preference:
-- **React**: Real-time updates via WebSocket, modern UI with Tailwind CSS
-- **Streamlit**: Simpler Python-based UI, polling updates (~1 second refresh), easier to customize
-- **Gradio**: Modern Python-based UI with Blocks API, polling updates, great for demos and sharing
-
-### Playing the Game
-- The game will start automatically with you as the human player.
-- During the **Discussion Phase**: Chat with other players (AI agents) about the topic
-- During the **Voting Phase**: Vote to eliminate a player you suspect is human (if you're AI) or an AI (if you're human)
-- **Survive multiple rounds** to win!
-
-## Configuration
-The game is now highly configurable via environment variables in `backend/config.py`:
-- `NUM_AI_PLAYERS`: Number of AI opponents (default: 4, supports up to 8+)
-- `AI_MODEL_NAME`: LLM model to use (default: 'gpt-4o-mini')
-- `AI_MODEL_PROVIDER`: Choose between 'openai', 'anthropic', or 'groq' (default: 'openai')
-- `DISCUSSION_TIME`: Discussion phase duration in seconds (default: 180)
-- `VOTING_TIME`: Voting phase duration in seconds (default: 60)
-- `ROUNDS_TO_WIN`: Number of rounds human must survive to win (default: 3)
-
-You can set these as environment variables or modify `backend/config.py` directly.
-
-## LangGraph Architecture
-The backend uses LangGraph's StateGraph for advanced multi-agent orchestration:
-
-### Key Components
-- **State Management**: All game state is managed through a TypedDict (`GameState`) that flows through the graph
-- **Agent Nodes**: Each AI player is represented as a node with:
-  - Unique personality and behavioral traits
-  - Independent decision-making for chat messages and votes
-  - Pseudonymized view of other players for anonymity
-- **Orchestration Nodes**: Game flow nodes manage phases:
-  - Discussion phase (parallel AI chat generation)
-  - Voting phase (sequential AI vote processing)
-  - Elimination (vote counting and player removal)
-  - Win condition checking
-  - New round initialization
-
-### Graph Flow
-```
-Initialize → Discussion → AI Chat Agents → Voting → AI Vote Agents → Elimination → Win Check
-                                                                                      ↓
-                                                                          New Round ←┘ (if no winner)
-```
-
-### Benefits
-- **Scalability**: Easily adjust number of AI agents (4-8+)
-- **Modularity**: Each game phase is a discrete node
-- **State Tracking**: Complete game history maintained in state
-- **Extensibility**: Easy to add new agent types or game mechanics
+Open http://localhost:5173 and start playing!
 
 ## Documentation
 
-### Getting Started
-- **[QUICKSTART.md](QUICKSTART.md)** ⭐ - Get running in 5 minutes (start here!)
-- **[DEPLOYMENT.md](DEPLOYMENT.md)** - Complete deployment guide
-- **[TUNNELING_OPTIONS.md](TUNNELING_OPTIONS.md)** - All tunneling options (no sudo required)
-- **[SETUP_SUMMARY.md](SETUP_SUMMARY.md)** - Quick reference and troubleshooting
-- **[CONNECTION_ISSUES.md](CONNECTION_ISSUES.md)** - Fix SSL/connection errors
+- **[START_HERE.md](START_HERE.md)** - Complete setup guide with troubleshooting
+- **[MTURK_SETUP.md](MTURK_SETUP.md)** - MTurk integration and payment system
+- **[env.example](env.example)** - Configuration options reference
+- **[markdowns/](markdowns/)** - Detailed technical documentation
 
-### Technical Documentation
-- **[LANGGRAPH_MIGRATION.md](LANGGRAPH_MIGRATION.md)** - LangGraph architecture guide
-- **[STREAMLIT_IMPLEMENTATION.md](STREAMLIT_IMPLEMENTATION.md)** - Streamlit frontend implementation
-- **[DEVELOPER_GUIDE.md](DEVELOPER_GUIDE.md)** - Developer documentation
-- **[IMPLEMENTATION_SUMMARY.md](IMPLEMENTATION_SUMMARY.md)** - Complete implementation summary
+## How It Works
 
-### Additional Guides
-- **[STREAMLIT_README.md](STREAMLIT_README.md)** - Streamlit frontend details
-- **README.md** (this file) - General overview
+### Game Flow
+
+1. **Lobby**: Players join a room (or create one with custom settings)
+2. **Discussion Phase**: Everyone chats about a topic (default: 3 minutes)
+3. **Voting Phase**: Vote for who seems most AI-like (default: 1 minute)
+4. **Elimination**: Player with most votes is eliminated
+5. **Repeat**: Continue for multiple rounds (default: 3 rounds)
+6. **Victory**: Humans win if they survive; AIs win if all humans are eliminated
+
+### Architecture
+
+```
+Frontend (React)          Backend (FastAPI)           AI Layer
+├── Lobby System          ├── REST API                ├── LangGraph
+├── Real-time Chat        ├── WebSocket Server        ├── Multi-Agent System
+├── Voting Interface      ├── Room Management         ├── OpenAI/Anthropic/Groq
+└── Admin Dashboard       ├── Game Coordinator        └── Configurable Models
+                          └── Database (SQLite/PostgreSQL)
+```
+
+**Tech Stack:**
+- **Frontend**: React 18, Tailwind CSS, WebSocket
+- **Backend**: FastAPI, LangGraph, SQLAlchemy
+- **AI**: OpenAI GPT-4/GPT-4o-mini (default), Anthropic Claude, or Groq
+
+## Configuration
+
+Key settings in `.env` (see [env.example](env.example) for all options):
+
+```env
+# Required
+OPENAI_API_KEY=sk-...
+
+# Game Settings
+NUM_AI_PLAYERS=4              # Number of AI opponents (4-8)
+AI_MODEL_NAME=gpt-4o-mini     # AI model to use
+DISCUSSION_TIME=180           # Discussion phase (seconds)
+VOTING_TIME=60                # Voting phase (seconds)
+ROUNDS_TO_WIN=3               # Rounds to survive
+
+# Database (SQLite for dev, PostgreSQL for production)
+DATABASE_URL=sqlite+aiosqlite:///./group_chat.db
+
+# MTurk (optional - for payment system)
+AWS_ACCESS_KEY_ID=...
+AWS_SECRET_ACCESS_KEY=...
+MTURK_ENVIRONMENT=sandbox
+```
+
+## Gem Economy & MTurk Payment
+
+Players earn gems by playing games (1000 gems = $1 USD):
+
+- **Performance-Based**: Earn more for winning, voting correctly, active participation
+- **Flexible Cashouts**: Redeem gems via MTurk when reaching minimum threshold ($2 default)
+- **Automated HITs**: Worker-specific qualification-based HITs
+- **Admin Dashboard**: Track earnings, manage cashouts, view analytics
+
+See [MTURK_SETUP.md](MTURK_SETUP.md) for complete integration guide.
+
+## Development
+
+### Prerequisites
+
+- Python 3.8+
+- Node.js 18+
+- OpenAI API key (or Anthropic/Groq API key)
+
+### Project Structure
+
+```
+ai-group-chat-streamlit/
+├── backend/
+│   ├── main.py              # FastAPI server entry point
+│   ├── services/
+│   │   └── game_coordinator.py  # LangGraph game logic
+│   ├── routers/             # API endpoints
+│   ├── models/              # Database models
+│   └── requirements.txt
+├── frontend/
+│   ├── src/
+│   │   ├── pages/           # React pages
+│   │   └── components/      # React components
+│   └── package.json
+├── markdowns/               # Detailed documentation
+├── env.example              # Configuration template
+└── README.md               # This file
+```
+
+### Running Tests
+
+```bash
+# Backend tests
+cd backend
+pytest
+
+# Frontend tests
+cd frontend
+npm test
+```
 
 ## Deployment
 
-### Recommended: Local Backend + Cloud Frontend ⭐
+### Quick Deploy (Recommended)
 
-The best setup for performance - run the heavy AI backend on your local machine and host the lightweight frontend on Streamlit Cloud:
+**Local Backend + Cloud Frontend:**
 
-**Quick Start:**
-```bash
-# 1. Start local backend
-./start_local.sh
+1. Run backend locally with tunneling (ngrok or localhost.run)
+2. Deploy frontend to Vercel/Netlify with backend URL
 
-# 2. In another terminal, expose via ngrok
-./ngrok http 8000 --domain=ai-groupchat.ngrok.io
+See [markdowns/DEPLOYMENT.md](markdowns/DEPLOYMENT.md) for detailed deployment guides.
 
-# 3. Deploy frontend to Streamlit Cloud with BACKEND_URL set to your ngrok URL
-```
+### Production Checklist
 
-**Detailed instructions:** See [DEPLOYMENT.md](DEPLOYMENT.md)
+- [ ] Switch to PostgreSQL (see [markdowns/SQLITE_TO_POSTGRESQL.md](markdowns/SQLITE_TO_POSTGRESQL.md))
+- [ ] Set strong JWT secrets in `.env`
+- [ ] Configure CORS allowed origins
+- [ ] Set `ENVIRONMENT=production`
+- [ ] Enable HTTPS
+- [ ] Set up database backups
+- [ ] Configure monitoring/logging
 
-**Benefits:**
-- ⚡ Fast backend performance (runs on your machine)
-- 🆓 Free frontend hosting (Streamlit Cloud)
-- 🔧 Easy to develop and debug locally
-- 💰 No cloud backend costs
+## Contributing
 
-### Alternative Deployment Options
+Contributions welcome! See [markdowns/DEVELOPER_GUIDE.md](markdowns/DEVELOPER_GUIDE.md) for development guidelines.
 
-#### Full Local Development
-Run everything locally:
-```bash
-# Terminal 1: Backend
-uvicorn backend.main:app --reload
+## Support
 
-# Terminal 2: Frontend
-streamlit run streamlit_app.py
-```
+- Check [START_HERE.md](START_HERE.md) for troubleshooting
+- Review [markdowns/](markdowns/) for detailed technical docs
+- Check backend logs: `uvicorn backend.main:app --reload`
+- Check browser console for frontend errors
 
-#### Full Cloud Deployment
-Deploy both backend and frontend to cloud:
+## License
 
-**Backend (FastAPI)** - Deploy to Render, Railway, or Heroku:
-- Set OPENAI_API_KEY env var
-- Get public URL (e.g., https://your-backend.onrender.com)
-
-**Frontend (Streamlit)** - Deploy to Streamlit Cloud:
-- Set BACKEND_URL to your backend URL in secrets
-- Deploy `streamlit_cloud_app.py`
-
-**React Frontend Option** - Deploy to Vercel/Netlify:
-- Set REACT_APP_BACKEND_URL env var to your backend URL
-- Build and deploy from `frontend/` directory
-
-Users access the frontend URL in their browser; each can play in their own room by entering a room code or auto-generating one.
+[Add your license here]

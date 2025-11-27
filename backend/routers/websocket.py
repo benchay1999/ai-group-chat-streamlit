@@ -329,7 +329,8 @@ async def websocket_endpoint(websocket: WebSocket, room_code: str, player_id: st
         else:
             total_duration = room.get('voting_duration', VOTING_TIME)
         
-        elapsed = _time.time() - phase_start
+        # FIX 9.2: Use monotonic clock for timer calculations (immune to system clock changes)
+        elapsed = _time.monotonic() - phase_start
         remaining = max(0, int(total_duration - elapsed))
         
         await websocket.send_json({

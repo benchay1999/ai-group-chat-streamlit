@@ -500,32 +500,34 @@ const LobbyPage = () => {
             </span>
           </a>
 
-          <button
-            onClick={() => setShowEmail(!showEmail)}
-            className="inline-flex items-center gap-2 px-4 py-2 bg-white bg-opacity-20 backdrop-blur-sm rounded-full hover:bg-opacity-30 transition-all group"
-          >
-            <Mail className="w-4 h-4 text-blue-200 group-hover:text-white transition-colors" />
-            <span className="text-sm font-medium text-blue-100 group-hover:text-white transition-colors">
-              Contact
-            </span>
-          </button>
-          
-          {showEmail && (
-            <div className="inline-flex items-center gap-2 px-4 py-2 bg-white bg-opacity-20 backdrop-blur-sm rounded-full animate-in fade-in slide-in-from-left-2 duration-300">
-              <span className="text-sm font-mono text-white">benchay@kaist.ac.kr</span>
-              <button
-                onClick={handleCopyEmail}
-                className="p-1.5 hover:bg-white hover:bg-opacity-20 rounded-full transition-all"
-                title="Copy email"
-              >
-                {emailCopied ? (
-                  <Check className="w-4 h-4 text-green-300" />
-                ) : (
-                  <Copy className="w-4 h-4 text-blue-200 hover:text-white" />
-                )}
-              </button>
-            </div>
-          )}
+          <div className="relative">
+            <button
+              onClick={() => setShowEmail(!showEmail)}
+              className="inline-flex items-center gap-2 px-5 py-2.5 bg-white bg-opacity-10 hover:bg-opacity-20 border border-white border-opacity-20 hover:border-opacity-40 backdrop-blur-md rounded-full transition-all duration-300 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 group"
+            >
+              <Mail className="w-4 h-4 text-blue-200 group-hover:text-white transition-colors" />
+              <span className="text-sm font-semibold text-blue-100 group-hover:text-white transition-colors">
+                Contact
+              </span>
+            </button>
+            
+            {showEmail && (
+              <div className="absolute left-full ml-2 top-1/2 -translate-y-1/2 inline-flex items-center gap-2 px-4 py-2 bg-white bg-opacity-20 backdrop-blur-sm rounded-full animate-in fade-in slide-in-from-left-2 duration-300 whitespace-nowrap">
+                <span className="text-sm font-mono text-white">benchay@kaist.ac.kr</span>
+                <button
+                  onClick={handleCopyEmail}
+                  className="p-1.5 hover:bg-white hover:bg-opacity-20 rounded-full transition-all"
+                  title="Copy email"
+                >
+                  {emailCopied ? (
+                    <Check className="w-4 h-4 text-green-300" />
+                  ) : (
+                    <Copy className="w-4 h-4 text-blue-200 hover:text-white" />
+                  )}
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 

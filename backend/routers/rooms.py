@@ -341,8 +341,31 @@ async def leave_room_endpoint(room_code: str, player_data: dict):
     # DO NOT remove from game state - they stay in the game as eliminated/absent
     # DO NOT add back their number to available_numbers - it's permanently assigned
     
-    # Note: We keep the room alive even if assigned_humans is empty
-    # The room will be cleaned up by the periodic cleanup task or when the game ends
+    # FIX 4.2: Check if ALL players have permanently left and terminate room
+    if len(assigned_humans) == 0:
+        print(f"🗑️ ALL players have permanently left room {room_code} - terminating immediately")
+        
+        # Broadcast termination to any remaining connections (shouldn't be any, but defensive)
+        await broadcast_to_room(room_code, {
+            "type": "room_terminated",
+            "message": "All players have left the room",
+            "reason": "all_players_left"
+        })
+        
+        # Clean up room
+        if room_code in rooms:
+            del rooms[room_code]
+        if room_code in room_locks:
+            del room_locks[room_code]
+        
+        return {
+            "success": True,
+            "action": "room_terminated",
+            "message": "Room terminated - all players left"
+        }
+    
+    # Room still has players - keep it alive for potential rejoin
+    # Will be cleaned up by periodic cleanup task if abandoned for too long
     
     return {
         "success": True,
@@ -373,7 +396,8 @@ async def get_room_state(room_code: str, player_id: str = "StreamlitUser"):
         
         # Calculate remaining time based on phase
         timer = 0
-        current_time = time.time()
+        # FIX 9.2: Use monotonic clock for timer calculations (immune to system clock changes)
+        current_time = time.monotonic()
         
         if state['phase'] == Phase.DISCUSSION:
             duration = room.get('discussion_duration', DISCUSSION_TIME)
@@ -689,9 +713,11 @@ async def join_room(
         if len(assigned_humans) >= max_humans:
             return {"success": False, "error": f"Room full ({max_humans} humans max)"}
         
-        # MULTI-HUMAN ROOM VALIDATION
+        # FIX 10.2: MULTI-HUMAN ROOM VALIDATION with forced minimum
         if max_humans > 1:
             stake_percentage = room.get('stake_percentage', 0)
+            minimum_gems_required = room.get('minimum_gems_required', 250)
+            
             if stake_percentage > 0:
                 if not current_user:
                     return {
@@ -699,10 +725,11 @@ async def join_room(
                         "error": "Authentication required to join staked multi-human rooms"
                     }
                 
-                if current_user.gem_balance < 250:
+                # FIX 10.2: Enforce minimum gems requirement
+                if current_user.gem_balance < minimum_gems_required:
                     return {
                         "success": False, 
-                        "error": f"Insufficient gems. You need at least 250 gems to join a staked multi-human room. Your balance: {current_user.gem_balance} gems"
+                        "error": f"Insufficient gems. You need at least {minimum_gems_required} gems to join this staked multi-human room. Your balance: {current_user.gem_balance} gems"
                     }
     
         # Get state
@@ -751,24 +778,33 @@ async def join_room(
             room['player_user_map'][player_id] = user_id_str
             print(f"👤 ✅ Player {player_id} joined room {room_code} ({len(room['current_humans'])}/{max_humans}) - Mapped to user {user_id_str[:8]}...")
             
-            # Calculate and store stake
+            # FIX 10.2: Calculate and store stake with forced minimum
             if max_humans > 1:
                 stake_percentage = room.get('stake_percentage', 0)
-                player_stake = int(current_user.gem_balance * stake_percentage / 100)
+                minimum_gems_required = room.get('minimum_gems_required', 250)
+                
+                # Calculate stake as percentage of balance
+                calculated_stake = int(current_user.gem_balance * stake_percentage / 100)
+                
+                # FIX 10.2: Enforce minimum stake (whichever is higher)
+                # This ensures fairness - wealthy players can't game the system by joining with low balances
+                player_stake = max(calculated_stake, minimum_gems_required) if stake_percentage > 0 else 0
+                
                 room['player_stakes'][player_id] = player_stake
                 
-                # Recalculate minimum stake
+                # Recalculate minimum stake across all players
                 all_stakes = list(room['player_stakes'].values())
                 if all_stakes:
                     room['minimum_stake'] = min(all_stakes)
-                    print(f"💎 Player {player_id} stake: {player_stake} gems ({stake_percentage}% of {current_user.gem_balance})")
-                    print(f"💎 Room minimum stake updated to: {room['minimum_stake']} gems")
+                    print(f"💎 Player {player_id} stake: {player_stake} gems (max of {stake_percentage}%={calculated_stake} or min={minimum_gems_required})")
+                    print(f"💎 Room minimum stake: {room['minimum_stake']} gems")
                     
                     # Broadcast stake update
                     await broadcast_to_room(room_code, {
                         "type": "stake_update",
                         "minimum_stake": room['minimum_stake'],
                         "stake_percentage": stake_percentage,
+                        "minimum_gems_required": minimum_gems_required,
                         "num_players": len(room['player_stakes'])
                     })
         else:

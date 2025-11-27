@@ -94,7 +94,7 @@ from backend.auth import create_admin_user
 
 async def main():
     async with async_session_maker() as db:
-        # Password must be 72 characters or less (bcrypt limitation)
+        # Use a strong password (12+ characters recommended)
         admin = await create_admin_user(db, 'admin', 'SecureAdminPass123!')
         print(f'Admin user created: {admin.user_id}')
 
@@ -103,10 +103,10 @@ asyncio.run(main())
 ```
 
 **Password Requirements:**
-- **No length limits!** (Argon2 is way better than bcrypt)
+- **No length limits** (uses Argon2 password hashing)
 - Recommended: 12+ characters with mix of letters, numbers, symbols
 - Example: `MyAdmin!Pass2024` (16 characters, secure enough)
-- Use any password length you want - Argon2 handles it perfectly
+- Any password length supported - Argon2 handles it securely
 
 ## System Architecture
 
@@ -115,10 +115,10 @@ asyncio.run(main())
 #### 1. Database Models (`backend/database.py`)
 - **Users Table**: Stores user authentication info
 - **Sessions Table**: Stores game sessions with completion keys
-- Async SQLAlchemy with PostgreSQL
+- Async SQLAlchemy with SQLite (development) or PostgreSQL (production)
 
 #### 2. Authentication (`backend/auth.py`)
-- Password hashing with bcrypt
+- Password hashing with Argon2 (secure, no length limits)
 - JWT token generation/verification
 - Role-based access control
 - Token expiration (24 hours for auth tokens)

@@ -373,8 +373,36 @@ const GamePage = () => {
     }
   }, [clearActiveSession]);
 
-  // Initialize WebSocket
-  const { status: wsStatus, sendMessage: wsSendMessage } = useWebSocket(roomCode, playerId, handleWebSocketMessage);
+  // FIX 2.2: Handle WebSocket reconnection - fetch fresh state
+  const handleReconnect = useCallback(async () => {
+    try {
+      console.log('🔄 Fetching fresh state after reconnection...');
+      const data = await roomAPI.getRoomState(roomCode, playerId);
+      
+      if (data.exists) {
+        setGameState({
+          phase: data.phase,
+          round: data.round,
+          topic: data.topic,
+          players: data.players || [],
+          chatHistory: data.chat_history || [],
+          timer: data.timer || 0,
+          serverSynced: true,
+        });
+        console.log('✅ State recovered after reconnection');
+      }
+    } catch (error) {
+      console.error('Failed to fetch state after reconnection:', error);
+    }
+  }, [roomCode, playerId]);
+
+  // Initialize WebSocket with reconnection handler
+  const { status: wsStatus, sendMessage: wsSendMessage } = useWebSocket(
+    roomCode, 
+    playerId, 
+    handleWebSocketMessage,
+    handleReconnect  // FIX 2.2: Pass reconnection callback
+  );
 
   // Handle initial load state based on WebSocket connection
   useEffect(() => {

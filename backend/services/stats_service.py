@@ -2,10 +2,12 @@ import os
 import time as _time
 import json
 import uuid as uuid_lib
+import asyncio
 from datetime import datetime
-from typing import Dict, Optional, List
+from typing import Dict, Optional, List, Callable, Any
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, desc, func
+from sqlalchemy.exc import OperationalError, IntegrityError
 
 from backend.global_state import rooms
 from backend.langgraph_state import GameState
@@ -23,6 +25,57 @@ from backend.gamification import (
     calculate_level, ACHIEVEMENTS
 )
 from backend.cashout_service import gems_to_usd
+
+
+# FIX 6.2: Retry helper for database operations
+async def retry_async_operation(
+    operation: Callable[[], Any],
+    max_retries: int = 3,
+    initial_delay: float = 1.0,
+    backoff_factor: float = 2.0,
+    operation_name: str = "operation"
+) -> Any:
+    """
+    Retry an async operation with exponential backoff.
+    
+    Args:
+        operation: Async callable to retry
+        max_retries: Maximum number of retry attempts
+        initial_delay: Initial delay between retries in seconds
+        backoff_factor: Multiplier for delay after each retry
+        operation_name: Description for logging
+    
+    Returns:
+        Result of the operation
+    
+    Raises:
+        Last exception if all retries fail
+    """
+    delay = initial_delay
+    last_exception = None
+    
+    for attempt in range(max_retries + 1):
+        try:
+            return await operation()
+        except (OperationalError, IntegrityError) as e:
+            last_exception = e
+            if attempt < max_retries:
+                print(f"⚠️ {operation_name} failed (attempt {attempt + 1}/{max_retries + 1}): {e}")
+                print(f"🔄 Retrying in {delay:.1f}s...")
+                await asyncio.sleep(delay)
+                delay *= backoff_factor
+            else:
+                print(f"❌ {operation_name} failed after {max_retries + 1} attempts")
+                raise
+        except Exception as e:
+            # Don't retry on non-transient errors
+            print(f"❌ {operation_name} failed with non-retryable error: {e}")
+            raise
+    
+    # Should never reach here, but just in case
+    if last_exception:
+        raise last_exception
+
 
 async def deduct_stakes(room_code: str, db: AsyncSession) -> bool:
     """
@@ -583,8 +636,10 @@ async def save_session_stats(room_code: str, state: dict, current_user: Optional
                         continue
                     
                     print(f"     🔍 Querying database for user {mapped_user_uuid}...")
+                    # FIX 4.6: Use SELECT FOR UPDATE to lock user row during transaction
+                    # This prevents concurrent gem deductions from multiple games
                     user_result = await db.execute(
-                        select(User).where(User.id == mapped_user_uuid)
+                        select(User).where(User.id == mapped_user_uuid).with_for_update()
                     )
                     db_user = user_result.scalar_one_or_none()
                     
@@ -861,9 +916,21 @@ async def save_session_stats(room_code: str, state: dict, current_user: Optional
             
             print(f"✅ {session_players_created} SessionPlayer records created")
             
-            # CRITICAL: Commit all changes (Session, AIAgentUsage, SessionPlayer, User gem balances)
+            # FIX 6.2: Commit all changes with retry logic (Session, AIAgentUsage, SessionPlayer, User gem balances)
             print(f"💾 Committing transaction to database...")
-            await db.commit()
+            
+            async def commit_transaction():
+                await db.commit()
+                return True
+            
+            await retry_async_operation(
+                commit_transaction,
+                max_retries=3,
+                initial_delay=1.0,
+                backoff_factor=2.0,
+                operation_name=f"Database commit for room {room_code}"
+            )
+            
             print(f"=" * 80)
             print(f"✅ ✅ ✅ SESSION SAVED SUCCESSFULLY ✅ ✅ ✅")
             print(f"   Session ID: {session_id}")

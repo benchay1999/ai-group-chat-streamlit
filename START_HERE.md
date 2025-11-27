@@ -1,204 +1,343 @@
-# 🚀 START HERE - Complete Setup in 2 Minutes
+# Quick Start Guide - Human Hunter
 
-## ✅ All UI Components Are Now Complete!
+Complete setup guide to get the Human Hunter AI social deduction game running on your local machine.
 
-I've just finished creating the final pieces:
+## Prerequisites
 
-### New Files Created:
-1. ✅ **DashboardPage.jsx** - Completely redesigned with gamification
-   - Level badge and points
-   - Progress bars
-   - Stats cards
-   - Achievement previews
-   - Motivational messages
+Before you begin, ensure you have:
 
-2. ✅ **GameOver.jsx** - Enhanced with rewards
-   - Points earned animation
-   - Achievement unlock modals
-   - Quick stats display
-   - Level progress
+- **Python 3.8+** (Python 3.11+ recommended)
+- **Node.js 18+** and npm
+- **OpenAI API Key** (get from https://platform.openai.com/api-keys)
+- **Git** (for cloning the repository)
 
-3. ✅ **SETUP_GAMIFICATION.sh** - One-command setup script
+## Step 1: Clone and Configure
 
-4. ✅ **FEATURES_READY_TO_TEST.md** - Complete testing guide
-
----
-
-## 🎯 Quick Start (Choose One)
-
-### Option A: One-Command Setup ⚡ (Recommended)
+### Clone the Repository
 
 ```bash
-cd /home/wschay/ai-group-chat-streamlit
-./SETUP_GAMIFICATION.sh
+git clone <repository-url>
+cd ai-group-chat-streamlit
 ```
 
-This automatically:
-- Installs all dependencies
-- Runs database migrations
-- Verifies everything is working
+### Set Up Environment Variables
 
-### Option B: Manual Setup 🔧
+Copy the example environment file:
 
 ```bash
-cd /home/wschay/ai-group-chat-streamlit/backend
-
-# Install dependencies
-pip install alembic sqlalchemy aiosqlite python-jose passlib argon2-cffi
-
-# Run migrations
-python -m alembic upgrade head
+cp env.example .env
 ```
 
----
+Edit `.env` and add your OpenAI API key:
 
-## 🎮 Test It Now!
+```env
+# Required: Your OpenAI API key
+OPENAI_API_KEY=sk-your-api-key-here
 
-After running setup:
+# Database (SQLite for development)
+DATABASE_URL=sqlite+aiosqlite:///./group_chat.db
+
+# JWT Secrets (generate with: python -c "import secrets; print(secrets.token_urlsafe(32))")
+JWT_SECRET_KEY=your-secret-key-here
+JWT_COMPLETION_SECRET=your-completion-secret-here
+
+# Optional: Game configuration
+NUM_AI_PLAYERS=4
+AI_MODEL_NAME=gpt-4o-mini
+DISCUSSION_TIME=180
+VOTING_TIME=60
+ROUNDS_TO_WIN=3
+```
+
+**Generate secure JWT secrets:**
 
 ```bash
-# Terminal 1 - Start Backend
-cd backend && python main.py
-
-# Terminal 2 - Start Frontend  
-cd frontend && npm run dev
+python -c "import secrets; print(secrets.token_urlsafe(32))"
+python -c "import secrets; print(secrets.token_urlsafe(32))"
 ```
 
-Then:
-1. Go to http://localhost:3000
-2. Register/login
-3. Play a game
-4. Watch the magic happen! ✨
+Copy the output and paste into your `.env` file for `JWT_SECRET_KEY` and `JWT_COMPLETION_SECRET`.
 
----
+## Step 2: Backend Setup
 
-## 🎊 What You'll Experience
+### Install Backend Dependencies
 
-### During Game:
-- Console shows: `📊 Token usage for Player 3: +125 input, +87 output`
-- Console shows: `💰 Total cost: $0.004250`
-
-### After Game:
-1. **Winner Screen** appears
-2. **+75 Points!** animation slides in 🎯
-3. **Achievement Unlocked!** celebration 🏆
-4. **Quick Stats** shown (level, streak, points)
-5. **Completion Key** modal
-
-### On Dashboard:
-- **Hero Section**: Big level badge, points, streak
-- **Progress Bar**: Visual level progress
-- **4 Stat Cards**: Games, win rate, streak, achievements
-- **Motivational Message**: "Play 4 more games to unlock..."
-- **Achievement Preview**: Next 3 unlockable achievements
-- **Session History**: All your games
-
-### For Admins:
-- **Analytics Dashboard** (`/admin/analytics`):
-  - Total cost spent
-  - Token usage charts
-  - Cost over time
-  - Per-model breakdown
-  - High-cost sessions
-
----
-
-## 📊 Implementation Status
-
-| Feature | Backend | Database | Frontend | Status |
-|---------|---------|----------|----------|--------|
-| Token Tracking | ✅ Done | ⚠️ Ready (needs migration) | ✅ Done | **Ready to activate** |
-| Gamification | ✅ Done | ⚠️ Ready (needs migration) | ✅ Done | **Ready to activate** |
-| Player ID | ✅ Done | ⚠️ Ready (needs migration) | ✅ Done | **Ready to activate** |
-
-**All code is written. Just run the setup script!**
-
----
-
-## 🎁 What's Included
-
-### Token Tracking:
-- ✅ Real-time tracking of all LLM calls
-- ✅ Per-agent token usage breakdown
-- ✅ Automatic cost calculation (15+ models supported)
-- ✅ Admin analytics dashboard with charts
-- ✅ Time-series cost monitoring
-
-### Gamification:
-- ✅ 20+ achievements across 4 categories
-- ✅ Exponential level progression (Level 1-100)
-- ✅ Points for: completion, wins, participation, voting
-- ✅ Daily streak tracking
-- ✅ Win rate and accuracy stats
-- ✅ Motivational messaging system
-- ✅ Beautiful animated UI components
-
-### Player Identification:
-- ✅ "You were Player X" for users
-- ✅ Full player-user mappings for admins
-- ✅ WebSocket authentication
-- ✅ Works with anonymous players too
-
----
-
-## 🏆 Achievement Examples
-
-Play games to unlock:
-- 🎮 **First Steps** - Complete your first game (10 pts)
-- 👁️ **Sharp Eye** - Win your first game (20 pts)
-- 🎯 **Getting Started** - Play 5 games (25 pts)
-- ⭐ **Regular Player** - Play 10 games (50 pts)
-- 📅 **Consistent** - Play 3 days in a row (30 pts)
-- 🔥 **Dedicated** - Play 7 days in a row (70 pts)
-- 🕵️ **Master Detective** - 70% win rate, 20+ games (200 pts)
-- ...and 13 more!
-
----
-
-## 💡 Pro Tips
-
-1. **First time?** The setup script is your friend
-2. **Token costs too high?** Check `/admin/analytics` to see which model costs most
-3. **Want more points?** Win games and participate actively (send messages, vote)
-4. **Build streak?** Play at least one game every day
-5. **Admin user?** Run `python create_admin.py` to create one
-
----
-
-## 📝 Next Steps
-
-1. **Run setup**: `./SETUP_GAMIFICATION.sh`
-2. **Start servers**: Backend + Frontend
-3. **Play a game**: Test everything works
-4. **Check dashboard**: See your stats and achievements
-5. **Try admin panel**: View analytics (if admin)
-
----
-
-## 🐛 If Something Goes Wrong
-
-See `FEATURES_READY_TO_TEST.md` for detailed troubleshooting.
-
-Quick fixes:
-- Database empty? → Run `python -m alembic upgrade head`
-- No achievements? → Make sure migrations ran
-- No tokens tracked? → Check console for `📊` messages
-
----
-
-## 🎉 You're All Set!
-
-Everything is ready to go. The features are fully implemented - they just need the database to be initialized.
-
-**Run this now:**
 ```bash
-./SETUP_GAMIFICATION.sh
+cd backend
+pip install -r requirements.txt
 ```
 
-Then enjoy your gamified AI group chat with full cost tracking! 🚀
+This installs:
+- FastAPI (web framework)
+- LangGraph (multi-agent orchestration)
+- SQLAlchemy (database ORM)
+- OpenAI/Anthropic/Groq clients
+- And other required packages
 
-Questions? Check:
-- `FEATURES_READY_TO_TEST.md` - Complete testing guide
-- `IMPLEMENTATION_COMPLETE.md` - Technical documentation
-- `PLAYER_IDENTIFICATION_FEATURE.md` - Player ID feature docs
+### Initialize Database
 
+The database will be automatically created when you start the backend. Tables are created on first run.
+
+For production, see [MTURK_SETUP.md](MTURK_SETUP.md) for PostgreSQL migration.
+
+### Start the Backend Server
+
+```bash
+# From the backend directory
+python main.py
+
+# Alternative: using uvicorn directly
+uvicorn backend.main:app --reload --host 0.0.0.0 --port 8000
+```
+
+You should see:
+
+```
+🚀 Starting Backend Server
+✅ Environment variables loaded
+📡 Backend available at: http://localhost:8000
+📊 API docs at: http://localhost:8000/docs
+```
+
+**Test it:** Open http://localhost:8000/health in your browser. You should see `{"status":"healthy"}`
+
+## Step 3: Frontend Setup
+
+Open a **new terminal window** (keep backend running).
+
+### Install Frontend Dependencies
+
+```bash
+cd frontend
+npm install
+```
+
+This installs:
+- React 18
+- React Router (navigation)
+- Tailwind CSS (styling)
+- Axios (HTTP client)
+- WebSocket client
+- UI components
+
+### Configure Backend URL
+
+The frontend automatically connects to `http://localhost:8000` in development.
+
+To override, create `frontend/.env`:
+
+```env
+VITE_BACKEND_URL=http://localhost:8000
+```
+
+### Start the Frontend Development Server
+
+```bash
+npm run dev
+```
+
+You should see:
+
+```
+  VITE v5.x.x  ready in XXX ms
+
+  ➜  Local:   http://localhost:5173/
+  ➜  Network: use --host to expose
+```
+
+## Step 4: Play the Game!
+
+1. **Open your browser** at http://localhost:5173
+
+2. **Register/Login** (optional but recommended for tracking progress)
+   - Click "Register" and create an account
+   - Or skip and play as guest
+
+3. **Create or Join a Room**
+   - Click "Create Room" to start a new game
+   - Or join an existing room from the lobby
+   - Configure game settings (AI count, discussion time, etc.)
+
+4. **Play!**
+   - **Discussion Phase**: Chat with players (mix of humans and AI)
+   - **Voting Phase**: Vote for who you think is AI (or human, if you're AI)
+   - **Survive**: Make it through multiple rounds to win!
+
+## Optional: MTurk Payment System
+
+If you want to enable the gem economy and MTurk payment system:
+
+1. **Set up AWS MTurk credentials** - See [MTURK_SETUP.md](MTURK_SETUP.md)
+2. **Configure cashout settings** in `.env`
+3. **Create admin user** for managing payments
+
+This is optional and not required for basic gameplay.
+
+## Game Configuration
+
+Customize game settings in `.env`:
+
+### AI Configuration
+
+```env
+# Number of AI players (4-8 recommended)
+NUM_AI_PLAYERS=4
+
+# AI model to use
+AI_MODEL_NAME=gpt-4o-mini          # Fast and cheap (recommended)
+# AI_MODEL_NAME=gpt-4o              # More capable but expensive
+# AI_MODEL_NAME=claude-3-5-sonnet-20241022  # Anthropic Claude
+
+# AI provider
+AI_MODEL_PROVIDER=openai           # Options: openai, anthropic, groq
+```
+
+### Game Timing
+
+```env
+# Discussion phase duration (seconds)
+DISCUSSION_TIME=180                # 3 minutes default
+
+# Voting phase duration (seconds)
+VOTING_TIME=60                     # 1 minute default
+
+# Rounds to win
+ROUNDS_TO_WIN=3                    # Human must survive 3 rounds
+```
+
+### Multiple API Keys (Optional)
+
+For high-traffic deployments, distribute load across multiple API keys:
+
+```env
+# Comma-separated list of API keys
+OPENAI_API_KEYS=sk-key1...,sk-key2...,sk-key3...
+```
+
+## Troubleshooting
+
+### Backend Issues
+
+**Problem: "ModuleNotFoundError"**
+- Solution: Make sure you're in the `backend` directory and ran `pip install -r requirements.txt`
+
+**Problem: "OPENAI_API_KEY not found"**
+- Solution: Check your `.env` file is in the project root and contains `OPENAI_API_KEY=sk-...`
+
+**Problem: "Database error"**
+- Solution: Delete `group_chat.db` and restart the backend to recreate the database
+
+**Problem: Port 8000 already in use**
+- Solution: Kill the existing process or use a different port:
+  ```bash
+  uvicorn backend.main:app --reload --port 8001
+  ```
+
+### Frontend Issues
+
+**Problem: "Cannot connect to backend"**
+- Solution: Ensure backend is running on http://localhost:8000
+- Check browser console for CORS errors
+- Verify `VITE_BACKEND_URL` in frontend/.env (if set)
+
+**Problem: "npm install" fails**
+- Solution: Update Node.js to version 18+
+  ```bash
+  node --version  # Should be 18.x or higher
+  ```
+
+**Problem: WebSocket connection failed**
+- Solution: Check that backend WebSocket endpoint is accessible at ws://localhost:8000/ws/game/{room_code}
+- Verify no firewall is blocking WebSocket connections
+
+### Game Issues
+
+**Problem: AI players not responding**
+- Solution: Check backend logs for API errors
+- Verify OpenAI API key is valid and has credits
+- Check rate limits on your API key
+
+**Problem: "Room not found" error**
+- Solution: Room codes expire after inactivity
+- Create a new room if the old one expired
+
+**Problem: Players stuck in waiting room**
+- Solution: Refresh the page or create a new room
+- Check backend logs for errors
+
+## Development Tips
+
+### Backend Development
+
+- **Auto-reload**: The `--reload` flag automatically restarts the server when code changes
+- **API Docs**: Visit http://localhost:8000/docs for interactive API documentation
+- **Logs**: Backend logs show AI agent thinking, token usage, and costs
+
+### Frontend Development
+
+- **Hot Reload**: Vite automatically refreshes when you edit React components
+- **React DevTools**: Install browser extension for debugging React components
+- **Console**: Check browser console for errors and WebSocket messages
+
+### Database Management
+
+**View database contents:**
+
+```bash
+sqlite3 group_chat.db "SELECT * FROM users;"
+sqlite3 group_chat.db "SELECT * FROM sessions;"
+```
+
+**Reset database:**
+
+```bash
+rm group_chat.db
+# Restart backend to recreate
+```
+
+**Backup database:**
+
+```bash
+cp group_chat.db group_chat.db.backup
+```
+
+## Next Steps
+
+### For Developers
+
+- **Customize AI Personalities**: Edit `backend/services/game_coordinator.py`
+- **Add New Features**: Check `markdowns/DEVELOPER_GUIDE.md`
+- **Run Tests**: `pytest` in backend directory, `npm test` in frontend
+
+### For Researchers
+
+- **Set Up MTurk**: See [MTURK_SETUP.md](MTURK_SETUP.md) for payment system
+- **Configure Gem Economy**: Edit gem rewards in backend config
+- **Admin Dashboard**: Create admin user for analytics access
+
+### For Production Deployment
+
+- **Migrate to PostgreSQL**: See `markdowns/SQLITE_TO_POSTGRESQL.md`
+- **Deploy Backend**: Railway, Render, or Heroku
+- **Deploy Frontend**: Vercel, Netlify, or Cloudflare Pages
+- **Security Checklist**: See `markdowns/PRODUCTION_DEPLOYMENT_SECURITY_CHECKLIST.md`
+
+## Additional Documentation
+
+- **[MTURK_SETUP.md](MTURK_SETUP.md)** - Complete MTurk integration guide
+- **[env.example](env.example)** - All configuration options
+- **[markdowns/SYSTEM_ARCHITECTURE.md](markdowns/SYSTEM_ARCHITECTURE.md)** - Technical architecture details
+- **[markdowns/DEPLOYMENT.md](markdowns/DEPLOYMENT.md)** - Deployment guides
+- **[markdowns/DEVELOPER_GUIDE.md](markdowns/DEVELOPER_GUIDE.md)** - Developer documentation
+
+## Support
+
+If you encounter issues:
+
+1. Check this guide's troubleshooting section
+2. Review backend logs for errors
+3. Check browser console for frontend errors
+4. Verify all prerequisites are installed
+5. Ensure `.env` is configured correctly
+
+Happy gaming! 🎮

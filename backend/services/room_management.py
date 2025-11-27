@@ -124,6 +124,8 @@ def create_room(max_humans: int, total_players: int, language: str,
         'stake_percentage': stake_percentage,  # Stake percentage for multi-human games
         'player_stakes': {},  # Maps player_id -> calculated stake amount (in gems)
         'minimum_stake': 0,  # Minimum stake across all players (recalculated as players join)
+        # FIX 10.2: Minimum gems required to join staked multi-human rooms
+        'minimum_gems_required': 250 if (max_humans > 1 and stake_percentage > 0) else 0,
         'player_message_cooldowns': defaultdict(float) # Track last message time per player for rate limiting
     }
     

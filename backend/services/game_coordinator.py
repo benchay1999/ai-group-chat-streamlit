@@ -51,23 +51,24 @@ async def run_discussion_phase(room_code: str):
     Manages timer and triggers voting phase.
     Also enables proactive agent engagement.
     Broadcasts server time remaining every 5 seconds for synchronization.
+    FIX 9.2: Uses monotonic clock to prevent issues with system clock changes.
     """
     # Get room-specific discussion time (fallback to global config)
     discussion_time = rooms[room_code].get('discussion_duration', DISCUSSION_TIME)
     print(f"⏱️ Starting discussion phase for room {room_code}: {discussion_time} seconds")
     
-    # Store phase start time for accurate tracking
-    phase_start = _time.time()
+    # FIX 9.2: Store phase start time using monotonic clock (immune to system clock changes)
+    phase_start = _time.monotonic()
     rooms[room_code]['phase_start_time'] = phase_start
     
     # Start proactive engagement task
     engagement_task = asyncio.create_task(proactive_agent_engagement(room_code))
     
     # Countdown with periodic broadcasts for synchronization
-    # Use actual wall clock time to avoid drift from sleep inaccuracies
+    # FIX 9.2: Use monotonic clock time to avoid drift from system clock changes
     while True:
-        # Calculate elapsed time from wall clock (accurate)
-        elapsed = _time.time() - phase_start
+        # FIX 9.2: Calculate elapsed time from monotonic clock (immune to NTP adjustments)
+        elapsed = _time.monotonic() - phase_start
         remaining = max(0, discussion_time - elapsed)
         
         # Exit if time is up
@@ -185,20 +186,24 @@ async def run_voting_phase(room_code: str):
     Run the voting phase for a room.
     Manages timer and triggers elimination.
     Broadcasts server time remaining every 5 seconds for synchronization.
+    FIX 9.2: Uses monotonic clock to prevent issues with system clock changes.
     """
     # Get room-specific voting time (fallback to global config)
     voting_time = rooms[room_code].get('voting_duration', VOTING_TIME)
     print(f"🗳️ Starting voting phase for room {room_code}: {voting_time} seconds")
     
-    # Store phase start time for accurate tracking
-    phase_start = _time.time()
+    # FIX 1.1: Reset voting completion flag for new voting phase
+    rooms[room_code]['voting_completed'] = False
+    
+    # FIX 9.2: Store phase start time using monotonic clock (immune to system clock changes)
+    phase_start = _time.monotonic()
     rooms[room_code]['phase_start_time'] = phase_start
     
     # Countdown with periodic broadcasts for synchronization
-    # Use actual wall clock time to avoid drift from sleep inaccuracies
+    # FIX 9.2: Use monotonic clock time to avoid drift from system clock changes
     while True:
-        # Calculate elapsed time from wall clock (accurate)
-        elapsed = _time.time() - phase_start
+        # FIX 9.2: Calculate elapsed time from monotonic clock (immune to NTP adjustments)
+        elapsed = _time.monotonic() - phase_start
         remaining = max(0, voting_time - elapsed)
         
         # Exit if time is up
@@ -708,21 +713,43 @@ async def process_single_ai_message(room_code: str, ai_id: str):
             print(f"🚫 Not triggering new AI responses - phase is {phase_value}")
                 
     finally:
-        # Remove this AI from processing set
+        # FIX 2.5: Comprehensive cleanup to prevent ghost typing indicators
         if room_code in rooms:
+            # Get AI sender for cleanup
+            try:
+                async with room_locks[room_code]:
+                    state = rooms[room_code].get('state', {})
+                    player_id_map = {p['id']: p['id'] for p in state.get('players', []) if p['id'] == ai_id}
+                    ai_sender = ai_id if ai_id in player_id_map else None
+            except Exception:
+                ai_sender = None
+            
             # Cleanup typing status to prevent ghost typers on error
             if room_code in room_locks:
                 try:
                     async with room_locks[room_code]:
                         if 'typing_players' in rooms[room_code]:
                             rooms[room_code]['typing_players'].discard(ai_id)
+                            if ai_sender:
+                                rooms[room_code]['typing_players'].discard(ai_sender)
                 except Exception:
                     pass
+            
+            # FIX 2.5: Broadcast typing stop to all clients (critical for cleanup)
+            if ai_sender:
+                try:
+                    await broadcast_to_room(room_code, {
+                        "type": "typing",
+                        "player": ai_sender,
+                        "status": "stop"
+                    })
+                except Exception as e:
+                    print(f"⚠️ Failed to broadcast typing stop for {ai_sender}: {e}")
             
             processing_agents = rooms[room_code].get('ai_processing_agents', set())
             processing_agents.discard(ai_id)
             rooms[room_code]['ai_processing_agents'] = processing_agents
-            print(f"✅ AI {ai_id} completed message in room {room_code}")
+            print(f"✅ AI {ai_id} completed message in room {room_code} (cleanup ensured)")
 
 async def trigger_agent_decisions(room_code: str, exclude_agents: list = None):
     """
@@ -867,6 +894,7 @@ async def complete_voting(room_code: str):
     """
     Complete the voting phase and process elimination.
     Uses locking to ensure atomic state transitions.
+    FIX 1.1: Added voting_completed flag to prevent race condition when called from multiple endpoints.
     """
     print(f"🟢🟢🟢 COMPLETE_VOTING CALLED for room {room_code} 🟢🟢🟢")
     
@@ -883,10 +911,18 @@ async def complete_voting(room_code: str):
     async with room_locks[room_code]:
         state = rooms[room_code]['state']
         
+        # FIX 1.1: Check if voting already completed (prevents duplicate calls)
+        if rooms[room_code].get('voting_completed', False):
+            print(f"⚠️ Voting already completed for room {room_code}, skipping duplicate call")
+            return
+        
         # Check phase (double-check pattern for safety)
         if state['phase'] != Phase.VOTING:
             print(f"⚠️ Room {room_code} not in voting phase (current: {state['phase']}), returning")
             return
+        
+        # FIX 1.1: Set flag immediately to prevent concurrent calls
+        rooms[room_code]['voting_completed'] = True
         
         print(f"🏁 Completing voting for room {room_code}")
         print(f"📊 Final votes before processing: {state.get('votes', {})}")

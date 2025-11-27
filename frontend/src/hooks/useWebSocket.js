@@ -9,11 +9,12 @@ import { getWebSocketURL } from '../services/api';
 const MAX_RECONNECT_ATTEMPTS = 5;
 const RECONNECT_DELAY = 2000;
 
-export const useWebSocket = (roomCode, playerId, onMessage) => {
+export const useWebSocket = (roomCode, playerId, onMessage, onReconnect) => {
   const [status, setStatus] = useState('disconnected'); // 'connecting' | 'connected' | 'disconnected' | 'error'
   const wsRef = useRef(null);
   const reconnectAttemptsRef = useRef(0);
   const reconnectTimeoutRef = useRef(null);
+  const hasConnectedOnce = useRef(false); // FIX 2.2: Track if we've connected before
 
   const connect = useCallback(() => {
     if (!roomCode || !playerId) return;
@@ -27,8 +28,17 @@ export const useWebSocket = (roomCode, playerId, onMessage) => {
 
       ws.onopen = () => {
         console.log('✅ WebSocket connected');
+        const isReconnection = hasConnectedOnce.current;
         setStatus('connected');
         reconnectAttemptsRef.current = 0;
+        
+        // FIX 2.2: Trigger reconnection callback to fetch fresh state
+        if (isReconnection && onReconnect) {
+          console.log('🔄 WebSocket reconnected - triggering state recovery');
+          onReconnect();
+        }
+        
+        hasConnectedOnce.current = true;
       };
 
       ws.onmessage = (event) => {
@@ -74,7 +84,7 @@ export const useWebSocket = (roomCode, playerId, onMessage) => {
       console.error('Error creating WebSocket:', error);
       setStatus('error');
     }
-  }, [roomCode, playerId, onMessage]);
+  }, [roomCode, playerId, onMessage, onReconnect]);
 
   const disconnect = useCallback(() => {
     if (reconnectTimeoutRef.current) {
