@@ -61,17 +61,94 @@ const GamePage = () => {
     return () => clearTimeout(timer);
   }, [roomCode, playerId, navigate]);
 
+  // Fetch initial game state including chat history
+  useEffect(() => {
+    const fetchGameState = async () => {
+      if (!roomCode || !playerId) return;
+
+      try {
+        console.log('📥 Fetching initial game state...');
+        const state = await roomAPI.getGameState(roomCode, playerId);
+        
+        if (state.exists) {
+          setGameState(prev => ({
+            ...prev,
+            phase: state.phase,
+            round: state.round,
+            topic: state.topic,
+            players: state.players,
+            // Merge chat history, respecting timestamps if available
+            chat: state.chat_history || [],
+            winner: state.winner,
+            selected_suspect: state.selected_suspect,
+            suspect_role: state.suspect_role,
+            vote_counts: state.vote_counts,
+            // Calculate timer based on phase if needed
+            timer: state.phase === 'Discussion' ? (state.timer || 180) : (state.timer || 60)
+          }));
+          
+          // Check if current player has already voted
+          // The players array from backend already has 'voted' property set correctly
+          // based on: "voted": p['id'] in state.get('votes', {})
+          const currentPlayer = state.players.find(p => p.id === playerId);
+          if (currentPlayer && currentPlayer.voted) {
+            console.log('✅ Player has already voted, restoring state');
+          }
+          
+          console.log('✅ Initial game state loaded:', state);
+        }
+      } catch (error) {
+        console.error('Error fetching game state:', error);
+        // Don't show error toast as WebSocket will likely connect and work anyway
+      }
+    };
+
+    fetchGameState();
+  }, [roomCode, playerId]);
+
+  // Helper to check for duplicate messages
+  const isDuplicateMessage = (existingChat, newMessage) => {
+    // If we have timestamps, use them for precise deduping
+    if (newMessage.timestamp) {
+      return existingChat.some(msg => 
+        msg.timestamp === newMessage.timestamp && 
+        msg.sender === newMessage.sender
+      );
+    }
+    
+    // Fallback: Check last few messages for identical content/sender
+    // This prevents duplicates if timestamp is missing but allows same message later
+    const recentMessages = existingChat.slice(-5);
+    return recentMessages.some(msg => 
+      msg.sender === newMessage.sender && 
+      msg.message === newMessage.message
+    );
+  };
+
   // WebSocket message handler
   const handleWebSocketMessage = useCallback((data) => {
     const { type } = data;
 
     switch (type) {
       case 'message':
-        setGameState(prev => ({
-          ...prev,
-          chat: [...prev.chat, { sender: data.sender, message: data.message }],
-        }));
+        setGameState(prev => {
+          // Check for duplicates before adding
+          if (isDuplicateMessage(prev.chat, data)) {
+            console.log('Start duplicate check');
+            return prev;
+          }
+          
+          return {
+            ...prev,
+            chat: [...prev.chat, { 
+              sender: data.sender, 
+              message: data.message,
+              timestamp: data.timestamp 
+            }],
+          };
+        });
         break;
+
 
       case 'typing':
         setTyping(prev => {

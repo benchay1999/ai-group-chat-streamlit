@@ -1640,7 +1640,8 @@ async def schedule_correction_message(room_code: str, ai_id: str, correction_tex
     await broadcast_to_room(room_code, {
         "type": "message",
         "sender": ai_sender,
-        "message": correction_text
+        "message": correction_text,
+        "timestamp": chat_msg.get("timestamp", time.time())
     })
     
     print(f"✅ Correction sent for {ai_id}: {correction_text}")
@@ -1737,19 +1738,19 @@ async def process_single_ai_message(room_code: str, ai_id: str):
         # https://dl.acm.org/doi/full/10.1145/3715275.3732108
         
         # Note: Typing speed enhanced by 15% (0.3 → 0.255s per char)
-        base_delay = 0.5  # Base reaction time
+        base_delay = 0.3  # Base reaction time
         
         # Typing rate with variance (Normal distribution)
         # Enhanced by 15% (0.3 → 0.255s per char = ~3.92 chars/sec instead of 3.33)
-        typing_rate_per_char = max(0.1, np.random.normal(0.255, 0.0255))  # Clamp to avoid negative
+        typing_rate_per_char = max(0.1, np.random.normal(0.12, 0.02))  # Clamp to avoid negative
         
         # Context factor - cognitive load from processing previous message
-        context_rate_per_char = max(0.0, np.random.normal(0.03, 0.003))
+        context_rate_per_char = max(0.0, np.random.normal(0.02, 0.003))
         context_delay = context_rate_per_char * n_char_prev
         
         # Thinking time - Gamma distribution (right-skewed, models human thinking)
         # Gamma(shape=2.5, scale=0.25) has mean=0.625s, variance=0.156s²
-        thinking_time = np.random.gamma(2.5, 0.25)
+        thinking_time = np.random.gamma(1.5, 0.15)
         
         # Total statistical delay
         total_statistical_delay = base_delay + (typing_rate_per_char * n_char) + context_delay + thinking_time
@@ -1878,7 +1879,8 @@ async def process_single_ai_message(room_code: str, ai_id: str):
             await broadcast_to_room(room_code, {
                 "type": "message",
                 "sender": ai_sender,
-                "message": chunk
+                "message": chunk,
+                "timestamp": chat_msg.get("timestamp", time.time())
             })
             
             # Small pause between chunks if not the last chunk
@@ -3129,7 +3131,12 @@ async def websocket_endpoint(websocket: WebSocket, room_code: str, player_id: st
     
     # Send chat history
     for msg in state["chat_history"]:
-        await websocket.send_json({"type": "message", "sender": msg["sender"], "message": msg["message"]})
+        await websocket.send_json({
+            "type": "message", 
+            "sender": msg["sender"], 
+            "message": msg["message"],
+            "timestamp": msg.get("timestamp", time.time())
+        })
     
     try:
         while True:
@@ -3194,11 +3201,16 @@ async def websocket_endpoint(websocket: WebSocket, room_code: str, player_id: st
                 rooms[room_code]['state'] = state
                 
                 # Broadcast message (exclude sender since frontend shows it optimistically)
+                # Include timestamp from the last added message in history
+                last_msg = state['chat_history'][-1] if state['chat_history'] else {}
+                msg_timestamp = last_msg.get('timestamp', current_time)
+                
                 print(f"📤 Broadcasting human message to room (excluding sender)")
                 await broadcast_to_room(room_code, {
                     "type": "message",
                     "sender": player_id,
-                    "message": message
+                    "message": message,
+                    "timestamp": msg_timestamp
                 }, exclude_player=player_id)
                 
                 # Trigger agent decision-making (they'll decide if they want to respond)
@@ -6473,10 +6485,15 @@ async def send_message(room_code: str, message_data: dict):
     rooms[room_code]['state'] = state
     
     # Broadcast to WebSocket clients
+    # Include timestamp from the last added message in history
+    last_msg = state['chat_history'][-1] if state['chat_history'] else {}
+    msg_timestamp = last_msg.get('timestamp', current_time)
+
     await broadcast_to_room(room_code, {
         "type": "message",
         "sender": player_id,
-        "message": message
+        "message": message,
+        "timestamp": msg_timestamp
     })
     
     # Trigger agent decision-making (they'll decide if they want to respond)
