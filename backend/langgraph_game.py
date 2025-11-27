@@ -827,6 +827,7 @@ JSON 형식으로만 응답하세요:
 }
 
 청크는 1-4개 사이여야 합니다. 각 청크는 짧고 자연스러워야 합니다.
+중요: 전체 메시지 길이는 400자를 넘지 않아야 합니다. 각 청크는 가급적 100자 미만으로 유지하세요.
 """
         else:
             language_instruction = "\n\nRespond in English."
@@ -875,6 +876,7 @@ Output ONLY valid JSON in this format:
 }
 
 Keep chunks between 1-4 total. Each chunk should be short and natural.
+CRITICAL: Total message length MUST be under 400 characters. Try to keep each chunk under 100 characters.
 Never use em dashes. Don't reveal you're an AI.
 """
         

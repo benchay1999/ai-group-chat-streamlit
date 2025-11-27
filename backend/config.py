@@ -289,5 +289,8 @@ AWS_SECRET_ACCESS_KEY = os.getenv('AWS_SECRET_ACCESS_KEY')
 
 # Gem Economy & Cashout Configuration (1000 gems = $1.00 USD)
 GEMS_PER_DOLLAR = 1000  # Conversion rate: 1000 gems = $1.00
+STAKE_PERCENTAGE = float(os.getenv('STAKE_PERCENTAGE', '0.5'))  # 50% of balance
+SINGLE_HUMAN_BASE_GEMS = int(os.getenv('SINGLE_HUMAN_BASE_GEMS', '50'))
+MULTI_HUMAN_BASE_GEMS = int(os.getenv('MULTI_HUMAN_BASE_GEMS', '100'))
 MINIMUM_CASHOUT_AMOUNT = float(os.getenv('MINIMUM_CASHOUT_AMOUNT', '2.00'))  # Minimum USD to cash out
 CASHOUT_MONITOR_INTERVAL = int(os.getenv('CASHOUT_MONITOR_INTERVAL', '3600'))  # Check for expired codes every hour

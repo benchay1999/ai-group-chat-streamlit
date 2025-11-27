@@ -202,8 +202,9 @@ async def create_cashout_transaction(
     )
     
     try:
-        # Deduct gems from user's balance immediately (within locked transaction)
+        # Deduct gems from user's balance and move to reserved (Two-Phase Commit)
         user.gem_balance -= gems_amount
+        user.gems_reserved += gems_amount
         
         # SECURITY: Validate gem balance didn't go negative (defense in depth)
         if user.gem_balance < 0:
@@ -468,6 +469,9 @@ async def redeem_cashout_code(
         old_total_cashed_out = user.total_gems_cashed_out
         user.total_gems_cashed_out += transaction.amount_gems
         
+        # Burn the reserved gems (Two-Phase Commit complete)
+        user.gems_reserved -= transaction.amount_gems
+        
         # Commit all changes atomically
         await db.commit()
         await db.refresh(transaction)
@@ -583,6 +587,9 @@ async def cancel_cashout_transaction(
     old_balance = user.gem_balance
     user.gem_balance += transaction.amount_gems
     
+    # Release reserved gems (Two-Phase Commit rollback)
+    user.gems_reserved -= transaction.amount_gems
+    
     # Update transaction status
     transaction.status = CashoutStatus.FAILED if "expired" in reason.lower() else CashoutStatus.CANCELLED
     transaction.error_message = reason
@@ -637,3 +644,43 @@ async def get_user_cashout_history(
         }
         for t in transactions
     ]
+
+
+async def cleanup_expired_cashouts(db: AsyncSession) -> int:
+    """
+    Cancel expired pending cashout transactions and refund gems.
+    
+    Args:
+        db: Database session
+        
+    Returns:
+        Number of transactions cancelled
+    """
+    print(f"🧹 checking for expired cashouts...")
+    
+    # Find expired pending transactions
+    query = select(CashoutTransaction).where(
+        CashoutTransaction.status == CashoutStatus.PENDING,
+        CashoutTransaction.expires_at < datetime.utcnow()
+    )
+    
+    result = await db.execute(query)
+    expired_transactions = result.scalars().all()
+    
+    count = 0
+    for transaction in expired_transactions:
+        try:
+            print(f"   Cancelling expired transaction {transaction.id}")
+            await cancel_cashout_transaction(
+                transaction=transaction,
+                db=db,
+                reason="Redemption code expired"
+            )
+            count += 1
+        except Exception as e:
+            print(f"❌ Failed to cancel expired transaction {transaction.id}: {e}")
+            
+    if count > 0:
+        print(f"✅ Cancelled {count} expired cashout transactions")
+    
+    return count

@@ -3,7 +3,7 @@ Database models and connection setup for PostgreSQL.
 Uses SQLAlchemy with async support for FastAPI integration.
 """
 
-from sqlalchemy import Column, String, Integer, DateTime, Enum, DECIMAL, ForeignKey, Text, Index
+from sqlalchemy import Column, String, Integer, DateTime, Enum, DECIMAL, ForeignKey, Text, Index, CheckConstraint
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 from sqlalchemy.orm import declarative_base, relationship
 from sqlalchemy.dialects.postgresql import UUID
@@ -111,9 +111,16 @@ class User(Base):
     
     # Gem economy fields (1000 gems = $1.00 USD)
     gem_balance = Column(Integer, default=0, nullable=False)  # Current gem balance
+    gems_reserved = Column(Integer, default=0, nullable=False)  # Gems locked for pending cashouts
     total_gems_earned = Column(Integer, default=0, nullable=False)  # Lifetime gems earned
     total_gems_cashed_out = Column(Integer, default=0, nullable=False)  # Lifetime gems cashed out
     mturk_worker_id = Column(String(255), nullable=True, index=True)  # MTurk Worker ID for cashouts
+    
+    # Constraints
+    __table_args__ = (
+        CheckConstraint('gem_balance >= 0', name='check_gem_balance_positive'),
+        CheckConstraint('gems_reserved >= 0', name='check_gems_reserved_positive'),
+    )
     
     # MTurk worker demographics (required when setting worker ID)
     age = Column(Integer, nullable=True)  # Worker age

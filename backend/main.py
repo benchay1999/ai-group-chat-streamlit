@@ -25,7 +25,10 @@ from .langgraph_game import (
     process_human_vote
 )
 from .langgraph_state import GameState, Phase
-from .config import NUM_AI_PLAYERS, DISCUSSION_TIME, VOTING_TIME, OPENAI_API_KEYS
+from .config import (
+    NUM_AI_PLAYERS, DISCUSSION_TIME, VOTING_TIME, OPENAI_API_KEYS,
+    STAKE_PERCENTAGE, SINGLE_HUMAN_BASE_GEMS, MULTI_HUMAN_BASE_GEMS
+)
 from .api_key_manager import APIKeyManager, APIKeyManagerError
 from .database import (
     init_db, close_db, get_async_session, 
@@ -195,6 +198,9 @@ login_rate_limiter = SimpleRateLimiter(max_requests=30, window_seconds=60)
 register_rate_limiter = SimpleRateLimiter(max_requests=20, window_seconds=60)
 # Cashout: 10 per minute per user (prevent abuse)
 cashout_rate_limiter = SimpleRateLimiter(max_requests=10, window_seconds=60)
+# WebSocket connection: 5 per 10 seconds per IP (prevent DOS)
+# Allows quick reloads but stops aggressive connection flooding
+websocket_connect_rate_limiter = SimpleRateLimiter(max_requests=5, window_seconds=10)
 
 
 # ============================================================================
@@ -235,6 +241,10 @@ async def startup_event():
     # Start room health monitoring task
     asyncio.create_task(monitor_room_health())
     print("🏥 Started room health monitoring task")
+    
+    # Start periodic rate limiter cleanup task
+    asyncio.create_task(periodic_rate_limiter_cleanup())
+    print("🧹 Started periodic rate limiter cleanup task")
     
     print("🚀 Application started successfully")
 
@@ -402,6 +412,33 @@ async def monitor_room_health():
             traceback.print_exc()
 
 
+async def periodic_rate_limiter_cleanup():
+    """
+    Background task to clean up old rate limiter entries.
+    Runs every 1 hour.
+    Prevents memory leaks from indefinite storage of timestamps.
+    """
+    while True:
+        try:
+            await asyncio.sleep(3600)  # 1 hour
+            
+            print("\n🧹 Running rate limiter cleanup...")
+            
+            # Clean up all global rate limiters
+            mturk_rate_limiter.cleanup_old_entries()
+            login_rate_limiter.cleanup_old_entries()
+            register_rate_limiter.cleanup_old_entries()
+            cashout_rate_limiter.cleanup_old_entries()
+            websocket_connect_rate_limiter.cleanup_old_entries()
+            
+            print("✅ Rate limiter cleanup complete")
+            
+        except Exception as e:
+            print(f"❌ Error in rate limiter cleanup: {e}")
+            import traceback
+            traceback.print_exc()
+
+
 @app.on_event("shutdown")
 async def shutdown_event():
     """Close database connections and stop background tasks on application shutdown."""
@@ -465,7 +502,8 @@ class MTurkPaymentRequest(BaseModel):
 
 
 # Thread pool for running blocking AI operations without blocking the event loop
-executor = ThreadPoolExecutor(max_workers=10)
+# Increased to 60 to handle 10+ concurrent rooms (40+ AIs) without starvation
+executor = ThreadPoolExecutor(max_workers=60)
 
 # Room management
 rooms: Dict[str, Dict] = {}
@@ -1036,7 +1074,9 @@ async def deduct_stakes(room_code: str, db: AsyncSession) -> bool:
         print(f"ℹ️  Single-human game, no stakes to deduct")
         return True
     
-    stake_percentage = room_data.get('stake_percentage', 0)
+    # Use configured stake percentage (default from config if not in room)
+    # Config is 0.5 (float), but room stores 50 (int). Convert to int scale safely.
+    stake_percentage = room_data.get('stake_percentage', int(round(STAKE_PERCENTAGE * 100)))
     if stake_percentage == 0:
         print(f"ℹ️  No stakes configured for room {room_code}")
         return True
@@ -1068,7 +1108,8 @@ async def deduct_stakes(room_code: str, db: AsyncSession) -> bool:
                 continue
             
             # Get user from database
-            result = await db.execute(select(User).where(User.id == user_uuid))
+            # CRITICAL FIX: Use row-level locking to prevent race conditions
+            result = await db.execute(select(User).where(User.id == user_uuid).with_for_update())
             user = result.scalar_one_or_none()
             
             if not user:
@@ -1208,7 +1249,7 @@ async def calculate_game_rewards(
         # Everyone gets base gems (participation fee) - IF THEY VOTED
         for player_id in human_player_ids:
             if player_id in voted_player_ids:
-                rewards[player_id]['base_gems'] = 50
+                rewards[player_id]['base_gems'] = SINGLE_HUMAN_BASE_GEMS
             else:
                 print(f"⚠️ Player {player_id} did not vote - forfeiting base gems")
                 rewards[player_id]['base_gems'] = 0
@@ -1227,7 +1268,7 @@ async def calculate_game_rewards(
         # All humans get base gems - IF THEY VOTED
         for player_id in human_player_ids:
             if player_id in voted_player_ids:
-                rewards[player_id]['base_gems'] = 100
+                rewards[player_id]['base_gems'] = MULTI_HUMAN_BASE_GEMS
             else:
                 print(f"⚠️ Player {player_id} did not vote - forfeiting base gems")
                 rewards[player_id]['base_gems'] = 0
@@ -2746,6 +2787,16 @@ async def websocket_endpoint(websocket: WebSocket, room_code: str, player_id: st
     Query params:
         token: Optional JWT token for authenticated users
     """
+    # Rate limit check BEFORE accepting connection
+    # Use client host as key
+    client_host = websocket.client.host
+    if not websocket_connect_rate_limiter.is_allowed(client_host):
+        print(f"⛔ WebSocket connection blocked - rate limit exceeded for {client_host}")
+        # Cannot send JSON since connection is not accepted yet
+        # Just close with Policy Violation code
+        await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+        return
+
     await websocket.accept()
     print(f"🔌 WebSocket accepted for player {player_id} in room {room_code}")
     
@@ -4706,15 +4757,20 @@ async def list_sessions(
             query = query.order_by(desc(DBSession.completed_at))
             
         result = await db.execute(query.distinct())
+        sessions_with_gems = [(s, None) for s in result.scalars().all()]
     else:
         # Regular users see sessions where they're the owner OR where they played
         from .database import SessionPlayer
-        from sqlalchemy import or_
+        from sqlalchemy import or_, and_
         
         # Get sessions where user is owner OR participated as a player
+        # OPTIMIZATION: Fetch gems_earned directly to avoid N+1 file reads
         result = await db.execute(
-            select(DBSession)
-            .outerjoin(SessionPlayer, SessionPlayer.session_id == DBSession.id)
+            select(DBSession, SessionPlayer.gems_earned)
+            .outerjoin(SessionPlayer, and_(
+                SessionPlayer.session_id == DBSession.id,
+                SessionPlayer.user_id == current_user.id
+            ))
             .where(
                 or_(
                     DBSession.user_id == current_user.id,
@@ -4722,10 +4778,11 @@ async def list_sessions(
                 )
             )
             .order_by(desc(DBSession.completed_at))
-            .distinct()
         )
+        sessions_with_gems = result.all()
     
-    sessions = result.scalars().all()
+    # Extract sessions for highest reward query
+    sessions = [s for s, _ in sessions_with_gems]
     
     # Load gem rewards for each session from JSON files
     session_list = []
@@ -4749,7 +4806,7 @@ async def list_sessions(
         except Exception as e:
             print(f"Error fetching highest rewards batch: {e}")
     
-    for s in sessions:
+    for s, gems_earned_db in sessions_with_gems:
         # Get highest reward for this session from pre-fetched map
         highest_reward = highest_rewards_map.get(s.id, 0)
 
@@ -4768,35 +4825,36 @@ async def list_sessions(
             "calculated_earnings": float(getattr(s, 'calculated_earnings', None)) if getattr(s, 'calculated_earnings', None) else None,
             "highest_reward": highest_reward,
             "claimed_at": s.claimed_at.isoformat() if s.claimed_at else None,
-            "gem_earned": None  # Will be loaded from JSON if available
+            "gem_earned": gems_earned_db  # Use DB value!
         }
         
-        # Try to load gem_rewards from JSON file for this user
-        try:
-            if s.stats_file_path and os.path.exists(s.stats_file_path):
-                with open(s.stats_file_path, 'r') as f:
-                    stats_data = json.load(f)
-                    gem_rewards = stats_data.get('gem_rewards', {})
-                    
-                    # Find which player was this user
-                    from .database import SessionPlayer
-                    player_result = await db.execute(
-                        select(SessionPlayer).where(
-                            SessionPlayer.session_id == s.id,
-                            SessionPlayer.user_id == current_user.id
+        # Fallback: Load from JSON only if DB value is missing (legacy sessions)
+        if session_data["gem_earned"] is None:
+            try:
+                if s.stats_file_path and os.path.exists(s.stats_file_path):
+                    with open(s.stats_file_path, 'r') as f:
+                        stats_data = json.load(f)
+                        gem_rewards = stats_data.get('gem_rewards', {})
+                        
+                        # Find which player was this user
+                        from .database import SessionPlayer
+                        # We still need to query here if we don't have the player ID
+                        # But this only runs for legacy data.
+                        player_result = await db.execute(
+                            select(SessionPlayer).where(
+                                SessionPlayer.session_id == s.id,
+                                SessionPlayer.user_id == current_user.id
+                            )
                         )
-                    )
-                    user_player = player_result.scalar_one_or_none()
-                    if user_player and user_player.player_id in gem_rewards:
-                        reward_data = gem_rewards[user_player.player_id]
-                        # Handle both old format (number) and new format (dict with breakdown)
-                        if isinstance(reward_data, dict):
-                            # Use net_change for accurate display (accounts for stake deduction)
-                            session_data["gem_earned"] = reward_data.get('net_change', reward_data.get('total_gems', 0))
-                        else:
-                            session_data["gem_earned"] = reward_data  # Old format
-        except Exception as gem_load_error:
-            print(f"⚠️ Could not load gem_earned for session {s.id}: {gem_load_error}")
+                        user_player = player_result.scalar_one_or_none()
+                        if user_player and user_player.player_id in gem_rewards:
+                            reward_data = gem_rewards[user_player.player_id]
+                            if isinstance(reward_data, dict):
+                                session_data["gem_earned"] = reward_data.get('net_change', reward_data.get('total_gems', 0))
+                            else:
+                                session_data["gem_earned"] = reward_data
+            except Exception as gem_load_error:
+                print(f"⚠️ Could not load gem_earned for session {s.id}: {gem_load_error}")
         
         session_list.append(session_data)
     
@@ -5460,7 +5518,9 @@ async def create_room(
     language = room_data.get('language', 'english')
     discussion_duration = room_data.get('discussion_duration', 180)
     voting_duration = room_data.get('voting_duration', 60)
-    stake_percentage = room_data.get('stake_percentage', 0)
+    # Use configured default stake percentage (converted to int 0-100 safely)
+    default_stake = int(round(STAKE_PERCENTAGE * 100))
+    stake_percentage = room_data.get('stake_percentage', default_stake)
     
     # Validation
     if not (1 <= max_humans <= 5):

@@ -50,17 +50,22 @@ export const useWebSocket = (roomCode, playerId, onMessage) => {
 
       ws.onclose = (event) => {
         console.log('🔌 WebSocket closed:', event.code, event.reason);
-        setStatus('disconnected');
+        // Don't set to 'disconnected' immediately if we're going to reconnect
+        // Keep 'connecting' state visible to user
+        
         wsRef.current = null;
 
         // Attempt reconnection if not a clean close
         if (!event.wasClean && reconnectAttemptsRef.current < MAX_RECONNECT_ATTEMPTS) {
+          setStatus('connecting'); // Show "Connecting..." instead of "Disconnected"
           reconnectAttemptsRef.current += 1;
           console.log(`🔄 Reconnecting (attempt ${reconnectAttemptsRef.current}/${MAX_RECONNECT_ATTEMPTS})...`);
           
           reconnectTimeoutRef.current = setTimeout(() => {
             connect();
           }, RECONNECT_DELAY * reconnectAttemptsRef.current);
+        } else {
+          setStatus('disconnected');
         }
       };
 

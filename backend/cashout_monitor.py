@@ -9,7 +9,7 @@ from typing import Optional
 from sqlalchemy import select
 
 from backend.database import CashoutTransaction, CashoutStatus, async_session_maker
-from backend.cashout_service import cancel_cashout_transaction
+from backend.cashout_service import cancel_cashout_transaction, cleanup_expired_cashouts
 from backend.config import CASHOUT_MONITOR_INTERVAL
 
 
@@ -59,36 +59,10 @@ class CashoutMonitor:
     async def _check_expired_codes(self):
         """Check for expired redemption codes and return gems to users."""
         async with async_session_maker() as db:
-            # Get all pending transactions
-            query = select(CashoutTransaction).where(
-                CashoutTransaction.status == CashoutStatus.PENDING
-            )
-            result = await db.execute(query)
-            pending_transactions = result.scalars().all()
-            
-            if not pending_transactions:
-                return  # Nothing to process
-            
-            expired_count = 0
-            
-            for transaction in pending_transactions:
-                try:
-                    # Check if code has expired
-                    if transaction.expires_at and datetime.utcnow() > transaction.expires_at:
-                        print(f"⏰ Redemption code {transaction.redemption_code[:16]}... expired, returning gems to user")
-                        await cancel_cashout_transaction(
-                            transaction=transaction,
-                            db=db,
-                            reason="Redemption code expired after 7 days - gems returned to balance"
-                        )
-                        expired_count += 1
-                
-                except Exception as e:
-                    print(f"❌ Error processing transaction {transaction.id}: {e}")
-                    continue
-            
-            if expired_count > 0:
-                print(f"🔄 Processed {expired_count} expired redemption code(s)")
+            try:
+                await cleanup_expired_cashouts(db)
+            except Exception as e:
+                print(f"❌ Error in cleanup_expired_cashouts: {e}")
 
 
 # Global monitor instance
