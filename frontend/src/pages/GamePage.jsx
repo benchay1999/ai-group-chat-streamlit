@@ -21,6 +21,9 @@ const GamePage = () => {
   const navigate = useNavigate();
   const { roomCode, playerId, leaveRoom, saveActiveSession, clearActiveSession } = useGame();
   
+  // Loading state to prevent rendering child components before initial state is loaded
+  const [isLoadingInitialState, setIsLoadingInitialState] = useState(true);
+
   const [gameState, setGameState] = useState({
     phase: 'Discussion',
     round: 1,
@@ -100,6 +103,8 @@ const GamePage = () => {
       } catch (error) {
         console.error('Error fetching game state:', error);
         // Don't show error toast as WebSocket will likely connect and work anyway
+      } finally {
+        setIsLoadingInitialState(false);
       }
     };
 
@@ -411,6 +416,18 @@ const GamePage = () => {
         gemRewards={gameState.gem_rewards}
         playerId={playerId}
       />
+    );
+  }
+
+  // Show loading state while fetching initial game state
+  if (isLoadingInitialState) {
+    return (
+      <div className="h-screen flex items-center justify-center bg-gray-900 text-white">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-16 w-16 border-b-4 border-purple-500 mx-auto mb-4"></div>
+          <p className="text-lg">Loading game state...</p>
+        </div>
+      </div>
     );
   }
 

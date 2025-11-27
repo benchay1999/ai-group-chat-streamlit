@@ -13,6 +13,7 @@ export const useRoomPolling = (roomCode, interval = DEFAULT_INTERVAL, enabled = 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const intervalRef = useRef(null);
+  const consecutiveErrorsRef = useRef(0);
 
   useEffect(() => {
     if (!roomCode || !enabled) {
@@ -26,10 +27,19 @@ export const useRoomPolling = (roomCode, interval = DEFAULT_INTERVAL, enabled = 
         setRoomInfo(data);
         setError(null);
         setLoading(false);
+        consecutiveErrorsRef.current = 0; // Reset error count on success
       } catch (err) {
         console.error('Error polling room info:', err);
-        setError(err.message);
-        setLoading(false);
+        consecutiveErrorsRef.current += 1;
+        
+        // Only set error state if we fail multiple times in a row
+        // This prevents flickering error messages during transient network issues/rate limits
+        if (consecutiveErrorsRef.current >= 3) {
+          setError(err.message);
+        }
+        
+        // Don't set loading to false immediately if we're just retrying
+        // Keep previous data visible
       }
     };
 
@@ -50,4 +60,3 @@ export const useRoomPolling = (roomCode, interval = DEFAULT_INTERVAL, enabled = 
 };
 
 export default useRoomPolling;
-

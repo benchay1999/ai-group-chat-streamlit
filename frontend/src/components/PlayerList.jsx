@@ -15,12 +15,41 @@ const PlayerList = ({ players, phase, castVote, currentPlayerId, onLeave, numHum
   // Use the num_human_players from backend (passed as prop)
   const numHumans = numHumanPlayers;
   
+  // State for local vote submission tracking to prevent double-submission
+  const [voteSubmitted, setVoteSubmitted] = useState(false);
+
+  // Check localStorage for previous vote
+  useEffect(() => {
+    if (currentPlayerId) {
+      const storageKey = `vote_submitted_${currentPlayerId}`;
+      const savedVote = localStorage.getItem(storageKey);
+      if (savedVote === 'true') {
+        setVoteSubmitted(true);
+      }
+    }
+  }, [currentPlayerId]);
+
+  // Clear vote submission state when phase changes (new round)
+  useEffect(() => {
+    if (phase !== 'Voting') {
+      setVoteSubmitted(false);
+      if (currentPlayerId) {
+        localStorage.removeItem(`vote_submitted_${currentPlayerId}`);
+      }
+    }
+  }, [phase, currentPlayerId]);
+
+  // Combined voted check: server state OR local state
+  const isVotingDisabled = hasVoted || voteSubmitted;
+  
   // For multi-human games, need to select N-1 players
   const votesNeeded = numHumans > 1 ? numHumans - 1 : 1;
-  const canSubmitVotes = selectedPlayers.length === votesNeeded;
+  const canSubmitVotes = selectedPlayers.length === votesNeeded && !isVotingDisabled;
   
   // Toggle player selection
   const togglePlayerSelection = (playerId) => {
+    if (isVotingDisabled) return;
+    
     setSelectedPlayers(prev => {
       if (prev.includes(playerId)) {
         return prev.filter(id => id !== playerId);
@@ -36,7 +65,13 @@ const PlayerList = ({ players, phase, castVote, currentPlayerId, onLeave, numHum
   
   // Submit votes
   const handleSubmitVotes = () => {
-    if (canSubmitVotes) {
+    if (canSubmitVotes && !isVotingDisabled) {
+      // Set local state immediately
+      setVoteSubmitted(true);
+      if (currentPlayerId) {
+        localStorage.setItem(`vote_submitted_${currentPlayerId}`, 'true');
+      }
+      
       // Always send array for consistency (backend handles both formats)
       castVote(selectedPlayers);
       setSelectedPlayers([]);
@@ -64,7 +99,7 @@ const PlayerList = ({ players, phase, castVote, currentPlayerId, onLeave, numHum
       <div className="flex-1 overflow-y-auto p-4 space-y-2">
         {players.map(player => {
           const isCurrentPlayer = player.id === currentPlayerId;
-          const canSelect = phase === 'Voting' && !player.eliminated && !isCurrentPlayer && !hasVoted;
+          const canSelect = phase === 'Voting' && !player.eliminated && !isCurrentPlayer && !isVotingDisabled;
           const isSelected = selectedPlayers.includes(player.id);
 
           return (
@@ -109,7 +144,7 @@ const PlayerList = ({ players, phase, castVote, currentPlayerId, onLeave, numHum
 
                 {/* Status Badges */}
                 <div className="flex items-center gap-2">
-                  {player.voted && phase !== 'Voting' && (
+                  {(player.voted || (isCurrentPlayer && isVotingDisabled)) && phase !== 'Voting' && (
                     <span className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded-full font-semibold">
                       ✓ {t('player.voted')}
                     </span>
@@ -127,6 +162,11 @@ const PlayerList = ({ players, phase, castVote, currentPlayerId, onLeave, numHum
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
+                    // Set local state immediately
+                    setVoteSubmitted(true);
+                    if (currentPlayerId) {
+                      localStorage.setItem(`vote_submitted_${currentPlayerId}`, 'true');
+                    }
                     castVote([player.id]);  // Send as array for consistency
                   }}
                   className="mt-3 w-full bg-gradient-to-r from-blue-500 to-indigo-600 text-white py-2 px-4 rounded-lg font-semibold hover:from-blue-600 hover:to-indigo-700 transition-all transform hover:scale-105"
@@ -140,7 +180,7 @@ const PlayerList = ({ players, phase, castVote, currentPlayerId, onLeave, numHum
       </div>
       
       {/* Submit Votes Button (for multi-human games) */}
-      {phase === 'Voting' && !hasVoted && numHumans > 1 && (
+      {phase === 'Voting' && !isVotingDisabled && numHumans > 1 && (
         <div className="p-4 border-t border-gray-200 bg-gray-50">
           <div className="mb-2 text-sm text-gray-600 text-center">
             {selectedPlayers.length < votesNeeded ? (

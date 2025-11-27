@@ -95,7 +95,45 @@ app.add_middleware(
 
 
 # ============================================================================
-# Global Exception Handler (with CORS support)
+# Rate Limiting Middleware
+# ============================================================================
+
+@app.middleware("http")
+async def rate_limit_middleware(request: Request, call_next):
+    """
+    Global rate limiting middleware for API endpoints.
+    Skips static files and docs.
+    """
+    path = request.url.path
+    
+    # Skip rate limiting for:
+    # 1. Static files (usually handled by frontend server in prod, but good to safe)
+    # 2. Documentation endpoints
+    # 3. WebSocket upgrade requests (handled by websocket_connect_rate_limiter)
+    if (path.startswith("/static") or 
+        path.startswith("/docs") or 
+        path.startswith("/openapi.json") or 
+        "ws" in request.scope.get("type", "")):
+        return await call_next(request)
+    
+    # Apply global API rate limit
+    client_ip = request.client.host
+    if not api_rate_limiter.is_allowed(client_ip):
+        return JSONResponse(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            content={
+                "success": False,
+                "error": "Too many requests",
+                "detail": "You are sending too many requests. Please wait a moment."
+            }
+        )
+        
+    response = await call_next(request)
+    return response
+
+
+# ============================================================================
+# Exception Handlers
 # ============================================================================
 
 from fastapi.responses import JSONResponse
@@ -201,6 +239,9 @@ cashout_rate_limiter = SimpleRateLimiter(max_requests=10, window_seconds=60)
 # WebSocket connection: 5 per 10 seconds per IP (prevent DOS)
 # Allows quick reloads but stops aggressive connection flooding
 websocket_connect_rate_limiter = SimpleRateLimiter(max_requests=5, window_seconds=10)
+# General API: 100 requests per minute per IP (prevent API flooding)
+# Covers polling endpoints (Lobby, Waiting, Dashboard)
+api_rate_limiter = SimpleRateLimiter(max_requests=100, window_seconds=60)
 
 
 # ============================================================================
@@ -430,6 +471,7 @@ async def periodic_rate_limiter_cleanup():
             register_rate_limiter.cleanup_old_entries()
             cashout_rate_limiter.cleanup_old_entries()
             websocket_connect_rate_limiter.cleanup_old_entries()
+            api_rate_limiter.cleanup_old_entries()
             
             print("✅ Rate limiter cleanup complete")
             
@@ -1009,6 +1051,14 @@ async def process_ai_votes(room_code: str):
     while state.get('pending_ai_votes') and state['phase'] == Phase.VOTING:
         # Get next AI voter
         ai_id = state['pending_ai_votes'][0]
+        
+        # DEFENSE: Check if AI has already voted
+        if ai_id in state.get('votes', {}):
+            print(f"⚠️ AI {ai_id} already voted - skipping duplicate vote")
+            # Remove from pending list and continue
+            state['pending_ai_votes'] = state['pending_ai_votes'][1:]
+            rooms[room_code]['state'] = state
+            continue
         
         # Run single AI vote node in thread pool to avoid blocking
         loop = asyncio.get_event_loop()
@@ -6542,7 +6592,7 @@ async def cast_vote(room_code: str, vote_data: dict):
     # Check if already voted (enforce single vote per player)
     if player_id in state.get('votes', {}):
         error_msg = "Already voted"
-        print(f"   ❌ {error_msg}")
+        print(f"   ❌ {error_msg} - Player {player_id} attempted duplicate vote in room {room_code}")
         return {"error": error_msg}
     
     # Validate vote count for multi-human games

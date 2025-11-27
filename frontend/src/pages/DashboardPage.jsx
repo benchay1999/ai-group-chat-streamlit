@@ -27,6 +27,7 @@ const DashboardPage = () => {
   const [earningsLoading, setEarningsLoading] = useState(true);
   const [walletData, setWalletData] = useState(null);
   const [walletLoading, setWalletLoading] = useState(true);
+  const [retryCount, setRetryCount] = useState(0);
 
   // Send heartbeat to track this user as online
   useHeartbeat();
@@ -35,7 +36,11 @@ const DashboardPage = () => {
     loadSessions();
     loadEarnings();
     loadWallet();
-  }, []);
+  }, [retryCount]); // Reload when retry triggered
+
+  const handleRetry = () => {
+    setRetryCount(prev => prev + 1);
+  };
 
   const loadSessions = async () => {
     try {
@@ -43,7 +48,10 @@ const DashboardPage = () => {
       const data = await sessionsAPI.listSessions();
       setSessions(data?.sessions || []);
     } catch (error) {
-      toast.error('Failed to load sessions');
+      // Only toast error if not rate limited
+      if (error.response?.status !== 429) {
+        toast.error('Failed to load sessions');
+      }
       console.error('Error loading sessions:', error);
       setSessions([]); // Set to empty array on error
     } finally {
@@ -83,9 +91,11 @@ const DashboardPage = () => {
       setEarnings(earningsData);
     } catch (error) {
       console.error('Failed to load earnings:', error);
-      toast.error('Failed to load earnings data. Please refresh the page.');
-      // Keep earnings as null to show error state
-      setEarnings(null);
+      // Don't clear old earnings data on rate limit errors
+      if (error.response?.status !== 429) {
+        toast.error('Failed to load earnings data.');
+        setEarnings(null);
+      }
     } finally {
       setEarningsLoading(false);
     }
@@ -98,8 +108,10 @@ const DashboardPage = () => {
       setWalletData(data);
     } catch (error) {
       console.error('Failed to load wallet:', error);
-      toast.error('Failed to load wallet data');
-      setWalletData(null); // Explicitly set to null on error
+      if (error.response?.status !== 429) {
+        toast.error('Failed to load wallet data');
+        setWalletData(null); // Explicitly set to null on error
+      }
     } finally {
       setWalletLoading(false);
     }
@@ -145,7 +157,7 @@ const DashboardPage = () => {
       </div>
 
       {/* Earnings Loading State */}
-      {earningsLoading && (
+      {earningsLoading && !earnings && (
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
           <div className="bg-gray-800 bg-opacity-50 rounded-xl p-12 text-center">
             <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-cyan-400 mx-auto mb-4"></div>
@@ -162,7 +174,7 @@ const DashboardPage = () => {
             <h2 className="text-2xl font-bold text-red-400 mb-2">Failed to Load Earnings Data</h2>
             <p className="text-gray-300 mb-4">Unable to retrieve your earnings information. Please try again.</p>
             <button
-              onClick={loadEarnings}
+              onClick={handleRetry}
               className="px-6 py-3 bg-red-600 hover:bg-red-700 text-white rounded-lg font-semibold transition-colors"
             >
               Retry
@@ -172,7 +184,7 @@ const DashboardPage = () => {
       )}
 
       {/* Earnings Hero Section */}
-      {earnings && !earningsLoading && (
+      {earnings && (
         <div className="relative overflow-hidden bg-gradient-to-br from-gray-900 via-purple-900 to-black border-b border-gray-800">
           {/* Animated grid background */}
           <div className="absolute inset-0 bg-grid-pattern opacity-10" />
