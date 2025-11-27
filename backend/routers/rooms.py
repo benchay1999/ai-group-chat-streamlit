@@ -341,6 +341,45 @@ async def leave_room_endpoint(room_code: str, player_data: dict):
     # DO NOT remove from game state - they stay in the game as eliminated/absent
     # DO NOT add back their number to available_numbers - it's permanently assigned
     
+    # Check if this is the only human player leaving (to save API costs)
+    state = room['state']
+    human_players = [
+        p for p in state['players'] 
+        if p['role'] == 'human' 
+        and not p['eliminated'] 
+        and p['id'] not in room.get('permanently_left', set())
+        and p['id'] != player_id  # Exclude the leaving player
+    ]
+    
+    # Check if leaving player is human
+    leaving_player_is_human = any(
+        p['id'] == player_id and p['role'] == 'human' 
+        for p in state['players']
+    )
+    
+    # If the leaving player is the only human, terminate immediately
+    if leaving_player_is_human and len(human_players) == 0:
+        print(f"🗑️ Terminating room {room_code} - only human player is leaving")
+        
+        # Broadcast termination
+        await broadcast_to_room(room_code, {
+            "type": "room_terminated",
+            "message": "Room terminated - last human player left",
+            "reason": "single_human_left"
+        })
+        
+        # Clean up room
+        if room_code in rooms:
+            del rooms[room_code]
+        if room_code in room_locks:
+            del room_locks[room_code]
+        
+        return {
+            "success": True,
+            "action": "terminated",
+            "message": "Room terminated - you were the only human player"
+        }
+    
     # FIX 4.2: Check if ALL players have permanently left and terminate room
     if len(assigned_humans) == 0:
         print(f"🗑️ ALL players have permanently left room {room_code} - terminating immediately")

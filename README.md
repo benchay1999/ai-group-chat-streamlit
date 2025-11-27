@@ -1,6 +1,6 @@
-# Human Hunter - AI Social Deduction Game
+# Human-AI Group Chat
 
-A web-based Turing Test-inspired game where human players compete against AI agents in a social deduction setting. Players chat, vote, and try to identify who's human and who's AI.
+The Challenge: Join a group chat with AI bots and/or other humans. Chat, analyze behavior, and vote for who you think is the most human-like player (besides yourself). In a single-human game, you have to get the most votes from the players. In a multi-human game, you have to (1) get the most votes from the players, and (2) identify other human players.
 
 ## Key Features
 
@@ -17,7 +17,7 @@ Get running in 5 minutes:
 
 ```bash
 # 1. Clone and configure
-git clone <repository-url>
+git clone https://github.com/benchay1999/ai-group-chat-streamlit.git
 cd ai-group-chat-streamlit
 cp env.example .env
 # Edit .env and add your OPENAI_API_KEY
@@ -25,7 +25,7 @@ cp env.example .env
 # 2. Start backend
 cd backend
 pip install -r requirements.txt
-python main.py
+uvicorn backend.main:app
 
 # 3. Start frontend (new terminal)
 cd frontend
@@ -85,7 +85,7 @@ VOTING_TIME=60                # Voting phase (seconds)
 ROUNDS_TO_WIN=3               # Rounds to survive
 
 # Database (SQLite for dev, PostgreSQL for production)
-DATABASE_URL=sqlite+aiosqlite:///./group_chat.db
+DATABASE_URL=sqlite+aiosqlite:///./backend/group_chat.db
 
 # MTurk (optional - for payment system)
 AWS_ACCESS_KEY_ID=...
