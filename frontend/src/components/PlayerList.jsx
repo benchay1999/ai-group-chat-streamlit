@@ -15,32 +15,8 @@ const PlayerList = ({ players, phase, castVote, currentPlayerId, onLeave, numHum
   // Use the num_human_players from backend (passed as prop)
   const numHumans = numHumanPlayers;
   
-  // State for local vote submission tracking to prevent double-submission
-  const [voteSubmitted, setVoteSubmitted] = useState(false);
-
-  // Check localStorage for previous vote
-  useEffect(() => {
-    if (currentPlayerId) {
-      const storageKey = `vote_submitted_${currentPlayerId}`;
-      const savedVote = localStorage.getItem(storageKey);
-      if (savedVote === 'true') {
-        setVoteSubmitted(true);
-      }
-    }
-  }, [currentPlayerId]);
-
-  // Clear vote submission state when phase changes (new round)
-  useEffect(() => {
-    if (phase !== 'Voting') {
-      setVoteSubmitted(false);
-      if (currentPlayerId) {
-        localStorage.removeItem(`vote_submitted_${currentPlayerId}`);
-      }
-    }
-  }, [phase, currentPlayerId]);
-
-  // Combined voted check: server state OR local state
-  const isVotingDisabled = hasVoted || voteSubmitted;
+  // Combined voted check: server state only
+  const isVotingDisabled = hasVoted;
   
   // For multi-human games, need to select N-1 players
   const votesNeeded = numHumans > 1 ? numHumans - 1 : 1;
@@ -66,12 +42,6 @@ const PlayerList = ({ players, phase, castVote, currentPlayerId, onLeave, numHum
   // Submit votes
   const handleSubmitVotes = () => {
     if (canSubmitVotes && !isVotingDisabled) {
-      // Set local state immediately
-      setVoteSubmitted(true);
-      if (currentPlayerId) {
-        localStorage.setItem(`vote_submitted_${currentPlayerId}`, 'true');
-      }
-      
       // Always send array for consistency (backend handles both formats)
       castVote(selectedPlayers);
       setSelectedPlayers([]);
@@ -162,11 +132,6 @@ const PlayerList = ({ players, phase, castVote, currentPlayerId, onLeave, numHum
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
-                    // Set local state immediately
-                    setVoteSubmitted(true);
-                    if (currentPlayerId) {
-                      localStorage.setItem(`vote_submitted_${currentPlayerId}`, 'true');
-                    }
                     castVote([player.id]);  // Send as array for consistency
                   }}
                   className="mt-3 w-full bg-gradient-to-r from-blue-500 to-indigo-600 text-white py-2 px-4 rounded-lg font-semibold hover:from-blue-600 hover:to-indigo-700 transition-all transform hover:scale-105"

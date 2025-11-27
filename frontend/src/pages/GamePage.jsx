@@ -3,7 +3,7 @@
  * Main game interface with WebSocket integration
  */
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useGame } from '../context/GameContext';
 import { useWebSocket } from '../hooks/useWebSocket';
@@ -23,6 +23,15 @@ const GamePage = () => {
   
   // Loading state to prevent rendering child components before initial state is loaded
   const [isLoadingInitialState, setIsLoadingInitialState] = useState(true);
+  
+  // Initial load state for WebSocket message deduplication
+  // Note: isInitialLoad is now only used for other potential initializations, 
+  // not for blocking chat messages.
+  const [isInitialLoad, setIsInitialLoad] = useState(true);
+  
+  // Phase update protection to prevent flickering
+  const [allowPhaseUpdates, setAllowPhaseUpdates] = useState(false);
+  const lastPhaseUpdateRef = useRef(0);
 
   const [gameState, setGameState] = useState({
     phase: 'Discussion',
@@ -90,6 +99,12 @@ const GamePage = () => {
             timer: state.phase === 'Discussion' ? (state.timer || 180) : (state.timer || 60)
           }));
           
+          // Restore typing indicators from server state
+          if (state.typing && state.typing.length > 0) {
+            setTyping(state.typing);
+            console.log('✅ Restored typing indicators:', state.typing);
+          }
+          
           // Check if current player has already voted
           // The players array from backend already has 'voted' property set correctly
           // based on: "voted": p['id'] in state.get('votes', {})
@@ -105,6 +120,8 @@ const GamePage = () => {
         // Don't show error toast as WebSocket will likely connect and work anyway
       } finally {
         setIsLoadingInitialState(false);
+        // Allow WebSocket phase updates after 1 second grace period
+        setTimeout(() => setAllowPhaseUpdates(true), 1000);
       }
     };
 
@@ -136,10 +153,14 @@ const GamePage = () => {
 
     switch (type) {
       case 'message':
+        // Note: We no longer skip messages during initial load because the backend
+        // does not replay chat history on WebSocket connection. Any message received
+        // here is a new, live message that should be displayed.
+        
         setGameState(prev => {
           // Check for duplicates before adding
           if (isDuplicateMessage(prev.chat, data)) {
-            console.log('Start duplicate check');
+            console.log('Ignoring duplicate message');
             return prev;
           }
           
@@ -166,6 +187,19 @@ const GamePage = () => {
         break;
 
       case 'phase':
+        if (!allowPhaseUpdates) {
+          console.log('Ignoring phase update during initial load grace period');
+          return;
+        }
+        
+        const now = Date.now();
+        // Ignore rapid phase changes within 500ms (likely due to race conditions)
+        if (now - lastPhaseUpdateRef.current < 500) {
+          console.log('Ignoring duplicate phase update');
+          return; 
+        }
+        lastPhaseUpdateRef.current = now;
+
         setGameState(prev => ({
           ...prev,
           phase: data.phase,
@@ -304,6 +338,18 @@ const GamePage = () => {
 
   // Initialize WebSocket
   const { status: wsStatus, sendMessage: wsSendMessage } = useWebSocket(roomCode, playerId, handleWebSocketMessage);
+
+  // Handle initial load state based on WebSocket connection
+  useEffect(() => {
+    if (wsStatus === 'connected') {
+      // Disable initial load filtering after 2 seconds of connection
+      const timer = setTimeout(() => {
+        setIsInitialLoad(false);
+        console.log('WebSocket initial load phase complete');
+      }, 2000);
+      return () => clearTimeout(timer);
+    }
+  }, [wsStatus]);
 
   // Timer countdown (client-side, gets synced with server every 5 seconds)
   useEffect(() => {

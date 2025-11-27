@@ -948,11 +948,6 @@ async def run_discussion_phase(room_code: str):
             state['pending_ai_votes'] = []
             print(f"👥 Multi-human game ({num_human_players} humans): Only humans vote, AI agents will not vote")
         
-        state['votes'] = {}
-        
-        # Save state BEFORE broadcasting to ensure checks see VOTING phase
-        rooms[room_code]['state'] = state
-        
         # Broadcast phase change with voting duration and num_human_players
         voting_duration = rooms[room_code].get('voting_duration', VOTING_TIME)
         await broadcast_to_room(room_code, {
@@ -962,6 +957,14 @@ async def run_discussion_phase(room_code: str):
             "voting_duration": voting_duration,
             "num_human_players": num_human_players
         })
+
+        # THEN clear votes after small delay to ensure broadcasts complete
+        # This prevents race condition where clients fetch state mid-transition
+        await asyncio.sleep(0.1)
+        if room_code in rooms:
+            state = rooms[room_code]['state']
+            state['votes'] = {}
+            rooms[room_code]['state'] = state
         
         # Immediately send timer sync for phase transition (FIX: Prevent timer desync during phase change)
         await broadcast_to_room(room_code, {
@@ -3161,7 +3164,17 @@ async def websocket_endpoint(websocket: WebSocket, room_code: str, player_id: st
         phase_msg["voting_duration"] = room.get('voting_duration', VOTING_TIME)
     await websocket.send_json(phase_msg)
     
-    # Send current timer state if in an active phase (FIX: Timer sync for mid-phase joins)
+    # Send current typing indicators
+    typing_players = list(state.get('typing_players', set()))
+    if typing_players:
+        for player in typing_players:
+            await websocket.send_json({
+                "type": "typing",
+                "player": player,
+                "status": "start"
+            })
+    
+    # Send timer sync immediately
     if state["phase"].value in ["Discussion", "Voting"] and 'phase_start_time' in room:
         phase_start = room['phase_start_time']
         if state["phase"].value == "Discussion":
@@ -3179,14 +3192,8 @@ async def websocket_endpoint(websocket: WebSocket, room_code: str, player_id: st
         })
         print(f"⏱️ Sent initial timer sync to {player_id}: {remaining}s remaining in {state['phase'].value}")
     
-    # Send chat history
-    for msg in state["chat_history"]:
-        await websocket.send_json({
-            "type": "message", 
-            "sender": msg["sender"], 
-            "message": msg["message"],
-            "timestamp": msg.get("timestamp", time.time())
-        })
+    # Note: Chat history is now handled by the REST API initial state fetch
+    # to prevent message duplication on refresh.
     
     try:
         while True:
