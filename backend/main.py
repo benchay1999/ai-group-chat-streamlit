@@ -1848,6 +1848,11 @@ async def process_single_ai_message(room_code: str, ai_id: str):
             return
         
         # Show typing indicator before sending chunks
+        # Update state so new clients can see it on connect
+        if 'typing_players' not in rooms[room_code]['state']:
+            rooms[room_code]['state']['typing_players'] = set()
+        rooms[room_code]['state']['typing_players'].add(ai_sender)
+        
         await broadcast_to_room(room_code, {
             "type": "typing",
             "player": ai_sender,
@@ -1861,6 +1866,10 @@ async def process_single_ai_message(room_code: str, ai_id: str):
             if current_state['phase'] != Phase.DISCUSSION:
                 print(f"🚫 AI {ai_id} chunk {chunk_idx+1}/{len(chunks)} blocked - phase changed to {current_state['phase'].value}")
                 # Stop typing indicator
+                # Update state
+                if 'typing_players' in rooms[room_code]['state']:
+                    rooms[room_code]['state']['typing_players'].discard(ai_sender)
+                
                 await broadcast_to_room(room_code, {
                     "type": "typing",
                     "player": ai_sender,
@@ -1889,6 +1898,10 @@ async def process_single_ai_message(room_code: str, ai_id: str):
             if current_state['phase'] != Phase.DISCUSSION:
                 print(f"🚫 AI {ai_id} chunk {chunk_idx+1}/{len(chunks)} blocked after thinking - phase changed to {current_state['phase'].value}")
                 # Stop typing indicator
+                # Update state
+                if 'typing_players' in rooms[room_code]['state']:
+                    rooms[room_code]['state']['typing_players'].discard(ai_sender)
+                
                 await broadcast_to_room(room_code, {
                     "type": "typing",
                     "player": ai_sender,
@@ -1909,6 +1922,10 @@ async def process_single_ai_message(room_code: str, ai_id: str):
             if current_state['phase'] != Phase.DISCUSSION:
                 print(f"🚫 AI {ai_id} chunk {chunk_idx+1}/{len(chunks)} blocked after typing - phase changed to {current_state['phase'].value}")
                 # Stop typing indicator
+                # Update state
+                if 'typing_players' in rooms[room_code]['state']:
+                    rooms[room_code]['state']['typing_players'].discard(ai_sender)
+                
                 await broadcast_to_room(room_code, {
                     "type": "typing",
                     "player": ai_sender,
@@ -1947,6 +1964,10 @@ async def process_single_ai_message(room_code: str, ai_id: str):
                 if room_code not in rooms:
                     print(f"🚫 AI {ai_id} blocked after inter-chunk pause - room deleted")
                     # Stop typing indicator
+                    # Update state
+                    if 'typing_players' in rooms[room_code]['state']:
+                        rooms[room_code]['state']['typing_players'].discard(ai_sender)
+                    
                     await broadcast_to_room(room_code, {
                         "type": "typing",
                         "player": ai_sender,
@@ -1955,6 +1976,10 @@ async def process_single_ai_message(room_code: str, ai_id: str):
                     return
         
         # Stop typing indicator after all chunks sent
+        # Update state
+        if 'typing_players' in rooms[room_code]['state']:
+            rooms[room_code]['state']['typing_players'].discard(ai_sender)
+        
         await broadcast_to_room(room_code, {
             "type": "typing",
             "player": ai_sender,
@@ -1998,6 +2023,14 @@ async def process_single_ai_message(room_code: str, ai_id: str):
     finally:
         # Remove this AI from processing set
         if room_code in rooms:
+            # Cleanup typing status to prevent ghost typers on error
+            if 'typing_players' in rooms[room_code]['state']:
+                rooms[room_code]['state']['typing_players'].discard(ai_id)
+                
+                # Broadcast stop typing just in case (safe to send redundant stop)
+                # We can't await here easily without potentially complicating the finally block
+                # but the state update fixes the refresh persistence issue.
+            
             processing_agents = rooms[room_code].get('ai_processing_agents', set())
             processing_agents.discard(ai_id)
             rooms[room_code]['ai_processing_agents'] = processing_agents

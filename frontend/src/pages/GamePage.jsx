@@ -320,11 +320,28 @@ const GamePage = () => {
 
       case 'timer_sync':
         // Server-synchronized timer update (every 5 seconds)
-        setGameState(prev => ({
-          ...prev,
-          timer: data.time_remaining,
-          serverSynced: true,
-        }));
+        setGameState(prev => {
+          // FIX: Update phase if it differs from server state
+          // This handles cases where a client reconnects during a phase transition
+          // and misses the "phase" broadcast but catches the "timer_sync"
+          const newState = {
+            ...prev,
+            timer: data.time_remaining,
+            serverSynced: true,
+          };
+          
+          if (data.phase && data.phase !== prev.phase) {
+            console.log(`Phase mismatch detected in timer_sync! correcting: ${prev.phase} -> ${data.phase}`);
+            newState.phase = data.phase;
+            
+            // Reset phase-specific state
+            if (data.phase === 'Voting') {
+              newState.players = prev.players.map(p => ({ ...p, voted: false }));
+            }
+          }
+          
+          return newState;
+        });
         break;
 
       case 'error':
