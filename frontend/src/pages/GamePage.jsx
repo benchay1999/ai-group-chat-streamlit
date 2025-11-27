@@ -47,9 +47,18 @@ const GamePage = () => {
 
   // Redirect if no room/player
   useEffect(() => {
-    if (!roomCode || !playerId) {
-      navigate('/');
-    }
+    // Allow a grace period for session restoration
+    const timer = setTimeout(() => {
+      if (!roomCode || !playerId) {
+        // Check if we have a saved session in localStorage that might be restoring
+        const savedSession = localStorage.getItem('ai-group-chat-active-session');
+        if (!savedSession) {
+          navigate('/');
+        }
+      }
+    }, 1000);
+    
+    return () => clearTimeout(timer);
   }, [roomCode, playerId, navigate]);
 
   // WebSocket message handler

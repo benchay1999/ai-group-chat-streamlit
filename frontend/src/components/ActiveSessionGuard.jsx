@@ -16,7 +16,7 @@ const API_BASE_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:8000'
 const ActiveSessionGuard = ({ children }) => {
   const location = useLocation();
   const navigate = useNavigate();
-  const { getActiveSession, clearActiveSession, joinRoom } = useGame();
+  const { getActiveSession, clearActiveSession, joinRoom, roomCode, playerId } = useGame();
   const { isAuthenticated } = useAuth();
   
   const [showRejoinModal, setShowRejoinModal] = useState(false);
@@ -27,12 +27,6 @@ const ActiveSessionGuard = ({ children }) => {
   // Check for active session on mount and location change
   useEffect(() => {
     const checkActiveSession = async () => {
-      // Don't check if already on game or waiting page
-      if (location.pathname === '/game' || location.pathname === '/waiting') {
-        setVerifying(false);
-        return;
-      }
-
       const localSession = getActiveSession();
       
       if (!localSession) {
@@ -41,6 +35,8 @@ const ActiveSessionGuard = ({ children }) => {
       }
 
       console.log('🔍 Found local session:', localSession);
+
+      let validatedSession = null;
 
       // Verify session is still valid on backend (for authenticated users)
       if (isAuthenticated) {
@@ -52,8 +48,7 @@ const ActiveSessionGuard = ({ children }) => {
 
           if (response.data.has_active_session) {
             console.log('✅ Backend confirmed active session:', response.data);
-            setSessionInfo(response.data);
-            setShowRejoinModal(true);
+            validatedSession = response.data;
           } else {
             // Backend says no active session - clear local storage
             console.log('❌ Backend says no active session, clearing local storage');
@@ -62,20 +57,50 @@ const ActiveSessionGuard = ({ children }) => {
         } catch (error) {
           console.error('Error verifying session:', error);
           // On error, assume local session is valid
-          setSessionInfo(localSession);
-          setShowRejoinModal(true);
+          validatedSession = localSession;
         }
       } else {
         // For anonymous users, trust local storage
-        setSessionInfo(localSession);
-        setShowRejoinModal(true);
+        validatedSession = localSession;
+      }
+
+      if (validatedSession) {
+        setSessionInfo(validatedSession);
+        
+        // Handle property name differences between backend (snake_case) and local storage (camelCase)
+        const targetRoomCode = validatedSession.roomCode || validatedSession.room_code;
+        const targetPlayerId = validatedSession.playerId || validatedSession.player_id;
+        const status = validatedSession.roomStatus || validatedSession.room_status;
+        
+        // Check if we should automatically restore instead of showing modal
+        // This happens when user refreshes the page while in game/waiting
+        const isGamePage = location.pathname === '/game';
+        const isWaitingPage = location.pathname === '/waiting';
+        
+        // Determine if session status matches current page
+        // Status can be 'waiting' or 'in_progress' (which covers discussion, voting etc)
+        const matchesGame = isGamePage && (status === 'in_progress' || status === 'discussion' || status === 'voting');
+        const matchesWaiting = isWaitingPage && status === 'waiting';
+
+        if (matchesGame || matchesWaiting) {
+          // If we are on the correct page for the session state, just restore context
+          // Only update if not already set to avoid infinite loops
+          if (roomCode !== targetRoomCode || playerId !== targetPlayerId) {
+             console.log('🔄 Automatically restoring session context');
+             joinRoom(targetRoomCode, targetPlayerId);
+          }
+          setShowRejoinModal(false);
+        } else {
+          // We are on a different page (e.g. lobby), so show the modal
+          setShowRejoinModal(true);
+        }
       }
 
       setVerifying(false);
     };
 
     checkActiveSession();
-  }, [location.pathname, isAuthenticated, getActiveSession, clearActiveSession]);
+  }, [location.pathname, isAuthenticated, getActiveSession, clearActiveSession, joinRoom, roomCode, playerId]);
 
   const handleRejoin = async () => {
     setRejoining(true);

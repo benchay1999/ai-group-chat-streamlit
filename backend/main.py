@@ -5522,6 +5522,29 @@ async def create_room(
     default_stake = int(round(STAKE_PERCENTAGE * 100))
     stake_percentage = room_data.get('stake_percentage', default_stake)
     
+    # Check if user is already in an active room
+    if current_user:
+        user_id = str(current_user.id)
+        
+        # Search all rooms for this user's active session
+        for existing_room_code, existing_room_data in rooms.items():
+            existing_room_status = existing_room_data.get('room_status', '')
+            
+            # Only check rooms that are waiting or in_progress
+            if existing_room_status not in ['waiting', 'in_progress']:
+                continue
+            
+            # Check player_user_map for this user
+            player_user_map = existing_room_data.get('player_user_map', {})
+            
+            for player_id, mapped_user_id in player_user_map.items():
+                if mapped_user_id == user_id:
+                    # User already in active room
+                    return {
+                        "success": False, 
+                        "error": f"You are already in an active game ({existing_room_code}). Please finish or leave that game before creating a new one."
+                    }
+
     # Validation
     if not (1 <= max_humans <= 5):
         return {"success": False, "error": "max_humans must be between 1 and 5"}
