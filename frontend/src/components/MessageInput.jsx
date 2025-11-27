@@ -75,28 +75,34 @@ const MessageInput = ({ onSendMessage, disabled, phase, onTypingChange }) => {
   return (
     <div className="border-t border-gray-200 bg-white p-4">
       <div className="flex gap-3">
-        <input
-          type="text"
-          value={message}
-          onChange={(e) => setMessage(e.target.value)}
-          onKeyDown={handleKeyDown}
-          onBlur={() => {
-            setIsTyping(false);
-            // Notify parent that user stopped typing (input lost focus)
-            if (onTypingChange) {
-              onTypingChange('stop');
-            }
-            if (typingTimeoutRef.current) {
-              clearTimeout(typingTimeoutRef.current);
-            }
-          }}
-          placeholder={placeholderText}
-          disabled={disabled}
-          className="flex-1 px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-100 disabled:cursor-not-allowed"
-        />
+        <div className="relative flex-1">
+          <input
+            type="text"
+            value={message}
+            maxLength={400}
+            onChange={(e) => setMessage(e.target.value)}
+            onKeyDown={handleKeyDown}
+            onBlur={() => {
+              setIsTyping(false);
+              // Notify parent that user stopped typing (input lost focus)
+              if (onTypingChange) {
+                onTypingChange('stop');
+              }
+              if (typingTimeoutRef.current) {
+                clearTimeout(typingTimeoutRef.current);
+              }
+            }}
+            placeholder={placeholderText}
+            disabled={disabled}
+            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-100 disabled:cursor-not-allowed pr-16"
+          />
+          <div className="absolute bottom-3 right-3 text-xs text-gray-400 pointer-events-none bg-white bg-opacity-80 px-1 rounded">
+            {message.length}/400
+          </div>
+        </div>
         <button
           onClick={handleSend}
-          disabled={disabled || !message.trim()}
+          disabled={disabled || !message.trim() || message.length > 400}
           className="bg-gradient-to-r from-blue-500 to-purple-500 text-white px-6 py-3 rounded-lg font-semibold hover:from-blue-600 hover:to-purple-600 transition-all disabled:opacity-50 disabled:cursor-not-allowed transform hover:scale-105"
         >
           Send

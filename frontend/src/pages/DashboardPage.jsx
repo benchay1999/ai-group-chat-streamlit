@@ -11,7 +11,7 @@ import { sessionsAPI } from '../services/sessionsAPI';
 import { format } from 'date-fns';
 import { 
   ExternalLink, DollarSign, 
-  TrendingUp, Zap, Star, Sparkles, Award, Gem, Wallet, AlertCircle, ArrowRight, Clock, Check, Coins
+  TrendingUp, Zap, Star, Sparkles, Award, Gem, Wallet, AlertCircle, ArrowRight, Clock, Check, Coins, Minus
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../services/api';
@@ -492,7 +492,7 @@ const DashboardPage = () => {
                       Room Code
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
-                      Earnings
+                      Gems Earned/Lost
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
                       Date
@@ -537,40 +537,19 @@ const DashboardPage = () => {
                                 {session.gem_earned >= 0 ? '+' : ''}{session.gem_earned} gems
                               </span>
                             </div>
-                          ) : session.payment_amount ? (
-                            <div className="flex items-center gap-2">
-                              <span
-                                className={`text-lg font-bold ${
-                                  session.payment_status === 'paid'
-                                    ? 'text-green-400'
-                                    : 'text-yellow-400'
-                                }`}
-                              >
-                                ${session.payment_amount}
-                              </span>
-                              <span
-                                className={`px-2 py-0.5 text-xs font-medium rounded ${
-                                  session.payment_status === 'paid'
-                                    ? 'bg-green-900 text-green-200'
-                                    : 'bg-yellow-900 text-yellow-200 animate-pulse-yellow'
-                                }`}
-                              >
-                                {session.payment_status}
-                              </span>
-                            </div>
-                          ) : session.calculated_earnings ? (
-                            <span className="text-sm text-gray-500">
-                              Suggested: ${session.calculated_earnings}
-                            </span>
                           ) : (
-                            <span className="text-sm text-gray-500">Pending review</span>
+                            /* No participation / No gems earned */
+                            <div className="flex items-center gap-2 text-gray-600" title="Did not participate">
+                              <Minus className="w-5 h-5" />
+                            </div>
                           )}
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="flex items-center text-sm text-gray-400">
                           <Clock className="w-4 h-4 mr-2 text-gray-600" />
-                          {format(new Date(session.completed_at), 'MMM d, yyyy HH:mm')}
+                          {/* Treat backend date as UTC by ensuring it ends with Z */}
+                          {format(new Date(session.completed_at.endsWith('Z') ? session.completed_at : session.completed_at + 'Z'), 'MMM d, yyyy HH:mm')}
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">

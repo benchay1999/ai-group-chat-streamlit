@@ -1696,7 +1696,7 @@ async def process_single_ai_message(room_code: str, ai_id: str):
         # https://dl.acm.org/doi/full/10.1145/3715275.3732108
         
         # Note: Typing speed enhanced by 15% (0.3 → 0.255s per char)
-        base_delay = 1.0  # Base reaction time
+        base_delay = 0.5  # Base reaction time
         
         # Typing rate with variance (Normal distribution)
         # Enhanced by 15% (0.3 → 0.255s per char = ~3.92 chars/sec instead of 3.33)
@@ -2865,7 +2865,8 @@ async def websocket_endpoint(websocket: WebSocket, room_code: str, player_id: st
             'discussion_duration': DISCUSSION_TIME,  # Use default config
             'voting_duration': VOTING_TIME,  # Use default config
             'game_graph': game_graph,  # Room-specific GameGraph with assigned API key
-            'api_key_index': api_key_index  # Track which API key is assigned
+            'api_key_index': api_key_index,  # Track which API key is assigned
+            'player_message_cooldowns': defaultdict(float)  # Track last message time per player for rate limiting
         }
         # Initialize lock for this room to prevent race conditions
         if room_code not in room_locks:
@@ -3107,6 +3108,35 @@ async def websocket_endpoint(websocket: WebSocket, room_code: str, player_id: st
                 # Get the numbered player ID for this connection
                 player_id_map = rooms[room_code].get('player_id_map', {})
                 actual_player_id = player_id_map.get(player_id, player_id)
+                
+                # Validate message length
+                if len(message) > 400:
+                    print(f"⚠️ Message rejected - too long ({len(message)} chars)")
+                    await websocket.send_json({
+                        "type": "error",
+                        "message": "Message exceeds 400 character limit"
+                    })
+                    continue
+
+                # Rate limiting
+                current_time = time.time()
+                player_cooldowns = rooms[room_code].get('player_message_cooldowns')
+                # Handle legacy rooms that might not have this key
+                if player_cooldowns is None:
+                    player_cooldowns = defaultdict(float)
+                    rooms[room_code]['player_message_cooldowns'] = player_cooldowns
+                
+                last_message_time = player_cooldowns[actual_player_id]
+                if current_time - last_message_time < 0.1:
+                    print(f"⚠️ Message rejected - rate limit (0.1s) for {actual_player_id}")
+                    await websocket.send_json({
+                        "type": "error",
+                        "message": "You are sending messages too fast"
+                    })
+                    continue
+                
+                # Update last message time
+                player_cooldowns[actual_player_id] = current_time
                 
                 # Update state
                 state = await process_human_message(state, message, actual_player_id)
@@ -6335,6 +6365,25 @@ async def send_message(room_code: str, message_data: dict):
     # Check if in discussion phase
     if state['phase'] != Phase.DISCUSSION:
         return {"error": "Not in discussion phase"}
+    
+    # Validate message length
+    if len(message) > 400:
+        return {"error": "Message exceeds 400 character limit"}
+
+    # Rate limiting
+    current_time = time.time()
+    player_cooldowns = room.get('player_message_cooldowns')
+    # Handle legacy rooms that might not have this key
+    if player_cooldowns is None:
+        player_cooldowns = defaultdict(float)
+        room['player_message_cooldowns'] = player_cooldowns
+    
+    last_message_time = player_cooldowns[player_id]
+    if current_time - last_message_time < 0.1:
+        return {"error": "You are sending messages too fast"}
+    
+    # Update last message time
+    player_cooldowns[player_id] = current_time
     
     # Process human message
     state = await process_human_message(state, message, player_id)

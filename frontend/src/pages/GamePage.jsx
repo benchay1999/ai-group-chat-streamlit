@@ -202,6 +202,10 @@ const GamePage = () => {
         }));
         break;
 
+      case 'error':
+        toast.error(data.message);
+        break;
+
       default:
         console.log('Unknown message type:', type);
     }
