@@ -488,6 +488,18 @@ const LobbyPage = () => {
 
         {/* Contact Email and Bug Report - Bottom of Page */}
         <div className="flex justify-center items-center gap-2 mt-8 mb-6">
+          <a
+            href="https://github.com/benchay1999/ai-group-chat-streamlit/issues/new"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-2 px-5 py-2.5 bg-white bg-opacity-10 hover:bg-opacity-20 border border-white border-opacity-20 hover:border-opacity-40 backdrop-blur-md rounded-full transition-all duration-300 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 group"
+          >
+            <Bug className="w-4 h-4 text-pink-200 group-hover:text-pink-100 transition-transform duration-300 group-hover:rotate-12" />
+            <span className="text-sm font-semibold text-pink-100 group-hover:text-white transition-colors">
+              Bug report
+            </span>
+          </a>
+
           <button
             onClick={() => setShowEmail(!showEmail)}
             className="inline-flex items-center gap-2 px-4 py-2 bg-white bg-opacity-20 backdrop-blur-sm rounded-full hover:bg-opacity-30 transition-all group"
@@ -514,18 +526,6 @@ const LobbyPage = () => {
               </button>
             </div>
           )}
-
-          <a
-            href="https://github.com/benchay1999/ai-group-chat-streamlit/issues/new"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-2 px-5 py-2.5 bg-white bg-opacity-10 hover:bg-opacity-20 border border-white border-opacity-20 hover:border-opacity-40 backdrop-blur-md rounded-full transition-all duration-300 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 group"
-          >
-            <Bug className="w-4 h-4 text-pink-200 group-hover:text-pink-100 transition-transform duration-300 group-hover:rotate-12" />
-            <span className="text-sm font-semibold text-pink-100 group-hover:text-white transition-colors">
-              Bug report
-            </span>
-          </a>
         </div>
       </div>
 

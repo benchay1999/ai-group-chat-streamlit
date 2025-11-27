@@ -185,93 +185,107 @@ async def websocket_endpoint(websocket: WebSocket, room_code: str, player_id: st
         rooms[room_code]['mturk_context'][player_id] = mturk_context
         print(f"💼 ✅ Stored MTurk context for {player_id}: worker={mturk_context.get('worker_id')}")
     
-    state = rooms[room_code]['state']
-    existing_player = None
-    player_id_map = rooms[room_code].get('player_id_map', {})
-    numbered_id = player_id_map.get(player_id)
+    # Ensure lock exists
+    if room_code not in room_locks:
+        room_locks[room_code] = asyncio.Lock()
     
-    for p in state.get('players', []):
-        if p['id'] == player_id or (numbered_id and p['id'] == numbered_id):
-            existing_player = p
-            break
+    # CRITICAL: Protect player connection setup with lock to prevent race conditions
+    async with room_locks[room_code]:
+        state = rooms[room_code]['state']
+        existing_player = None
+        player_id_map = rooms[room_code].get('player_id_map', {})
+        numbered_id = player_id_map.get(player_id)
+        
+        for p in state.get('players', []):
+            if p['id'] == player_id or (numbered_id and p['id'] == numbered_id):
+                existing_player = p
+                break
+        
+        if not existing_player:
+            available_nums = rooms[room_code].get('available_numbers', [])
+            if available_nums:
+                assigned_number = available_nums.pop(0)
+                numbered_player_id = f"Player {assigned_number}"
+            else:
+                numbered_player_id = player_id
+            
+            state['players'].append({
+                "id": numbered_player_id,
+                "role": "human",
+                "eliminated": False,
+                "personality": None
+            })
+            
+            rooms[room_code]['player_id_map'] = rooms[room_code].get('player_id_map', {})
+            rooms[room_code]['player_id_map'][player_id] = numbered_player_id
+            
+            if user_id:
+                rooms[room_code]['player_user_map'][numbered_player_id] = user_id
+                print(f"👤 ✅ Mapped {numbered_player_id} (human) -> user {user_id[:8]}...")
+            else:
+                print(f"⚠️ No user_id to map for {numbered_player_id}")
+            
+            rooms[room_code]['state'] = state
+            print(f"✅ Added human player {numbered_player_id} to game state")
+            
+            connected_humans = get_connected_humans(rooms[room_code])
+            if numbered_player_id not in connected_humans:
+                connected_humans.append(numbered_player_id)
+                rooms[room_code]['connected_humans'] = connected_humans
+                print(f"🔗 Added {numbered_player_id} to connected_humans")
+            
+            update_player_activity(rooms[room_code], numbered_player_id)
+            update_player_heartbeat(rooms[room_code], numbered_player_id)
+        else:
+            numbered_player_id = existing_player['id']
+            rooms[room_code]['player_id_map'] = rooms[room_code].get('player_id_map', {})
+            rooms[room_code]['player_id_map'][player_id] = numbered_player_id
+            
+            connected_humans = get_connected_humans(rooms[room_code])
+            if numbered_player_id not in connected_humans:
+                connected_humans.append(numbered_player_id)
+                rooms[room_code]['connected_humans'] = connected_humans
+                print(f"🔗 Added existing player {numbered_player_id} to connected_humans")
+            
+            update_player_activity(rooms[room_code], numbered_player_id)
+            update_player_heartbeat(rooms[room_code], numbered_player_id)
+            
+            existing_mapping = rooms[room_code]['player_user_map'].get(numbered_player_id)
+            
+            if existing_mapping:
+                print(f"ℹ️ Player {numbered_player_id} already mapped via API -> user {existing_mapping[:8]}...")
+                if user_id and user_id != existing_mapping:
+                    print(f"⚠️ WebSocket user {user_id[:8]}... differs from API user {existing_mapping[:8]}... - keeping API mapping")
+            elif user_id:
+                rooms[room_code]['player_user_map'][numbered_player_id] = user_id
+                print(f"👤 ✅ Mapped {numbered_player_id} (existing player from API) -> user {user_id[:8]}... via WebSocket")
+            else:
+                print(f"⚠️ No user_id to map for existing player {numbered_player_id}")
+        
+        # Game initialization (if needed)
+        state = rooms[room_code]['state']
+        needs_init = 'initialized' not in rooms[room_code]
+        
+        if needs_init:
+            game_graph = rooms[room_code]['game_graph']
+            result = game_graph.initialize_game_node(state)
+            
+            rooms[room_code]['state'] = state
+            rooms[room_code]['initialized'] = True
+            
+            # Store initialization data for broadcasting outside lock
+            broadcast_queue = result.get('broadcast_queue', [])
+            discussion_duration = rooms[room_code].get('discussion_duration', DISCUSSION_TIME)
     
-    if not existing_player:
-        available_nums = rooms[room_code].get('available_numbers', [])
-        if available_nums:
-            assigned_number = available_nums.pop(0)
-            numbered_player_id = f"Player {assigned_number}"
-        else:
-            numbered_player_id = player_id
-        
-        state['players'].append({
-            "id": numbered_player_id,
-            "role": "human",
-            "eliminated": False,
-            "personality": None
-        })
-        
-        rooms[room_code]['player_id_map'] = rooms[room_code].get('player_id_map', {})
-        rooms[room_code]['player_id_map'][player_id] = numbered_player_id
-        
-        if user_id:
-            rooms[room_code]['player_user_map'][numbered_player_id] = user_id
-            print(f"👤 ✅ Mapped {numbered_player_id} (human) -> user {user_id[:8]}...")
-        else:
-            print(f"⚠️ No user_id to map for {numbered_player_id}")
-        
-        rooms[room_code]['state'] = state
-        print(f"✅ Added human player {numbered_player_id} to game state")
-        
-        connected_humans = get_connected_humans(rooms[room_code])
-        if numbered_player_id not in connected_humans:
-            connected_humans.append(numbered_player_id)
-            rooms[room_code]['connected_humans'] = connected_humans
-            print(f"🔗 Added {numbered_player_id} to connected_humans")
-        
-        update_player_activity(rooms[room_code], numbered_player_id)
-        update_player_heartbeat(rooms[room_code], numbered_player_id)
-    else:
-        numbered_player_id = existing_player['id']
-        rooms[room_code]['player_id_map'] = rooms[room_code].get('player_id_map', {})
-        rooms[room_code]['player_id_map'][player_id] = numbered_player_id
-        
-        connected_humans = get_connected_humans(rooms[room_code])
-        if numbered_player_id not in connected_humans:
-            connected_humans.append(numbered_player_id)
-            rooms[room_code]['connected_humans'] = connected_humans
-            print(f"🔗 Added existing player {numbered_player_id} to connected_humans")
-        
-        update_player_activity(rooms[room_code], numbered_player_id)
-        update_player_heartbeat(rooms[room_code], numbered_player_id)
-        
-        existing_mapping = rooms[room_code]['player_user_map'].get(numbered_player_id)
-        
-        if existing_mapping:
-            print(f"ℹ️ Player {numbered_player_id} already mapped via API -> user {existing_mapping[:8]}...")
-            if user_id and user_id != existing_mapping:
-                print(f"⚠️ WebSocket user {user_id[:8]}... differs from API user {existing_mapping[:8]}... - keeping API mapping")
-        elif user_id:
-            rooms[room_code]['player_user_map'][numbered_player_id] = user_id
-            print(f"👤 ✅ Mapped {numbered_player_id} (existing player from API) -> user {user_id[:8]}... via WebSocket")
-        else:
-            print(f"⚠️ No user_id to map for existing player {numbered_player_id}")
-    
-    state = rooms[room_code]['state']
-    if 'initialized' not in rooms[room_code]:
-        game_graph = rooms[room_code]['game_graph']
-        result = game_graph.initialize_game_node(state)
-        
-        if 'broadcast_queue' in result:
-            for msg in result['broadcast_queue']:
+    # Broadcast initialization messages (outside lock)
+    if needs_init:
+        if broadcast_queue:
+            for msg in broadcast_queue:
                 print(f"📤 Sending initial broadcast: {msg['type']}")
                 await broadcast_to_room(room_code, msg)
         
-        rooms[room_code]['state'] = state
-        rooms[room_code]['initialized'] = True
-        
         asyncio.create_task(run_discussion_phase(room_code))
         
-        discussion_duration = rooms[room_code].get('discussion_duration', DISCUSSION_TIME)
         await broadcast_to_room(room_code, {
             "type": "timer_sync",
             "phase": "Discussion",
@@ -332,52 +346,61 @@ async def websocket_endpoint(websocket: WebSocket, room_code: str, player_id: st
                 print(f"⚠️ Room {room_code} was deleted, closing connection")
                 break
             
-            state = rooms[room_code]['state']
-            
             if data["type"] == "message":
                 message = data["message"]
                 print(f"💬 Human message received: {message}")
                 
-                if state['phase'] != Phase.DISCUSSION:
-                    print(f"⚠️ Message rejected - not in discussion phase")
-                    await websocket.send_json({
-                        "type": "error",
-                        "message": "Messages only allowed during discussion phase"
-                    })
-                    continue
+                # Ensure lock exists
+                if room_code not in room_locks:
+                    room_locks[room_code] = asyncio.Lock()
                 
-                player_id_map = rooms[room_code].get('player_id_map', {})
-                actual_player_id = player_id_map.get(player_id, player_id)
-                
-                if len(message) > 400:
-                    await websocket.send_json({
-                        "type": "error",
-                        "message": "Message exceeds 400 character limit"
-                    })
-                    continue
+                # CRITICAL: Use lock to prevent race conditions during state updates
+                async with room_locks[room_code]:
+                    room = rooms[room_code]
+                    state = room['state']
+                    
+                    # Check if in discussion phase
+                    if state['phase'] != Phase.DISCUSSION:
+                        await websocket.send_json({
+                            "type": "error",
+                            "message": "Messages only allowed during discussion phase"
+                        })
+                        continue
+                    
+                    player_id_map = room.get('player_id_map', {})
+                    actual_player_id = player_id_map.get(player_id, player_id)
+                    
+                    if len(message) > 400:
+                        await websocket.send_json({
+                            "type": "error",
+                            "message": "Message exceeds 400 character limit"
+                        })
+                        continue
 
-                current_time = _time.time()
-                player_cooldowns = rooms[room_code].get('player_message_cooldowns')
-                if player_cooldowns is None:
-                    player_cooldowns = defaultdict(float)
-                    rooms[room_code]['player_message_cooldowns'] = player_cooldowns
+                    current_time = _time.time()
+                    player_cooldowns = room.get('player_message_cooldowns')
+                    if player_cooldowns is None:
+                        player_cooldowns = defaultdict(float)
+                        room['player_message_cooldowns'] = player_cooldowns
+                    
+                    last_message_time = player_cooldowns[actual_player_id]
+                    if current_time - last_message_time < 0.1:
+                        await websocket.send_json({
+                            "type": "error",
+                            "message": "You are sending messages too fast"
+                        })
+                        continue
+                    
+                    player_cooldowns[actual_player_id] = current_time
+                    
+                    # Process human message and update state atomically
+                    state = await process_human_message(state, message, actual_player_id)
+                    rooms[room_code]['state'] = state
+                    
+                    last_msg = state['chat_history'][-1] if state['chat_history'] else {}
+                    msg_timestamp = last_msg.get('timestamp', current_time)
                 
-                last_message_time = player_cooldowns[actual_player_id]
-                if current_time - last_message_time < 0.1:
-                    await websocket.send_json({
-                        "type": "error",
-                        "message": "You are sending messages too fast"
-                    })
-                    continue
-                
-                player_cooldowns[actual_player_id] = current_time
-                
-                state = await process_human_message(state, message, actual_player_id)
-                rooms[room_code]['state'] = state
-                
-                last_msg = state['chat_history'][-1] if state['chat_history'] else {}
-                msg_timestamp = last_msg.get('timestamp', current_time)
-                
+                # Broadcast outside lock (async-safe)
                 await broadcast_to_room(room_code, {
                     "type": "message",
                     "sender": player_id,
@@ -398,19 +421,43 @@ async def websocket_endpoint(websocket: WebSocket, room_code: str, player_id: st
             elif data["type"] == "vote":
                 voted_for = data["voted"]
                 
-                player_id_map = rooms[room_code].get('player_id_map', {})
-                actual_player_id = player_id_map.get(player_id, player_id)
+                # Ensure lock exists
+                if room_code not in room_locks:
+                    room_locks[room_code] = asyncio.Lock()
                 
-                state = await process_human_vote(state, actual_player_id, voted_for)
-                rooms[room_code]['state'] = state
+                should_complete = False
                 
+                # CRITICAL: Use lock to prevent race conditions during voting
+                async with room_locks[room_code]:
+                    room = rooms[room_code]
+                    state = room['state']
+                    
+                    player_id_map = room.get('player_id_map', {})
+                    actual_player_id = player_id_map.get(player_id, player_id)
+                    
+                    # Process human vote and update state atomically
+                    state = await process_human_vote(state, actual_player_id, voted_for)
+                    rooms[room_code]['state'] = state
+                    
+                    # Check if all votes are in
+                    # CRITICAL FIX: Exclude permanently_left players from vote requirement
+                    permanently_left = room.get('permanently_left', set())
+                    active_players = [p['id'] for p in state['players'] 
+                                     if not p['eliminated'] and p['id'] not in permanently_left]
+                    
+                    print(f"📊 Vote check (WS): {len(state['votes'])}/{len(active_players)} votes (excluding {len(permanently_left)} left players)")
+                    
+                    if len(state['votes']) >= len(active_players):
+                        should_complete = True
+                
+                # Broadcast outside lock (async-safe)
                 await broadcast_to_room(room_code, {
                     "type": "voted",
                     "player": actual_player_id
                 })
                 
-                active_players = [p['id'] for p in state['players'] if not p['eliminated']]
-                if len(state['votes']) >= len(active_players):
+                # Complete voting if all votes received
+                if should_complete:
                     await complete_voting(room_code)
     
     except WebSocketDisconnect:

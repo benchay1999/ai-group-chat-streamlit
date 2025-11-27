@@ -981,13 +981,19 @@ async def cast_vote(room_code: str, vote_data: dict):
         })
         
         # Check if all votes are in
-        active_player_ids = [p['id'] for p in state['players'] if not p['eliminated']]
-        human_player_ids = [p['id'] for p in state['players'] if p['role'] == 'human' and not p['eliminated']]
+        # CRITICAL FIX: Exclude permanently_left players from vote requirement
+        permanently_left = room.get('permanently_left', set())
+        active_player_ids = [p['id'] for p in state['players'] 
+                             if not p['eliminated'] and p['id'] not in permanently_left]
+        human_player_ids = [p['id'] for p in state['players'] 
+                            if p['role'] == 'human' and not p['eliminated'] and p['id'] not in permanently_left]
         
         if num_humans > 1:
             required_votes = len(human_player_ids)
         else:
             required_votes = len(active_player_ids)
+        
+        print(f"📊 Vote check: {len(state['votes'])}/{required_votes} votes (excluding {len(permanently_left)} left players)")
         
         if len(state['votes']) >= required_votes:
             print(f"✅ All required votes received, completing voting...")
@@ -1087,24 +1093,35 @@ async def player_heartbeat(room_code: str, heartbeat_data: dict):
 async def start_game(room_code: str):
     """
     Reset and start a game in a room.
+    DEPRECATED: This endpoint is not used by the frontend.
     """
     if room_code in rooms:
-        # Reset room
-        state = create_game_for_room(room_code, NUM_AI_PLAYERS)
-        rooms[room_code]['state'] = state
-        rooms[room_code]['ai_processing_agents'] = set()
+        # Ensure lock exists
+        if room_code not in room_locks:
+            room_locks[room_code] = asyncio.Lock()
         
-        # Broadcast reset
+        # CRITICAL: Use lock to prevent race conditions during reset
+        async with room_locks[room_code]:
+            # Reset room
+            state = create_game_for_room(room_code, NUM_AI_PLAYERS)
+            rooms[room_code]['state'] = state
+            rooms[room_code]['ai_processing_agents'] = set()
+        
+        # Broadcast reset (outside lock)
         await broadcast_to_room(room_code, {
             "type": "game_reset",
             "message": "Game reset"
         })
         
-        # Initialize game
+        # Initialize game (outside lock - long operation)
         game_graph = rooms[room_code]['game_graph']
         result = game_graph.initialize_game_node(state)
-        state.update(result)
-        rooms[room_code]['state'] = state
+        
+        # Update state with result (inside lock)
+        async with room_locks[room_code]:
+            state = rooms[room_code]['state']
+            state.update(result)
+            rooms[room_code]['state'] = state
         
         if 'broadcast_queue' in result:
             for msg in result['broadcast_queue']:

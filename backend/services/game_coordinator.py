@@ -26,7 +26,7 @@ async def proactive_agent_engagement(room_code: str):
             break
         
         # Wait for a period before checking (stagger checks to avoid conflicts)
-        await asyncio.sleep(random.uniform(4, 8))
+        await asyncio.sleep(random.uniform(1, 2))
         
         if room_code not in rooms:
             break
@@ -37,11 +37,11 @@ async def proactive_agent_engagement(room_code: str):
         if state['phase'] != Phase.DISCUSSION:
             break
         
-        # Check if conversation has been quiet (no messages in last 10 seconds)
+        # Check if conversation has been quiet (no messages in last 4 seconds)
         last_message_time = state.get('last_message_time', 0)
         time_since_last = time.time() - last_message_time
         
-        if time_since_last > 10:
+        if time_since_last > 4:
             print(f"💤 Conversation quiet for {time_since_last:.1f}s, triggering proactive engagement")
             asyncio.create_task(trigger_agent_decisions(room_code))
 
@@ -255,13 +255,16 @@ async def process_ai_votes(room_code: str):
         room_locks[room_code] = asyncio.Lock()
 
     while True:
-        # Optimistic read for condition check
-        state = rooms[room_code]['state']
-        if not (state.get('pending_ai_votes') and state['phase'] == Phase.VOTING):
-            break
+        # CRITICAL: Use lock for condition check to prevent race conditions
+        async with room_locks[room_code]:
+            state = rooms[room_code]['state']
+            has_pending = state.get('pending_ai_votes') and state['phase'] == Phase.VOTING
             
-        # Get next AI voter
-        ai_id = state['pending_ai_votes'][0]
+            if not has_pending:
+                break
+            
+            # Get next AI voter
+            ai_id = state['pending_ai_votes'][0]
         
         # DEFENSE: Check if AI has already voted
         if ai_id in state.get('votes', {}):
@@ -340,30 +343,36 @@ async def schedule_correction_message(room_code: str, ai_id: str, correction_tex
         print(f"🚫 Correction for {ai_id} cancelled - room deleted")
         return
     
-    current_state = rooms[room_code]['state']
+    # Ensure lock exists
+    if room_code not in room_locks:
+        room_locks[room_code] = asyncio.Lock()
     
-    # Check if still in discussion phase
-    if current_state['phase'] != Phase.DISCUSSION:
-        print(f"🚫 Correction for {ai_id} cancelled - phase is {current_state['phase'].value}")
-        return
-    
-    # Check if other messages were sent in between (adds realism)
-    messages_now = len(current_state.get('chat_history', []))
-    messages_between = messages_now - messages_before_correction
-    
-    print(f"📝 Sending correction for {ai_id}. {messages_between} messages sent in between.")
-    
-    # Create correction message
-    chat_msg = {
-        "sender": ai_sender,
-        "message": correction_text,
-        "timestamp": time.time()
-    }
-    
-    # Add to chat history
-    current_state['chat_history'].append(chat_msg)
-    current_state['last_message_time'] = time.time()
-    rooms[room_code]['state'] = current_state
+    # CRITICAL: Use lock to prevent race conditions when adding correction message
+    async with room_locks[room_code]:
+        current_state = rooms[room_code]['state']
+        
+        # Check if still in discussion phase
+        if current_state['phase'] != Phase.DISCUSSION:
+            print(f"🚫 Correction for {ai_id} cancelled - phase is {current_state['phase'].value}")
+            return
+        
+        # Check if other messages were sent in between (adds realism)
+        messages_now = len(current_state.get('chat_history', []))
+        messages_between = messages_now - messages_before_correction
+        
+        print(f"📝 Sending correction for {ai_id}. {messages_between} messages sent in between.")
+        
+        # Create correction message
+        chat_msg = {
+            "sender": ai_sender,
+            "message": correction_text,
+            "timestamp": time.time()
+        }
+        
+        # Add to chat history atomically
+        current_state['chat_history'].append(chat_msg)
+        current_state['last_message_time'] = time.time()
+        rooms[room_code]['state'] = current_state
     
     # Broadcast correction (minimal delay, just thinking time)
     await broadcast_to_room(room_code, {
@@ -473,20 +482,20 @@ async def process_single_ai_message(room_code: str, ai_id: str):
         # 1 + N(0.255, 0.0255)×n_char + N(0.03, 0.003)×n_char_prev + Γ(2.5, 0.25)
         # https://dl.acm.org/doi/full/10.1145/3715275.3732108
         
-        # Note: Typing speed enhanced by 15% (0.3 → 0.255s per char)
-        base_delay = 0.3  # Base reaction time
+        # Note: Adjusted for natural conversation pace
+        base_delay = 0.8  # Base reaction time
         
         # Typing rate with variance (Normal distribution)
-        # Enhanced by 15% (0.3 → 0.255s per char = ~3.92 chars/sec instead of 3.33)
-        typing_rate_per_char = max(0.1, np.random.normal(0.12, 0.02))  # Clamp to avoid negative
+        # Moderate speed: ~4 chars/sec for natural conversation
+        typing_rate_per_char = max(0.1, np.random.normal(0.25, 0.03))  # Clamp to avoid negative
         
         # Context factor - cognitive load from processing previous message
         context_rate_per_char = max(0.0, np.random.normal(0.02, 0.003))
         context_delay = context_rate_per_char * n_char_prev
         
         # Thinking time - Gamma distribution (right-skewed, models human thinking)
-        # Gamma(shape=2.5, scale=0.25) has mean=0.625s, variance=0.156s²
-        thinking_time = np.random.gamma(1.5, 0.15)
+        # Gamma(shape=2.0, scale=0.2) has mean=0.4s, more realistic thinking
+        thinking_time = np.random.gamma(2.0, 0.2)
         
         # Total statistical delay
         total_statistical_delay = base_delay + (typing_rate_per_char * n_char) + context_delay + thinking_time
@@ -646,9 +655,13 @@ async def process_single_ai_message(room_code: str, ai_id: str):
                     return
         
         # Stop typing indicator after all chunks sent
-        # Update state
-        if 'typing_players' in rooms[room_code]['state']:
-            rooms[room_code]['state']['typing_players'].discard(ai_sender)
+        # CRITICAL: Use lock to prevent race conditions
+        async with room_locks[room_code]:
+            if 'typing_players' in rooms[room_code]['state']:
+                rooms[room_code]['state']['typing_players'].discard(ai_sender)
+            
+            # Record current message count for correction scheduling (inside lock for accuracy)
+            messages_before_correction = len(rooms[room_code]['state'].get('chat_history', []))
         
         await broadcast_to_room(room_code, {
             "type": "typing",
@@ -659,8 +672,6 @@ async def process_single_ai_message(room_code: str, ai_id: str):
         # Schedule correction message if has_typo is true
         # Add 20-60% probability that another AI responds between typo and correction
         if has_typo and correction and correction.strip():
-            # Record current message count for tracking
-            messages_before_correction = len(rooms[room_code]['state'].get('chat_history', []))
             # Schedule the correction as a background task
             asyncio.create_task(
                 schedule_correction_message(room_code, ai_id, correction, ai_sender, messages_before_correction)
@@ -683,12 +694,18 @@ async def process_single_ai_message(room_code: str, ai_id: str):
             return
         
         # DEFENSE LAYER 4: Check phase before triggering more AI responses
-        current_state = rooms[room_code]['state']
-        if current_state['phase'] == Phase.DISCUSSION:
+        # CRITICAL: Use lock for phase check to prevent race conditions
+        async with room_locks[room_code]:
+            current_state = rooms[room_code]['state']
+            should_trigger = current_state['phase'] == Phase.DISCUSSION
+        
+        if should_trigger:
             # Only trigger new responses if still in discussion
             asyncio.create_task(trigger_agent_decisions(room_code, exclude_agents=[ai_id]))
         else:
-            print(f"🚫 Not triggering new AI responses - phase is {current_state['phase'].value}")
+            async with room_locks[room_code]:
+                phase_value = rooms[room_code]['state']['phase'].value
+            print(f"🚫 Not triggering new AI responses - phase is {phase_value}")
                 
     finally:
         # Remove this AI from processing set
@@ -715,13 +732,18 @@ async def trigger_agent_decisions(room_code: str, exclude_agents: list = None):
     if room_code not in rooms:
         return
     
+    # Ensure lock exists
+    if room_code not in room_locks:
+        room_locks[room_code] = asyncio.Lock()
+    
+    # Read state once for decision-making (outside lock - long operation)
     state = rooms[room_code]['state']
     
     # Only trigger during discussion phase
     if state['phase'] != Phase.DISCUSSION:
         return
     
-    # Check if we're still processing previous decisions (cooldown to prevent loops)
+    # Check cooldown (outside lock - quick check)
     if 'last_decision_trigger_time' not in rooms[room_code]:
         rooms[room_code]['last_decision_trigger_time'] = 0
     
@@ -747,7 +769,7 @@ async def trigger_agent_decisions(room_code: str, exclude_agents: list = None):
     if not active_ais:
         return
     
-    # Run decision-making in thread pool to avoid blocking
+    # Run decision-making in thread pool to avoid blocking (LONG OPERATION - outside lock)
     loop = asyncio.get_event_loop()
     
     # Let each AI decide if they should respond
@@ -764,18 +786,27 @@ async def trigger_agent_decisions(room_code: str, exclude_agents: list = None):
         except Exception as e:
             print(f"⚠️ Error in decision for {ai_id}: {e}")
     
-    # Update pending AI messages
+    # CRITICAL: Use lock when updating pending_ai_messages to prevent race conditions
     if responding_ais:
-        # Merge with existing pending messages to avoid revoking previous decisions
-        current_pending = state.get('pending_ai_messages', [])
-        # Add new ones that aren't already pending (preserve order)
-        new_pending = current_pending + [ai for ai in responding_ais if ai not in current_pending]
+        async with room_locks[room_code]:
+            # Re-read current state inside lock
+            current_state = rooms[room_code]['state']
+            
+            # Double-check phase hasn't changed while we were deciding
+            if current_state['phase'] != Phase.DISCUSSION:
+                print(f"🚫 Agent decisions cancelled - phase changed to {current_state['phase'].value}")
+                return
+            
+            # Merge with existing pending messages to avoid revoking previous decisions
+            current_pending = current_state.get('pending_ai_messages', [])
+            # Add new ones that aren't already pending (preserve order)
+            new_pending = current_pending + [ai for ai in responding_ais if ai not in current_pending]
+            
+            current_state['pending_ai_messages'] = new_pending
+            rooms[room_code]['state'] = current_state
+            print(f"🎯 {len(responding_ais)}/{len(active_ais)} agents decided to respond: {responding_ais} (Merged with pending: {current_pending})")
         
-        state['pending_ai_messages'] = new_pending
-        rooms[room_code]['state'] = state
-        print(f"🎯 {len(responding_ais)}/{len(active_ais)} agents decided to respond: {responding_ais} (Merged with pending: {current_pending})")
-        
-        # Trigger the responses
+        # Trigger the responses (outside lock)
         asyncio.create_task(process_ai_messages(room_code))
     else:
         print(f"🤐 No agents decided to respond this time")

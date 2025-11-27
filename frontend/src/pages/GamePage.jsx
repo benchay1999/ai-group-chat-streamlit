@@ -200,12 +200,21 @@ const GamePage = () => {
         }
         lastPhaseUpdateRef.current = now;
 
-        setGameState(prev => ({
-          ...prev,
-          phase: data.phase,
-          players: prev.players.map(p => ({ ...p, voted: false })),
-          num_human_players: data.num_human_players || prev.num_human_players,  // Update from backend
-        }));
+        setGameState(prev => {
+          // CRITICAL FIX: Only reset voted status if phase ACTUALLY CHANGED
+          // Don't reset if receiving status update for current phase (e.g., after reconnect)
+          const phaseChanged = prev.phase !== data.phase;
+          
+          return {
+            ...prev,
+            phase: data.phase,
+            // Only reset voted status when transitioning TO Voting phase (not when already in it)
+            players: phaseChanged && data.phase === 'Voting' 
+              ? prev.players.map(p => ({ ...p, voted: false }))
+              : prev.players,
+            num_human_players: data.num_human_players || prev.num_human_players,
+          };
+        });
         
         // Update timer based on phase duration from server
         if (data.phase === 'Discussion' && data.discussion_duration) {
@@ -227,10 +236,20 @@ const GamePage = () => {
         break;
 
       case 'player_list':
-        setGameState(prev => ({
-          ...prev,
-          players: data.players.map(id => ({ id, voted: false, eliminated: false })),
-        }));
+        setGameState(prev => {
+          // CRITICAL FIX: Preserve existing player state (voted, eliminated) when updating player list
+          // This prevents losing voted status when WebSocket reconnects during voting phase
+          const existingPlayersMap = new Map(prev.players.map(p => [p.id, p]));
+          
+          return {
+            ...prev,
+            players: data.players.map(id => {
+              const existing = existingPlayersMap.get(id);
+              // If player already exists, preserve their state; otherwise create new with defaults
+              return existing || { id, voted: false, eliminated: false };
+            }),
+          };
+        });
         break;
 
       case 'voted':
@@ -334,8 +353,9 @@ const GamePage = () => {
             console.log(`Phase mismatch detected in timer_sync! correcting: ${prev.phase} -> ${data.phase}`);
             newState.phase = data.phase;
             
-            // Reset phase-specific state
-            if (data.phase === 'Voting') {
+            // CRITICAL FIX: Only reset voted status when transitioning TO Voting
+            // Not when already in Voting and receiving timer sync
+            if (data.phase === 'Voting' && prev.phase !== 'Voting') {
               newState.players = prev.players.map(p => ({ ...p, voted: false }));
             }
           }
@@ -375,15 +395,22 @@ const GamePage = () => {
     }
 
     const interval = setInterval(() => {
-      setGameState(prev => ({
-        ...prev,
-        timer: Math.max(0, prev.timer - 1),
-        serverSynced: false,  // Mark as client-calculated until next server sync
-      }));
+      setGameState(prev => {
+        // Check timer and phase using prev state (current at time of interval)
+        if (prev.timer <= 0 || !['Discussion', 'Voting'].includes(prev.phase)) {
+          return prev;
+        }
+        
+        return {
+          ...prev,
+          timer: Math.max(0, prev.timer - 1),
+          serverSynced: false,  // Mark as client-calculated until next server sync
+        };
+      });
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [gameState.timer, gameState.phase]);
+  }, [gameState.phase]);  // CRITICAL FIX: Remove gameState.timer from deps to prevent interval recreation every second
 
   // Send message
   const handleSendMessage = async (message) => {
