@@ -248,6 +248,20 @@ async def leave_room_endpoint(room_code: str, player_data: dict):
     if max_humans == 1:
         print(f"🗑️ Terminating single-player room {room_code}")
         
+        # CRITICAL: Mark room as terminated FIRST to stop ongoing AI processing
+        room['room_status'] = 'terminated'
+        
+        # Clear any pending AI operations to stop them immediately
+        state = room.get('state', {})
+        if state:
+            state['pending_ai_messages'] = []
+            state['pending_ai_votes'] = []
+            room['state'] = state
+        
+        # Clear typing indicators
+        if 'typing_players' in room:
+            room['typing_players'] = set()
+        
         # Broadcast to any connected clients
         await broadcast_to_room(room_code, {
             "type": "room_terminated",
@@ -269,6 +283,20 @@ async def leave_room_endpoint(room_code: str, player_data: dict):
     # CASE 2: Multi-player game in waiting status - Terminate
     if max_humans > 1 and room_status == 'waiting':
         print(f"🗑️ Terminating room {room_code} (in waiting status)")
+        
+        # CRITICAL: Mark room as terminated FIRST to stop ongoing AI processing
+        room['room_status'] = 'terminated'
+        
+        # Clear any pending AI operations to stop them immediately
+        state = room.get('state', {})
+        if state:
+            state['pending_ai_messages'] = []
+            state['pending_ai_votes'] = []
+            room['state'] = state
+        
+        # Clear typing indicators
+        if 'typing_players' in room:
+            room['typing_players'] = set()
     
         # Broadcast to any connected clients
         await broadcast_to_room(room_code, {
@@ -361,6 +389,18 @@ async def leave_room_endpoint(room_code: str, player_data: dict):
     if leaving_player_is_human and len(human_players) == 0:
         print(f"🗑️ Terminating room {room_code} - only human player is leaving")
         
+        # CRITICAL: Mark room as terminated FIRST to stop ongoing AI processing
+        room['room_status'] = 'terminated'
+        
+        # Clear any pending AI operations to stop them immediately
+        state['pending_ai_messages'] = []
+        state['pending_ai_votes'] = []
+        room['state'] = state
+        
+        # Clear typing indicators
+        if 'typing_players' in room:
+            room['typing_players'] = set()
+        
         # Broadcast termination
         await broadcast_to_room(room_code, {
             "type": "room_terminated",
@@ -383,6 +423,20 @@ async def leave_room_endpoint(room_code: str, player_data: dict):
     # FIX 4.2: Check if ALL players have permanently left and terminate room
     if len(assigned_humans) == 0:
         print(f"🗑️ ALL players have permanently left room {room_code} - terminating immediately")
+        
+        # CRITICAL: Mark room as terminated FIRST to stop ongoing AI processing
+        room['room_status'] = 'terminated'
+        
+        # Clear any pending AI operations to stop them immediately
+        state = room.get('state', {})
+        if state:
+            state['pending_ai_messages'] = []
+            state['pending_ai_votes'] = []
+            room['state'] = state
+        
+        # Clear typing indicators
+        if 'typing_players' in room:
+            room['typing_players'] = set()
         
         # Broadcast termination to any remaining connections (shouldn't be any, but defensive)
         await broadcast_to_room(room_code, {

@@ -363,11 +363,6 @@ const LobbyPage = () => {
                   Your conversations help us research human-AI interaction while you get rewarded. 
                   Win more by being human-like! 🎮💰 Well, it is fake money (MTurk Sandbox) at the moment...
                 </p>
-                {!isAuthenticated && (
-                  <p className="text-xs text-yellow-200 mt-2 flex items-center gap-1 font-medium">
-                    <AlertCircle className="w-3 h-3" /> Note: Login required for stakes. Anonymous users can play multi-player games with 0% stakes.
-                  </p>
-                )}
               </div>
             </div>
             <button

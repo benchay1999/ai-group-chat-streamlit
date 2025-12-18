@@ -37,10 +37,18 @@ Open http://localhost:5173 and start playing!
 
 ## Documentation
 
-- **[START_HERE.md](START_HERE.md)** - Complete setup guide with troubleshooting
+### For New Developers
+
+Start with the comprehensive tutorial that covers everything you need to understand and work on this project:
+
+**[TUTORIAL.md](TUTORIAL.md)** - Complete project tutorial with architecture, codebase walkthrough, and development guide
+
+### Additional Documentation
+
+- **[START_HERE.md](START_HERE.md)** - Quick setup guide with troubleshooting
 - **[MTURK_SETUP.md](MTURK_SETUP.md)** - MTurk integration and payment system
 - **[env.example](env.example)** - Configuration options reference
-- **[markdowns/](markdowns/)** - Detailed technical documentation
+- **[markdowns/](markdowns/)** - Technical documentation (see [markdowns/README.md](markdowns/README.md) for index)
 
 ## How It Works
 

@@ -28,7 +28,7 @@ ROUNDS_TO_WIN = int(os.getenv("ROUNDS_TO_WIN", "1"))  # Human wins after 1 round
 
 # AI Model Configuration
 AI_MODEL_PROVIDER: Literal["openai", "anthropic", "groq"] = os.getenv("AI_MODEL_PROVIDER", "openai")
-AI_MODEL_NAME = os.getenv("AI_MODEL_NAME", "gpt-5-nano") # gpt-4.1-nano
+AI_MODEL_NAME = os.getenv("AI_MODEL_NAME", "gpt-4.1-nano") # gpt-4.1-nano
 AI_TEMPERATURE = float(os.getenv("AI_TEMPERATURE", "0.8"))
 
 # AI Personalities (can be extended)

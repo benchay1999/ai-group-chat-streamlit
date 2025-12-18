@@ -42,8 +42,10 @@ async def proactive_agent_engagement(room_code: str):
         time_since_last = time.time() - last_message_time
         
         if time_since_last > 4:
-            print(f"💤 Conversation quiet for {time_since_last:.1f}s, triggering proactive engagement")
-            asyncio.create_task(trigger_agent_decisions(room_code))
+            # Double-check phase before triggering (prevent race conditions)
+            if state['phase'] == Phase.DISCUSSION:
+                print(f"💤 Conversation quiet for {time_since_last:.1f}s, triggering proactive engagement")
+                asyncio.create_task(trigger_agent_decisions(room_code))
 
 async def run_discussion_phase(room_code: str):
     """
@@ -86,8 +88,13 @@ async def run_discussion_phase(room_code: str):
         sleep_duration = min(5.0, remaining)
         await asyncio.sleep(sleep_duration)
         
-        # Check if room still exists
+        # Check if room still exists or is terminated
         if room_code not in rooms:
+            engagement_task.cancel()
+            return
+        
+        if rooms[room_code].get('room_status') == 'terminated':
+            print(f"🛑 Discussion phase stopped - room {room_code} is terminated")
             engagement_task.cancel()
             return
     
@@ -149,6 +156,10 @@ async def run_discussion_phase(room_code: str):
         print(f"✅ Phase transition complete: DISCUSSION → VOTING in room {room_code} (atomic update)")
     
     # BROADCASTS - Outside lock (async-safe, non-blocking)
+    # Clear all typing indicators (both in state and room metadata)
+    if 'typing_players' in rooms[room_code]:
+        rooms[room_code]['typing_players'] = set()
+    
     # Stop all typing indicators for any AI that might be typing
     ai_players = [p['id'] for p in state['players'] if p['role'] == 'ai']
     for ai_id in ai_players:
@@ -221,8 +232,12 @@ async def run_voting_phase(room_code: str):
         sleep_duration = min(5.0, remaining)
         await asyncio.sleep(sleep_duration)
         
-        # Check if room still exists
+        # Check if room still exists or is terminated
         if room_code not in rooms:
+            return
+        
+        if rooms[room_code].get('room_status') == 'terminated':
+            print(f"🛑 Voting phase stopped - room {room_code} is terminated")
             return
     
     print(f"🗳️ Voting time ({voting_time}s) elapsed for room {room_code}, completing game")
@@ -407,7 +422,14 @@ async def process_single_ai_message(room_code: str, ai_id: str):
     try:
         # Lock for initial read
         async with room_locks[room_code]:
-            state = rooms[room_code]['state']
+            room = rooms[room_code]
+            
+            # DEFENSE: Stop if room is terminated
+            if room.get('room_status') == 'terminated':
+                print(f"🚫 AI {ai_id} stopped - room {room_code} is terminated")
+                return
+            
+            state = room['state']
             
             # Check if this AI is still in pending messages
             if ai_id not in state.get('pending_ai_messages', []):
@@ -431,6 +453,11 @@ async def process_single_ai_message(room_code: str, ai_id: str):
         # DEFENSE: Check if room/lock still exists after generation
         if room_code not in rooms or room_code not in room_locks:
             print(f"🛑 AI generation aborted - room {room_code} or lock removed")
+            return
+        
+        # DEFENSE: Check if room is terminated
+        if rooms[room_code].get('room_status') == 'terminated':
+            print(f"🛑 AI {ai_id} generation aborted - room {room_code} is terminated")
             return
         
         # DEFENSE LAYER 1: Check phase BEFORE doing anything (WITH LOCK)
@@ -487,20 +514,20 @@ async def process_single_ai_message(room_code: str, ai_id: str):
         # 1 + N(0.255, 0.0255)×n_char + N(0.03, 0.003)×n_char_prev + Γ(2.5, 0.25)
         # https://dl.acm.org/doi/full/10.1145/3715275.3732108
         
-        # Note: Adjusted for natural conversation pace
-        base_delay = 0.8  # Base reaction time
+        # Note: Adjusted for natural conversation pace (slowed down for realism)
+        base_delay = 1.0  # Base reaction time (increased from 0.8 for more natural pacing)
         
         # Typing rate with variance (Normal distribution)
-        # Moderate speed: ~4 chars/sec for natural conversation
-        typing_rate_per_char = max(0.1, np.random.normal(0.25, 0.03))  # Clamp to avoid negative
+        # Slower typing: ~2.5 chars/sec for more realistic human typing
+        typing_rate_per_char = max(0.15, np.random.normal(0.3, 0.05))  # Increased from 0.25 for slower typing
         
         # Context factor - cognitive load from processing previous message
-        context_rate_per_char = max(0.0, np.random.normal(0.02, 0.003))
+        context_rate_per_char = max(0.0, np.random.normal(0.03, 0.005))  # Slightly increased
         context_delay = context_rate_per_char * n_char_prev
         
         # Thinking time - Gamma distribution (right-skewed, models human thinking)
-        # Gamma(shape=2.0, scale=0.2) has mean=0.4s, more realistic thinking
-        thinking_time = np.random.gamma(2.0, 0.2)
+        # Gamma(shape=2.5, scale=0.3) has mean=0.75s, more realistic thinking delay
+        thinking_time = np.random.gamma(2.5, 0.25)
         
         # Total statistical delay
         total_statistical_delay = base_delay + (typing_rate_per_char * n_char) + context_delay + thinking_time
@@ -759,6 +786,11 @@ async def trigger_agent_decisions(room_code: str, exclude_agents: list = None):
     if room_code not in rooms:
         return
     
+    # DEFENSE: Stop if room is terminated
+    if rooms[room_code].get('room_status') == 'terminated':
+        print(f"🚫 Not triggering agent decisions - room {room_code} is terminated")
+        return
+    
     # Ensure lock exists
     if room_code not in room_locks:
         room_locks[room_code] = asyncio.Lock()
@@ -768,6 +800,7 @@ async def trigger_agent_decisions(room_code: str, exclude_agents: list = None):
     
     # Only trigger during discussion phase
     if state['phase'] != Phase.DISCUSSION:
+        print(f"🚫 Not triggering agent decisions - room {room_code} is in {state['phase'].value} phase, not DISCUSSION")
         return
     
     # Check cooldown (outside lock - quick check)
@@ -800,41 +833,58 @@ async def trigger_agent_decisions(room_code: str, exclude_agents: list = None):
     loop = asyncio.get_event_loop()
     
     # Let each AI decide if they should respond
+    # IMMEDIATE RESPONSE: Start message generation as soon as agent decides to respond
     game_graph = rooms[room_code]['game_graph']
-    responding_ais = []
+    responding_count = 0
     for ai_id in active_ais:
         try:
             should_respond = await loop.run_in_executor(
                 executor,
                 lambda aid=ai_id: game_graph._should_agent_respond(state, aid)
             )
+            
+            # IMMEDIATE RESPONSE: If agent decides to respond, start generation immediately
             if should_respond:
-                responding_ais.append(ai_id)
+                # CRITICAL: Use lock when updating state and processing_agents
+                async with room_locks[room_code]:
+                    # Re-read current state inside lock
+                    current_state = rooms[room_code]['state']
+                    
+                    # Double-check phase hasn't changed while we were deciding
+                    if current_state['phase'] != Phase.DISCUSSION:
+                        print(f"🚫 Agent decision cancelled for {ai_id} - phase changed to {current_state['phase'].value}")
+                        continue
+                    
+                    # Check if this agent is already pending or processing
+                    current_pending = current_state.get('pending_ai_messages', [])
+                    processing_agents = rooms[room_code].get('ai_processing_agents', set())
+                    
+                    if ai_id in current_pending or ai_id in processing_agents:
+                        print(f"⏭️  Agent {ai_id} already pending/processing, skipping")
+                        continue
+                    
+                    # Add to pending messages
+                    current_state['pending_ai_messages'] = current_pending + [ai_id]
+                    
+                    # Mark as processing to prevent duplicates
+                    if 'ai_processing_agents' not in rooms[room_code]:
+                        rooms[room_code]['ai_processing_agents'] = set()
+                    rooms[room_code]['ai_processing_agents'].add(ai_id)
+                    
+                    # Commit state changes
+                    rooms[room_code]['state'] = current_state
+                    responding_count += 1
+                    print(f"🎯 Agent {ai_id} decided to respond - starting message generation immediately")
+                
+                # Trigger message generation immediately (outside lock)
+                asyncio.create_task(process_single_ai_message(room_code, ai_id))
+                
         except Exception as e:
             print(f"⚠️ Error in decision for {ai_id}: {e}")
     
-    # CRITICAL: Use lock when updating pending_ai_messages to prevent race conditions
-    if responding_ais:
-        async with room_locks[room_code]:
-            # Re-read current state inside lock
-            current_state = rooms[room_code]['state']
-            
-            # Double-check phase hasn't changed while we were deciding
-            if current_state['phase'] != Phase.DISCUSSION:
-                print(f"🚫 Agent decisions cancelled - phase changed to {current_state['phase'].value}")
-                return
-            
-            # Merge with existing pending messages to avoid revoking previous decisions
-            current_pending = current_state.get('pending_ai_messages', [])
-            # Add new ones that aren't already pending (preserve order)
-            new_pending = current_pending + [ai for ai in responding_ais if ai not in current_pending]
-            
-            current_state['pending_ai_messages'] = new_pending
-            rooms[room_code]['state'] = current_state
-            print(f"🎯 {len(responding_ais)}/{len(active_ais)} agents decided to respond: {responding_ais} (Merged with pending: {current_pending})")
-        
-        # Trigger the responses (outside lock)
-        asyncio.create_task(process_ai_messages(room_code))
+    # Summary log
+    if responding_count > 0:
+        print(f"✅ {responding_count}/{len(active_ais)} agents decided to respond and started immediately")
     else:
         print(f"🤐 No agents decided to respond this time")
 
@@ -853,7 +903,14 @@ async def process_ai_messages(room_code: str):
     
     # Use lock to prevent concurrent calls from creating duplicate tasks
     async with room_locks[room_code]:
-        state = rooms[room_code]['state']
+        room = rooms[room_code]
+        
+        # DEFENSE: Stop if room is terminated
+        if room.get('room_status') == 'terminated':
+            print(f"🚫 Not processing AI messages - room {room_code} is terminated")
+            return
+        
+        state = room['state']
         
         # DEFENSE: Only process AI messages during discussion phase
         if state['phase'] != Phase.DISCUSSION:
@@ -1023,6 +1080,10 @@ async def complete_voting(room_code: str):
         final_vote_counts = vote_counts.copy()
         suspect = state.get('selected_suspect')
         suspect_role = state.get('suspect_role')
+    
+    # Clear all typing indicators when game ends
+    if 'typing_players' in rooms[room_code]:
+        rooms[room_code]['typing_players'] = set()
     
     # BROADCASTS - Outside lock (async-safe, non-blocking)
     # Use local variables captured inside the lock
