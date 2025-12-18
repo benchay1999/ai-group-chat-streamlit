@@ -46,8 +46,10 @@ Start with the comprehensive tutorial that covers everything you need to underst
 ### Additional Documentation
 
 - **[START_HERE.md](START_HERE.md)** - Quick setup guide with troubleshooting
+- **[DEPLOYMENT_GUIDE_NGROK_NETLIFY.md](DEPLOYMENT_GUIDE_NGROK_NETLIFY.md)** - Step-by-step deployment with ngrok & Netlify
+- **[ENVIRONMENT_REFERENCE.md](ENVIRONMENT_REFERENCE.md)** - Complete environment variable reference
 - **[MTURK_SETUP.md](MTURK_SETUP.md)** - MTurk integration and payment system
-- **[env.example](env.example)** - Configuration options reference
+- **[env.example](env.example)** - Configuration template
 - **[markdowns/](markdowns/)** - Technical documentation (see [markdowns/README.md](markdowns/README.md) for index)
 
 ## How It Works
@@ -155,14 +157,19 @@ npm test
 
 ## Deployment
 
-### Quick Deploy (Recommended)
+### Quick Deploy (Recommended for Beginners)
 
-**Local Backend + Cloud Frontend:**
+**ngrok + Netlify (Free, 30 minutes setup):**
 
-1. Run backend locally with tunneling (ngrok or localhost.run)
-2. Deploy frontend to Vercel/Netlify with backend URL
+Complete step-by-step guide for deploying with ngrok tunneling and Netlify hosting:
 
-See [markdowns/DEPLOYMENT.md](markdowns/DEPLOYMENT.md) for detailed deployment guides.
+**[DEPLOYMENT_GUIDE_NGROK_NETLIFY.md](DEPLOYMENT_GUIDE_NGROK_NETLIFY.md)** - Beginner-friendly ngrok + Netlify deployment guide
+
+### Alternative Deployment Options
+
+For production or alternative setups, see:
+- [markdowns/DEPLOYMENT.md](markdowns/DEPLOYMENT.md) - Multiple deployment strategies
+- [markdowns/TUNNELING_OPTIONS.md](markdowns/TUNNELING_OPTIONS.md) - Alternative tunneling services
 
 ### Production Checklist
 
