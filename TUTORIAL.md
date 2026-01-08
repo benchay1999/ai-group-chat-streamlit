@@ -120,7 +120,7 @@ Human Hunter is a real-time multiplayer social deduction game where human player
                               OpenAI API
                                     │
                     ┌───────────────┴───────────────┐
-                    │     GPT-4o / GPT-4o-mini      │
+                    │     GPT-4o / gpt-5.1-nano     │
                     │     (AI Player Responses)     │
                     └───────────────────────────────┘
 ```
@@ -131,7 +131,7 @@ Human Hunter is a real-time multiplayer social deduction game where human player
 |-------|-------------|
 | **Frontend** | React 18, Vite, Tailwind CSS, WebSocket API |
 | **Backend** | FastAPI, Uvicorn (ASGI), Python 3.8+ |
-| **AI/LLM** | LangGraph, LangChain, OpenAI GPT-4o-mini |
+| **AI/LLM** | LangGraph, LangChain, OpenAI gpt-5.1-nano|
 | **Database** | SQLAlchemy (async), SQLite/PostgreSQL |
 | **Auth** | JWT tokens, Argon2 password hashing |
 | **Payments** | AWS MTurk API |
@@ -438,10 +438,10 @@ OPENAI_API_KEY=sk-...
 
 # Game Settings
 NUM_AI_PLAYERS=4              # 4-8 AI opponents
-AI_MODEL_NAME=gpt-4o-mini     # or gpt-4o, claude-3-5-sonnet
-DISCUSSION_TIME=180           # seconds
-VOTING_TIME=60                # seconds
-ROUNDS_TO_WIN=3
+AI_MODEL_NAME=gpt-5.1-nano    # or gpt-4o, claude-3-5-sonnet
+DISCUSSION_TIME=240           # seconds (default 4 minutes)
+VOTING_TIME=120               # seconds (default 2 minutes)
+ROUNDS_TO_WIN=1               # default 1 round
 
 # Database
 DATABASE_URL=sqlite+aiosqlite:///./group_chat.db
@@ -508,14 +508,172 @@ AI agents use chain-of-thought prompting to analyze conversation and generate re
 
 ### Gem Economy
 
-Players earn gems through gameplay:
+The game features a comprehensive gem-based economy where players earn gems through gameplay and can convert them to real USD via MTurk (1000 gems = $1.00).
 
-| Action | Gems Earned |
-|--------|-------------|
-| Complete a game | 100 base |
-| Win (survive all rounds) | +200 bonus |
-| Correct vote | +50 per correct |
-| Active participation | +10-50 |
+#### Game Modes & Earning Rates
+
+**Single-Human Games (1 human vs AI agents):**
+
+| Participant | Gems Earned |
+|-------------|-------------|
+| All players (human + AI) | 50 gems |
+
+- Simple participation-based rewards
+- No stakes required, no risk
+- Perfect for building initial gem balance
+
+**Multi-Human Games (2+ humans competing):**
+
+| Component | Amount | Condition |
+|-----------|--------|-----------|
+| Base gems | 100 gems | Must vote to receive |
+| Stake refund | variable | Winners only (if voted) |
+| Stake winnings | variable | Based on voting accuracy |
+
+**Requirements:**
+- Minimum 250 gems required to join multi-human games
+- Stakes are optional: 0%, 10%, 30%, 50%, or 100% of balance
+- Anonymous users can only join 0% stake games
+
+#### Stakes System Mechanics (Multi-Human Games)
+
+**Phase 1: Stake Deduction (Game Start)**
+
+When a multi-human game begins with stakes enabled:
+
+1. Each player's stake calculated: `balance × stake_percentage / 100`
+2. System finds **minimum stake** across all players
+3. All players pay this minimum amount (deducted immediately after voting)
+
+**Example (3 players, 10% stake):**
+```python
+Player A: 1000 gems × 10% = 100 stake
+Player B: 900 gems × 10% = 90 stake
+Player C: 800 gems × 10% = 80 stake
+
+minimum_stake = 80 gems  # Lowest among all players
+→ All 3 players pay 80 gems
+```
+
+**Phase 2: Reward Distribution (Game End)**
+
+**For Winners (Most Votes):**
+```python
+# Calculate loser pool
+loser_pool = minimum_stake × num_losers
+
+# Divide among winners
+max_share = loser_pool / num_winners
+
+# Voting accuracy
+votes_needed = num_humans - 1  # Must vote for all OTHER humans
+correct_votes = count(voted for other humans)  # Not self, not AI
+accuracy = correct_votes / votes_needed  # Returns 0.0 to 1.0
+
+# Rewards
+stake_refund = minimum_stake  # Always returned if you voted
+stake_winnings = int(accuracy × max_share)  # Proportional to accuracy
+total_gems = 100 + stake_refund + stake_winnings
+```
+
+**For Losers (Fewer Votes):**
+- Base gems: 100 (if voted)
+- Stake refund: 0 (forfeited entirely)
+- Total: 100 gems
+- Net change: 100 - minimum_stake (always negative)
+
+**Voting Penalty:**
+- Must vote to receive base gems AND stake refund
+- No vote = forfeit everything (even if you win!)
+
+#### Voting Accuracy Impact
+
+In multi-human games, you must vote for **all other humans** (N-1 players, excluding yourself). Your accuracy determines your stake winnings:
+
+| Accuracy | Share of Loser Pool | Example (1000 gem pool) |
+|----------|---------------------|-------------------------|
+| 100% | Full share | 1000 gems |
+| 75% | 3/4 of share | 750 gems |
+| 50% | Half of share | 500 gems |
+| 25% | 1/4 of share | 250 gems |
+| 0% | No winnings | 0 gems (only stake refund) |
+
+#### Complete Example: 2-Player Game (10% Stakes)
+
+**Initial Balances:**
+- Player A: 1000 gems
+- Player B: 1000 gems
+
+**Stakes Calculation:**
+- Player A: 1000 × 10% = 100 gems
+- Player B: 1000 × 10% = 100 gems
+- minimum_stake = 100 gems (same for both)
+
+**Game Start (Deduction):**
+- Player A: 1000 → 900 gems (-100 deducted)
+- Player B: 1000 → 900 gems (-100 deducted)
+
+**Voting Results:**
+- Player A: 1 vote ← Winner 🏆
+- Player B: 0 votes ← Loser
+
+**Voting Accuracy:**
+- Player A voted for Player B: 1/1 = 100% accuracy ✅
+- Player B voted for Player A: 1/1 = 100% accuracy (but lost)
+
+**Reward Calculation:**
+
+**Player A (Winner, 100% accuracy):**
+```python
+base_gems = 100
+stake_refund = 100  # Got their stake back
+loser_pool = 100 × 1 = 100  # Player B's forfeited stake
+max_share = 100 / 1 = 100  # Only 1 winner
+stake_winnings = int(1.0 × 100) = 100  # 100% accuracy
+
+total_credited = 100 + 100 + 100 = 300 gems
+final_balance = 900 + 300 = 1200 gems
+net_change = +200 gems 🎉
+```
+
+**Player B (Loser, 100% accuracy but lost):**
+```python
+base_gems = 100
+stake_refund = 0  # Forfeited to winner
+stake_winnings = 0  # Losers don't get winnings
+
+total_credited = 100 gems
+final_balance = 900 + 100 = 1000 gems
+net_change = 0 gems (broke even due to base gems)
+```
+
+**System Balance:**
+- Total deducted: 200 gems (100 from each)
+- Total returned: 300 gems (to winners)
+- House collects: 0 gems (winner got 100% accuracy)
+
+If winner had 50% accuracy: winner would get 50 gems winnings instead of 100, and 50 gems would be collected by the house.
+
+#### Gem Wallet & Cashout System
+
+**Viewing Balance:**
+- Dashboard page: Shows total earned, current balance, recent games
+- Wallet page (`/wallet`): Detailed balance, cashout options, transaction history
+
+**Cashing Out:**
+1. **Requirement:** Add MTurk Worker ID in profile page
+2. **Minimum:** $2.00 (2000 gems)
+3. **Process:**
+   - Click "Request Cash Out" in wallet page
+   - System creates worker-specific qualification + HIT
+   - Accept HIT on MTurk platform
+   - Complete HIT by entering provided confirmation code
+   - Auto-approved within 1 hour
+   - Payment sent via MTurk
+
+**Conversion Rate**: 1000 gems = $1.00 USD
+
+For complete cashout setup and troubleshooting, see [MTURK_SETUP.md](MTURK_SETUP.md).
 
 **Gem to USD Rate**: 1000 gems = $1.00
 

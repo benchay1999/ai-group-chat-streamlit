@@ -6,8 +6,8 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { roomAPI } from '../services/api';
-import { useGame } from '../context/GameContext';
-import { useLanguage } from '../context/LanguageContext';
+import { useGame } from '../contexts/GameContext';
+import { useLanguage } from '../contexts/LanguageContext';
 import { useAuth } from '../contexts/AuthContext';
 import { useHeartbeat } from '../hooks/useHeartbeat';
 import walletAPI from '../services/walletAPI';

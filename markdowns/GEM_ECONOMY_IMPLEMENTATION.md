@@ -1,5 +1,143 @@
 # Gem Economy Implementation Summary
 
+## How The Gem System Works (User-Facing)
+
+### Overview
+Gems are the in-game currency that players earn by participating in games. They can be converted to real USD via Amazon Mechanical Turk at a rate of **1000 gems = $1.00 USD**.
+
+### Game Modes & Rewards
+
+#### Single-Human Games (1 human vs AI agents)
+- **Simple participation-based rewards**
+- **All participants:** 50 gems (human + AI)
+- **No stakes required**
+- **No risk of losing gems**
+- Perfect for building your initial gem balance
+
+#### Multi-Human Games (2+ human players competing)
+- **Performance-based rewards with optional stakes**
+- **Base Gems:** 100 gems for all participants who vote
+- **Stakes System:** Optional risk/reward mechanism
+  - Room creator selects stake percentage: 0%, 10%, 30%, 50%, or 100%
+  - Minimum 250 gems required to join
+  - All players pay the **minimum stake** (lowest among all players)
+  - Anonymous users can only join 0% stake games
+
+### Stakes Mechanics (Multi-Human Games)
+
+#### Phase 1: Game Start (Deduction)
+When a multi-human game starts with stakes enabled:
+
+1. System calculates each player's stake: `balance × percentage / 100`
+2. Finds the **minimum stake** across all players
+3. All players pay this minimum stake amount
+
+**Example (3 players, 10% stake):**
+```
+Player A: 1000 gems × 10% = 100 gems stake
+Player B: 900 gems × 10% = 90 gems stake  
+Player C: 800 gems × 10% = 80 gems stake
+
+minimum_stake = 80 gems
+→ All players pay 80 gems (deducted immediately after voting)
+```
+
+#### Phase 2: Game End (Rewards Distribution)
+
+**Base Gems (Everyone Who Voted):**
+- All participants who cast a vote: **+100 gems**
+- No vote = no base gems (forfeited)
+
+**Stakes Distribution:**
+
+**Winners (Most Votes):**
+1. **Stake Refund:** Get your stake back (if you voted)
+2. **Loser Pool:** All loser stakes combined
+3. **Equal Division:** Pool divided by number of winners
+4. **Accuracy Bonus:** You get `accuracy% × your_share` of the pool
+
+```python
+# Formulas for winners
+loser_pool = minimum_stake × num_losers
+max_share = loser_pool ÷ num_winners
+
+# Voting accuracy calculation
+votes_needed = num_humans - 1  # Must vote for all OTHER humans
+correct_votes = count(voted for other humans)  # Not self, not AI
+accuracy = correct_votes / votes_needed  # Returns 0.0 to 1.0
+
+# Rewards
+stake_refund = minimum_stake  # Always returned if you voted
+stake_winnings = int(accuracy × max_share)  # Proportional to accuracy
+TOTAL = 100 + stake_refund + stake_winnings
+```
+
+**Losers (Fewer Votes):**
+- Stakes returned: **0 gems** (forfeit entirely)
+- Only get base 100 gems (if voted)
+- Net loss = 100 - minimum_stake
+
+**Voting Penalty:**
+- **Must vote** to receive base gems and stake refund
+- No vote = forfeit both base gems AND stake refund (even if you win!)
+
+### Voting Accuracy Impact
+
+In multi-human games, you vote for **all other humans** (N-1 players, excluding yourself). Your accuracy determines your stake winnings:
+
+| Accuracy | Result |
+|----------|--------|
+| **100%** | Full share of loser pool |
+| **50%** | Half of your share |
+| **0%** | Only stake refund (no winnings) |
+
+**Key Principle:** Higher accuracy = higher reward
+
+### Example: 2-Player Game (10% stakes)
+
+**Game Start:**
+- Player A: 1000 gems → 840 gems (-160 deducted)
+- Player B: 1000 gems → 840 gems (-160 deducted)
+
+**Voting Results:**
+- Player A: 1 vote ← Winner 🏆
+- Player B: 0 votes
+
+**Rewards:**
+
+**Player A (Winner, 100% accuracy):**
+- Base: +100 gems
+- Stake refund: +160 gems
+- Stakes won (100%): +160 gems (full share of loser pool)
+- **Total credited: +420 gems**
+- **Final balance: 1260 gems (+260 net 🎉)**
+
+**Player B (Loser):**
+- Base: +100 gems
+- Stakes returned: 0 gems (forfeited)
+- **Total credited: +100 gems**
+- **Final balance: 940 gems (-60 net 💔)**
+
+### Guarantees
+
+✅ **Winners never lose gems** - Minimum: +100 base (even with 0% accuracy)  
+✅ **Higher accuracy = higher reward** - Up to full share of loser pool  
+✅ **Fair competition** - Winners split loser pool equally  
+⚠️ **House collects residual** - Uncollected gems (from low accuracy) don't return to losers
+
+### Cashout System
+
+**Converting Gems to USD:**
+- **Conversion Rate:** 1000 gems = $1.00 USD
+- **Minimum Cashout:** $2.00 (2000 gems)
+- **Method:** Amazon Mechanical Turk worker-specific HITs
+- **Requirement:** Must add MTurk Worker ID to profile
+- **Processing:** Auto-approved within 1 hour
+
+Visit `/wallet` page in the app to request cashouts and view transaction history.
+
+---
+
 ## ✅ COMPLETED: Backend Implementation
 
 All backend functionality is fully implemented and ready for testing:
@@ -162,14 +300,16 @@ python main.py
 5. **Complete HIT**: Accept and submit the HIT
 6. **Verify**: Monitor logs for auto-approval (within 1 hour)
 
-## 🎯 How the System Works
+## 🎯 System Flow
 
 ### User Flow
 1. Player registers/logs in
-2. Plays games and earns gems automatically (1000 gems = $1.00)
-3. Views balance in wallet page
+2. Plays games and earns gems automatically:
+   - **Single-human:** 50 gems per game
+   - **Multi-human:** 100 base + stakes (based on performance)
+3. Views balance in dashboard or wallet page
 4. When ready, adds MTurk Worker ID to profile
-5. Requests cashout (minimum $2.00)
+5. Requests cashout (minimum $2.00 = 2000 gems)
 6. System creates unique qualification + HIT
 7. Player accepts HIT on MTurk
 8. System auto-approves within 1 hour
@@ -179,17 +319,26 @@ python main.py
 ```
 Game Completed
   ↓
-Calculate Earnings ($USD)
+Calculate Rewards (gems)
+  │
+  ├─ Single-human: 50 gems for all
+  │
+  └─ Multi-human: 
+      ├─ Deduct stakes (minimum_stake from all players)
+      ├─ Determine winners (most votes)
+      ├─ Calculate voting accuracy for each player
+      └─ Distribute rewards:
+          ├─ Base: 100 gems (if voted)
+          ├─ Winners: stake_refund + (accuracy × share of loser_pool)
+          └─ Losers: 0 stake return (forfeited)
   ↓
-Convert to Gems (×1000)
-  ↓
-Credit to user.gem_balance
+Credit to user.gem_balance (atomic transaction)
   ↓
 Update user.total_gems_earned
 
 User Requests Cashout ($2.00)
   ↓
-Validate (worker_id, balance, minimum)
+Validate (worker_id, balance >= minimum)
   ↓
 Create Qualification for Worker
   ↓

@@ -16,7 +16,7 @@ This folder contains technical documentation for the Human Hunter project.
 
 | Document | Description |
 |----------|-------------|
-| [GEM_ECONOMY_IMPLEMENTATION.md](GEM_ECONOMY_IMPLEMENTATION.md) | Gem earning, spending, and cashout system |
+| [GEM_ECONOMY_IMPLEMENTATION.md](GEM_ECONOMY_IMPLEMENTATION.md) | Complete gem system guide: earning (single/multi-human), stakes, rewards, cashouts |
 | [REDEMPTION_CODE_SYSTEM.md](REDEMPTION_CODE_SYSTEM.md) | Redemption codes for gem cashouts |
 | [MTURK_WORKFLOW.md](MTURK_WORKFLOW.md) | Complete MTurk integration workflow |
 | [WEBSOCKET_IMPLEMENTATION.md](WEBSOCKET_IMPLEMENTATION.md) | WebSocket protocol and message types |
@@ -28,7 +28,7 @@ This folder contains technical documentation for the Human Hunter project.
 | [SQLITE_TO_POSTGRESQL.md](SQLITE_TO_POSTGRESQL.md) | Database migration guide for production |
 | [PRODUCTION_DEPLOYMENT_SECURITY_CHECKLIST.md](PRODUCTION_DEPLOYMENT_SECURITY_CHECKLIST.md) | Security checklist for production deployment |
 | [TUNNELING_OPTIONS.md](TUNNELING_OPTIONS.md) | Options for exposing local backend (ngrok, etc.) |
-| [RULES.md](RULES.md) | Game rules and mechanics |
+| [RULES.md](RULES.md) | Game rules, modes (single/multi-human), voting mechanics, gem rewards |
 
 ## Main Project Documentation
 
@@ -37,8 +37,9 @@ For getting started and project overview, see the root directory:
 - **[../TUTORIAL.md](../TUTORIAL.md)** - Comprehensive project tutorial (start here!)
 - **[../README.md](../README.md)** - Project overview
 - **[../START_HERE.md](../START_HERE.md)** - Quick start guide
-- **[../MTURK_SETUP.md](../MTURK_SETUP.md)** - MTurk setup instructions
-- **[../env.example](../env.example)** - Environment configuration reference
+- **[../MTURK_SETUP.md](../MTURK_SETUP.md)** - MTurk integration and gem cashout system setup
+- **[../ENVIRONMENT_REFERENCE.md](../ENVIRONMENT_REFERENCE.md)** - Complete environment variable reference with correct defaults
+- **[../env.example](../env.example)** - Environment configuration template
 
 ## Archived Documentation
 

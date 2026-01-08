@@ -4,7 +4,7 @@
  */
 
 import { useState, useEffect } from 'react';
-import { useLanguage } from '../context/LanguageContext';
+import { useLanguage } from '../contexts/LanguageContext';
 
 const PlayerList = ({ players, phase, castVote, currentPlayerId, onLeave, numHumanPlayers = 1 }) => {
   const { t } = useLanguage();

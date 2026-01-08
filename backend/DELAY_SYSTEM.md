@@ -16,7 +16,7 @@ This document explains the implementation, the mathematics behind it, and how to
 The total delay for an AI agent's response is calculated using:
 
 ```
-Total_delay = 1 + N(0.3, 0.03)×n_char + N(0.03, 0.003)×n_char_prev + Γ(2.5, 0.25)
+Total_delay = 1 + N(0.3, 0.05)×n_char + N(0.03, 0.005)×n_char_prev + Γ(2.5, 0.25)
 ```
 
 ### Components
@@ -24,8 +24,8 @@ Total_delay = 1 + N(0.3, 0.03)×n_char + N(0.03, 0.003)×n_char_prev + Γ(2.5, 0
 | Component | Distribution | Purpose | Typical Value |
 |-----------|--------------|---------|---------------|
 | **Base delay** | Fixed | Minimum reaction time | 1.0s |
-| **Typing rate** | N(0.3, 0.03) | Per-character typing time | 0.27-0.33s/char |
-| **Context factor** | N(0.03, 0.003) | Cognitive load from previous message | 0.027-0.033s/char_prev |
+| **Typing rate** | N(0.3, 0.05) | Per-character typing time | 0.25-0.35s/char |
+| **Context factor** | N(0.03, 0.005) | Cognitive load from previous message | 0.025-0.035s/char_prev |
 | **Thinking time** | Γ(2.5, 0.25) | Cognitive processing before typing | 0.3-1.2s (right-skewed) |
 
 ### Why These Distributions?
@@ -33,8 +33,8 @@ Total_delay = 1 + N(0.3, 0.03)×n_char + N(0.03, 0.003)×n_char_prev + Γ(2.5, 0
 **Normal Distribution N(μ, σ):**
 - Models natural variation in human typing speed
 - μ = 0.3 → Average typing speed of ~3.33 chars/sec (realistic for thoughtful conversation)
-- σ = 0.03 → ±10% variance (natural human variation)
-- **Clamped to minimum 0.1** to prevent negative/zero delays
+- σ = 0.05 → ±17% variance (higher variance for more realistic human variation)
+- **Clamped to minimum 0.15** to prevent negative/zero delays
 
 **Gamma Distribution Γ(shape, scale):**
 - Models thinking/reaction time (naturally right-skewed)
@@ -48,11 +48,11 @@ Total_delay = 1 + N(0.3, 0.03)×n_char + N(0.03, 0.003)×n_char_prev + Γ(2.5, 0
 
 ```python
 base = 1.0s
-typing = N(0.3, 0.03) × 100 = 30.0s ± 3.0s
-context = N(0.03, 0.003) × 50 = 1.5s ± 0.15s  
+typing = N(0.3, 0.05) × 100 = 30.0s ± 5.0s
+context = N(0.03, 0.005) × 50 = 1.5s ± 0.25s  
 thinking = Γ(2.5, 0.25) ≈ 0.625s (mean)
 
-Total ≈ 33.1s ± 3.2s
+Total ≈ 33.1s ± 5.3s
 ```
 
 ---
@@ -229,12 +229,13 @@ This prevents late messages from appearing in the wrong phase.
 
 ### Typing Speed
 
-**Current**: N(0.3, 0.03) → ~3.33 chars/sec
+**Current**: N(0.3, 0.05) → ~3.33 chars/sec with realistic variance
 
 **Adjust for**:
-- **Faster agents**: N(0.25, 0.03) → ~4 chars/sec
-- **Slower agents**: N(0.35, 0.03) → ~2.86 chars/sec
-- **More variance**: N(0.3, 0.05) → More personality variation
+- **Faster agents**: N(0.25, 0.05) → ~4 chars/sec
+- **Slower agents**: N(0.35, 0.05) → ~2.86 chars/sec
+- **More variance**: N(0.3, 0.08) → Even more personality variation
+- **Less variance**: N(0.3, 0.03) → More consistent typing
 
 ### Thinking Time
 

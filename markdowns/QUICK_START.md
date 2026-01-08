@@ -27,27 +27,25 @@ INFO:     Application startup complete.
 
 ### 4. Start Frontend (in new terminal)
 
-**Option A: React Frontend (Real-time WebSocket)**
 ```bash
 cd frontend
 npm install  # First time only
 npm run dev
 ```
-if this does not work
-```
-curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh | bash
-```
 
-**Option B: Streamlit Frontend (Simpler, Python-based)**
+**If Node.js is not installed:**
 ```bash
-# From project root
-pip install -r streamlit_requirements.txt
-streamlit run streamlit_app.py
+# Install nvm (Node Version Manager)
+curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh | bash
+
+# Install Node.js 18+
+nvm install 18
+nvm use 18
 ```
 
 ### 5. Play!
-- **React**: Open your browser to **http://localhost:5173**
-- **Streamlit**: Browser opens automatically at **http://localhost:8501**
+
+Open your browser to **http://localhost:5173**
 
 ---
 
@@ -62,16 +60,16 @@ uvicorn main:app --reload
 
 ### Use Different AI Model
 ```bash
-# Use GPT-5 instead of GPT-4o-mini
-export AI_MODEL_NAME=gpt-5
+# Use GPT-4o instead of gpt-5.1-nano (default)
+export AI_MODEL_NAME=gpt-4o
 uvicorn main:app --reload
 ```
 
 ### Adjust Game Speed
 ```bash
-# Faster rounds: 2 min discussion, 30 sec voting
+# Faster rounds: 2 min discussion, 45 sec voting (from default 4 min / 2 min)
 export DISCUSSION_TIME=120
-export VOTING_TIME=30
+export VOTING_TIME=45
 uvicorn main:app --reload
 ```
 
@@ -86,9 +84,7 @@ uvicorn main:app --reload
 | `backend/langgraph_game.py` | ✅ NEW | LangGraph implementation |
 | `backend/main.py` | ✅ UPDATED | FastAPI + LangGraph integration |
 | `backend/requirements.txt` | ✅ UPDATED | Added LangGraph dependencies |
-| `backend/ai.py` | 📦 ARCHIVED | → `ai_legacy.py` |
-| `backend/game.py` | 📦 ARCHIVED | → `game_legacy.py` |
-| `frontend/` | ✅ NO CHANGES | Works as-is! |
+| `frontend/` | ✅ REACT | React 18 + Vite + Tailwind CSS |
 
 ---
 
@@ -102,19 +98,15 @@ uvicorn main:app --reload
 
 ---
 
-## 🖥️ Frontend Comparison
+## 🖥️ Frontend Technology
 
-| Feature | React Frontend | Streamlit Frontend |
-|---------|---------------|-------------------|
-| **Technology** | React + Vite + Tailwind CSS | Python + Streamlit |
-| **Communication** | WebSocket (real-time) | HTTP Polling (~1s updates) |
-| **Setup** | Requires Node.js 18+ | Python only |
-| **UI Style** | Modern, responsive, custom | Clean, Python-native |
-| **Updates** | Instant | 1-2 second delay |
-| **Typing Indicators** | Real-time | Delayed |
-| **Best For** | Production, best UX | Development, quick demos, Python devs |
-
-Both frontends work with the same backend simultaneously!
+**React 18 + Vite:**
+- Modern, responsive UI with Tailwind CSS
+- Real-time WebSocket communication
+- Instant updates (<100ms latency)
+- Smooth page transitions with React Router
+- Mobile-friendly design
+- Requires Node.js 18+
 
 ---
 
@@ -152,26 +144,30 @@ export OPENAI_API_KEY='your-key-here'
 - Look at backend terminal for errors
 - Verify OpenAI API has credits
 
-### Streamlit won't start
+### React build errors
 ```bash
-pip install -r streamlit_requirements.txt
+cd frontend
+rm -rf node_modules package-lock.json
+npm install
 ```
 
-### Streamlit connection errors
-- Ensure backend is running on port 8000 first
-- Check the backend URL in streamlit_app.py (default: http://localhost:8000)
-- Look for error messages in the Streamlit UI
+### React won't connect to backend
+- Ensure backend is running on port 8000
+- Check `VITE_BACKEND_URL` in `frontend/.env` (if set)
+- Check browser DevTools → Console for errors
+- Verify CORS settings allow localhost:5173
 
 ---
 
 ## 🧪 Quick Test
 
-1. Start game in browser
-2. Type a message in chat
-3. Watch AI agents respond (2-10 seconds)
-4. After 3 minutes, voting starts automatically
-5. Click a player name to vote
-6. Watch elimination and new round
+1. Start game in browser (http://localhost:5173)
+2. Create or join a room
+3. Type a message in chat
+4. Watch AI agents respond (with realistic delays)
+5. After discussion phase (default 4 minutes), voting starts automatically
+6. Cast your vote(s) (1 player for single-human, N-1 for multi-human)
+7. Watch results and gem rewards
 
 **Expected behavior**: 
 - 4-5 players (1 human + 4 AI by default)
@@ -196,9 +192,9 @@ export VOTING_TIME=20
 uvicorn main:app --reload
 ```
 
-### Premium Model (GPT-5)
+### Premium Model (GPT-4o)
 ```bash
-export AI_MODEL_NAME=gpt-5
+export AI_MODEL_NAME=gpt-4o  # More expensive but higher quality
 uvicorn main:app --reload
 ```
 

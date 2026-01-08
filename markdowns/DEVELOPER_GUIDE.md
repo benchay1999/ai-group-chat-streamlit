@@ -103,7 +103,7 @@ from langchain_core.messages import SystemMessage, HumanMessage
 
 # Initialize model
 self.llm = ChatOpenAI(
-    model="gpt-4o-mini",
+    model="gpt-5.1-nano",  # Or configurable via AI_MODEL_NAME
     temperature=0.8
 )
 
@@ -474,12 +474,173 @@ def robust_node(self, state: GameState) -> GameState:
         }
 ```
 
+## Frontend Development (React)
+
+### Component Structure
+
+The frontend uses React 18 with hooks and context for state management:
+
+```jsx
+// Example: Creating a game feature component
+import { useState, useEffect } from 'react';
+import { useAuth } from '../contexts/AuthContext';
+import { roomAPI } from '../services/api';
+
+const MyFeature = () => {
+  const { user, isAuthenticated } = useAuth();
+  const [data, setData] = useState(null);
+
+  useEffect(() => {
+    const loadData = async () => {
+      const result = await roomAPI.getSomeData();
+      setData(result);
+    };
+    loadData();
+  }, []);
+
+  return (
+    <div className="my-feature">
+      {/* UI here */}
+    </div>
+  );
+};
+```
+
+### API Integration
+
+```javascript
+// services/api.js
+import axios from 'axios';
+
+const api = axios.create({
+  baseURL: import.meta.env.VITE_BACKEND_URL || 'http://localhost:8000',
+});
+
+// JWT interceptor
+api.interceptors.request.use((config) => {
+  const token = localStorage.getItem('token');
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  return config;
+});
+
+export default api;
+```
+
+### WebSocket Hook Usage
+
+```javascript
+import { useWebSocket } from '../hooks/useWebSocket';
+
+const GameComponent = () => {
+  const handleMessage = (data) => {
+    console.log('Received:', data);
+    // Update state based on message type
+  };
+
+  const { status, sendMessage } = useWebSocket(
+    roomCode,
+    playerId,
+    handleMessage
+  );
+
+  return <ConnectionStatus status={status} />;
+};
+```
+
+### Adding New Pages
+
+1. Create component in `frontend/src/pages/`
+2. Import in `App.jsx`
+3. Add route:
+
+```jsx
+// App.jsx
+import MyNewPage from './pages/MyNewPage';
+
+<Routes>
+  <Route path="/my-page" element={<MyNewPage />} />
+</Routes>
+```
+
+## Gem System Development
+
+### Adding New Gem Sources
+
+**1. Update Calculation Logic** (`backend/services/stats_service.py`):
+
+```python
+async def calculate_game_rewards(room_code, room_data, state, db):
+    # ... existing calculation ...
+    
+    # Add your bonus logic
+    if some_condition:
+        rewards[player_id]['bonus_gems'] = 50
+        rewards[player_id]['total_gems'] += 50
+    
+    return rewards
+```
+
+**2. Update Frontend Display** (`frontend/src/pages/DashboardPage.jsx`):
+
+```jsx
+// Show new bonus in earnings breakdown
+<div className="bonus-gems">
+  Bonus: +{session.bonus_gems} gems
+</div>
+```
+
+### Modifying Stakes System
+
+**Backend** (`backend/services/stats_service.py`):
+
+```python
+# In calculate_game_rewards()
+# Modify accuracy calculation
+accuracy = correct_votes / votes_needed
+
+# Or change stake distribution
+stake_winnings = int(accuracy * max_share * BOOST_MULTIPLIER)
+```
+
+**Frontend** (`frontend/src/pages/GemsInfoPage.jsx`):
+
+Update explanations and examples to match new formulas.
+
+### Adding Gem Sinks (Spending)
+
+```python
+# backend/routers/shop.py
+@router.post("/api/shop/buy-powerup")
+async def buy_powerup(
+    item_id: str,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_async_session)
+):
+    # Deduct gems
+    if current_user.gem_balance < item_cost:
+        raise HTTPException(400, "Insufficient gems")
+    
+    current_user.gem_balance -= item_cost
+    await db.commit()
+    
+    return {"success": True, "new_balance": current_user.gem_balance}
+```
+
 ## Resources
 
+### Backend
 - **LangGraph Docs**: https://langchain-ai.github.io/langgraph/
 - **LangChain Docs**: https://python.langchain.com/
 - **FastAPI Docs**: https://fastapi.tiangolo.com/
-- **WebSockets**: https://websockets.readthedocs.io/
+- **SQLAlchemy Docs**: https://docs.sqlalchemy.org/
+
+### Frontend
+- **React Docs**: https://react.dev/
+- **Vite Docs**: https://vitejs.dev/
+- **Tailwind CSS**: https://tailwindcss.com/
+- **React Router**: https://reactrouter.com/
 
 ## Getting Help
 

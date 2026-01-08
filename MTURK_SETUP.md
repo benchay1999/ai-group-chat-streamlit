@@ -1,6 +1,36 @@
-# Mechanical Turk Data Collection System Setup Guide
+# Mechanical Turk Integration & Gem Cashout System
 
-This guide covers the new authentication, session tracking, and payment management features for collecting group chat data via Mechanical Turk.
+This guide covers the gem-based economy and MTurk payment system for converting in-game gems to real USD.
+
+## Modern Gem-Based Cashout System
+
+The Human Hunter game features a comprehensive gem economy where players earn gems through gameplay and can convert them to real money via Amazon Mechanical Turk.
+
+### How It Works
+
+**Gems as In-Game Currency:**
+- Players earn gems by playing games (single-human or multi-human modes)
+- 1000 gems = $1.00 USD
+- Gems accumulate in player's wallet
+- Can be cashed out via MTurk when minimum threshold reached
+
+**Earning Gems:**
+- **Single-Human Games:** 50 gems for all participants (no stakes, no risk)
+- **Multi-Human Games:** 100 base gems + stakes system
+  - Performance-based rewards
+  - Winners get stake refund + share of loser pool
+  - Voting accuracy determines winnings
+  - See [markdowns/RULES.md](markdowns/RULES.md) for complete details
+
+**Viewing Balance:**
+- Dashboard page: Overview of earnings and current balance
+- Wallet page (`/wallet`): Detailed balance, transaction history, cashout button
+
+**Cashing Out:**
+- Minimum: $2.00 (2000 gems)
+- Requires MTurk Worker ID (add in profile)
+- Worker-specific qualification-based HITs
+- Auto-approved within 1 hour
 
 ## ⚠️ Current Database: SQLite (Temporary)
 
@@ -8,14 +38,17 @@ This guide covers the new authentication, session tracking, and payment manageme
 
 > **Important**: This is a **temporary development solution**. For production deployment with multiple concurrent users, you should migrate to a cloud PostgreSQL service. See the [PostgreSQL Migration](#postgresql-migration-production) section below.
 
-## Overview
+## System Overview
 
-The system now includes:
-- **User authentication** (user_id/password)
-- **Session tracking** with completion keys
-- **Payment management** for compensating participants
-- **Admin dashboard** for managing sessions
-- **Role-based access control** (regular users and admins)
+The MTurk integration includes:
+- **Gem-based economy** - Players earn gems through gameplay
+- **User authentication** - Secure user_id/password system
+- **Session tracking** - Complete game history with stats
+- **Gem wallet** - Track balance, earnings, and cashouts
+- **Worker-specific HITs** - Unique qualification system prevents fraud
+- **Automated payments** - Auto-approval within 1 hour
+- **Admin dashboard** - Monitor cashouts and earnings
+- **Role-based access** - Regular users and admins
 - **SQLite database** (temporary, will migrate to PostgreSQL for production)
 
 ## Quick Start (SQLite - No Sudo Required)
@@ -163,54 +196,62 @@ asyncio.run(main())
 
 ### For Participants (MTurk Workers)
 
-1. **Register** - Create account at `/login`
-2. **Play Game** - Join a game from lobby
-3. **Complete Session** - Chat and vote during the game
-4. **Get Completion Key** - Automatic modal after game ends
-5. **Submit on MTurk** - Copy completion key to MTurk form
-6. **View Dashboard** - Check payment status at `/dashboard`
+1. **Register/Login** - Create account at `/login` (or play as guest initially)
+2. **Play Games** - Join games from lobby
+   - Single-human games: Earn 50 gems per game (no stakes)
+   - Multi-human games: Earn 100+ gems based on performance (optional stakes)
+3. **Earn Gems** - Gems credited automatically after each game
+4. **View Balance** - Check gem balance in dashboard or wallet page (`/wallet`)
+5. **Add MTurk Worker ID** - Go to profile page and add your MTurk Worker ID
+6. **Request Cashout** - When you reach $2.00 (2000 gems), request cashout in wallet page
+7. **Complete HIT** - Accept and complete the worker-specific HIT created for you
+8. **Get Paid** - Auto-approved within 1 hour, payment sent via MTurk
 
 ### For Researchers (Admins)
 
 1. **Login as Admin** - Use admin credentials
-2. **View All Sessions** - Access admin panel at `/admin`
-3. **Review Sessions** - Click to view detailed chat history and votes
-4. **Verify Completion Keys** - Keys are automatically validated
-5. **Update Payment Status** - Mark sessions as paid
-6. **Set Payment Amount** - Record compensation amounts
+2. **Monitor Earnings** - View admin analytics at `/admin/analytics`
+3. **Review Cashouts** - Track pending and completed cashout requests
+4. **Verify HITs** - System auto-approves HITs, admin can monitor status
+5. **View Sessions** - Access complete game history and chat logs
+6. **Manage Users** - View user balances, earnings, and activity
 
-## Completion Key System
+## Gem Earning Rules
 
-### How It Works
+### Single-Human Games
+- **Participants:** 1 human vs AI agents
+- **Reward:** 50 gems for everyone (human + AI)
+- **Stakes:** None
+- **Risk:** None
+- **Purpose:** Build initial gem balance safely
 
-1. **Game Ends** → Backend saves session to JSON + PostgreSQL
-2. **Generate Key** → JWT token encoding session metadata
-3. **Associate User** → Automatically linked to logged-in user (if any)
-4. **Display Key** → Modal shows key for copying
-5. **Submit to MTurk** → Worker pastes key in MTurk form
-6. **Verify** → You can decode key to verify all session details
+### Multi-Human Games
+- **Participants:** 2+ human players competing
+- **Base Reward:** 100 gems (must vote to receive)
+- **Stakes:** Optional (0%, 10%, 30%, 50%, or 100% of balance)
+- **Minimum Balance:** 250 gems required to join
+- **Winners:** Get stake refund + share of loser pool (based on voting accuracy)
+- **Losers:** Forfeit their stake
+- **Risk:** Can lose gems if you perform poorly
 
-### Completion Key Contents
+### Voting Mechanics
 
-The JWT token includes:
-- `session_id` - Database UUID
-- `room_code` - Original room code
-- `language` - english/korean
-- `total_players` - Total number of players
-- `num_humans` - Number of human players
-- `discussion_duration` - Discussion time in seconds
-- `voting_duration` - Voting time in seconds
-- `completed_at` - Unix timestamp
-- `iat` - Issued at timestamp
+**Single-Human Mode:**
+- Vote for 1 player (who seems most human-like)
+- AI agents participate in voting
 
-### Manual Claiming
+**Multi-Human Mode:**
+- Vote for N-1 players (all humans except yourself)
+- Must identify all other human players correctly
+- Voting accuracy affects gem winnings
+- Formula: `accuracy = correct_votes / (num_humans - 1)`
 
-Users can claim completion keys from other devices/accounts:
+### Detailed Examples
 
-1. Navigate to `/dashboard`
-2. Enter completion key in "Claim Completion Key" form
-3. Key validated and associated with their account
-4. Prevents duplicate claims
+For complete gem mechanics, calculation formulas, and example scenarios, see:
+- Visit `/gems-info` page in the application
+- Read [markdowns/GEM_ECONOMY_IMPLEMENTATION.md](markdowns/GEM_ECONOMY_IMPLEMENTATION.md)
+- Check [markdowns/RULES.md](markdowns/RULES.md)
 
 ## Admin Features
 
@@ -229,13 +270,20 @@ Users can claim completion keys from other devices/accounts:
 - Set payment amount
 - View detailed session info
 
-### Payment Workflow
+### Cashout Workflow
 
-1. Worker completes session and submits completion key to MTurk
-2. Admin verifies completion on MTurk
-3. Admin marks session as "paid" in dashboard
-4. Admin sets payment amount (if needed)
-5. Worker sees updated status in their dashboard
+1. Worker plays games and accumulates gems
+2. Worker reaches minimum cashout threshold ($2.00 = 2000 gems)
+3. Worker adds MTurk Worker ID in profile (if not already done)
+4. Worker requests cashout in wallet page
+5. System creates worker-specific qualification
+6. System assigns qualification to worker
+7. System creates HIT with qualification requirement (only that worker can see it)
+8. Worker accepts and completes HIT on MTurk
+9. Background monitor detects HIT submission
+10. System auto-approves HIT within 1 hour
+11. MTurk sends payment to worker
+12. Transaction marked as completed in database
 
 ## Security Considerations
 

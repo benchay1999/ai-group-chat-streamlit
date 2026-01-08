@@ -57,11 +57,16 @@ Start with the comprehensive tutorial that covers everything you need to underst
 ### Game Flow
 
 1. **Lobby**: Players join a room (or create one with custom settings)
-2. **Discussion Phase**: Everyone chats about a topic (default: 3 minutes)
-3. **Voting Phase**: Vote for who seems most AI-like (default: 1 minute)
-4. **Elimination**: Player with most votes is eliminated
-5. **Repeat**: Continue for multiple rounds (default: 3 rounds)
-6. **Victory**: Humans win if they survive; AIs win if all humans are eliminated
+2. **Discussion Phase**: Everyone chats about a topic (default: 4 minutes)
+3. **Voting Phase**: Vote based on game mode (default: 2 minutes)
+   - **Single-human:** Vote for 1 player (most human-like)
+   - **Multi-human:** Vote for N-1 players (all other humans)
+4. **Results**:
+   - **Single-human:** Elimination; continue if AI eliminated, game over if human eliminated
+   - **Multi-human:** No elimination; winners determined by most votes, gems distributed
+5. **Victory**:
+   - **Single-human:** Human survives configured rounds (default: 1) or AIs eliminate human
+   - **Multi-human:** Player(s) with most votes win and earn gems based on performance
 
 ### Architecture
 
@@ -90,9 +95,9 @@ OPENAI_API_KEY=sk-...
 # Game Settings
 NUM_AI_PLAYERS=4              # Number of AI opponents (4-8)
 AI_MODEL_NAME=gpt-4o-mini     # AI model to use
-DISCUSSION_TIME=180           # Discussion phase (seconds)
-VOTING_TIME=60                # Voting phase (seconds)
-ROUNDS_TO_WIN=3               # Rounds to survive
+DISCUSSION_TIME=240           # Discussion phase (seconds) - default 4 minutes
+VOTING_TIME=120               # Voting phase (seconds) - default 2 minutes
+ROUNDS_TO_WIN=1               # Rounds to survive (default 1)
 
 # Database (SQLite for dev, PostgreSQL for production)
 DATABASE_URL=sqlite+aiosqlite:///./backend/group_chat.db
@@ -105,14 +110,47 @@ MTURK_ENVIRONMENT=sandbox
 
 ## Gem Economy & MTurk Payment
 
-Players earn gems by playing games (1000 gems = $1 USD):
+Players earn gems by playing games and can convert them to real USD via MTurk (1000 gems = $1 USD):
 
-- **Performance-Based**: Earn more for winning, voting correctly, active participation
-- **Flexible Cashouts**: Redeem gems via MTurk when reaching minimum threshold ($2 default)
-- **Automated HITs**: Worker-specific qualification-based HITs
-- **Admin Dashboard**: Track earnings, manage cashouts, view analytics
+### Earning Gems
 
-See [MTURK_SETUP.md](MTURK_SETUP.md) for complete integration guide.
+**Single-Human Games (1 human vs AI agents):**
+- **All participants:** 50 gems
+- Simple participation reward
+- No stakes, no risk
+- Perfect for building initial balance
+
+**Multi-Human Games (2+ humans competing):**
+- **Base Gems:** 100 gems (requires voting)
+- **Stakes System:** Optional risk/reward mechanism
+  - Choose stake percentage: 0%, 10%, 30%, 50%, or 100% of balance
+  - Minimum 250 gems required to join
+  - Winners: Stake refund + share of loser pool (based on voting accuracy)
+  - Losers: Forfeit their stake
+- **Voting Accuracy Matters:** Correctly identify all other humans to maximize winnings
+- **Example:** In a 2-player game with 10% stakes (160 gems each), winner gets +420 gems total, loser gets +100 gems
+
+### Voting Mechanics
+
+**Single-Human Mode:**
+- Vote for 1 player (who seems most human-like)
+- AI agents participate in voting
+
+**Multi-Human Mode:**
+- Vote for N-1 players (all humans except yourself)
+- Must identify all other human players correctly
+- Voting accuracy determines share of loser stakes
+- Formula: `accuracy = correct_votes / (num_humans - 1)`
+
+### Cashing Out
+
+- **Minimum Cashout:** $2.00 (2000 gems)
+- **Method:** Worker-specific MTurk HITs with qualification system
+- **Requirement:** MTurk Worker ID (add in profile)
+- **Processing:** Auto-approved within 1 hour
+- **Wallet Page:** View balance, request cashouts, track transaction history
+
+See [MTURK_SETUP.md](MTURK_SETUP.md) for complete setup guide. For detailed gem mechanics and examples, visit `/gems-info` page in the application.
 
 ## Development
 

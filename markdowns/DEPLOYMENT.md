@@ -1,230 +1,600 @@
-# Deployment Guide: Local Backend + Streamlit Cloud Frontend
+# Deployment Guide: Full Cloud Deployment
 
-This setup runs the heavy FastAPI/LangGraph backend on your local machine while hosting the lightweight Streamlit frontend on Streamlit Cloud.
+This guide covers deploying Human Hunter to the cloud using modern hosting services. For local backend with ngrok, see [DEPLOYMENT_GUIDE_NGROK_NETLIFY.md](../DEPLOYMENT_GUIDE_NGROK_NETLIFY.md).
 
-## Architecture
+## Architecture Options
+
+### Option 1: Netlify + Railway (Recommended)
 
 ```
-┌─────────────────────┐         ┌──────────────────┐         ┌─────────────────┐
-│   Your Computer     │         │     ngrok        │         │ Streamlit Cloud │
-│                     │         │   (Tunnel)       │         │                 │
-│  FastAPI Backend    │◄────────┤                  │◄────────┤   Frontend UI   │
-│  (LangGraph Agents) │         │  Public URL      │         │  (streamlit_app)│
-│  localhost:8000     │         │                  │         │                 │
-└─────────────────────┘         └──────────────────┘         └─────────────────┘
+┌─────────────────┐         ┌──────────────────┐         ┌─────────────┐
+│   Netlify CDN   │         │   Railway.app    │         │   Neon/     │
+│  (React Build)  │────────>│  (FastAPI)       │────────>│  Supabase   │
+│  Static Hosting │  HTTPS  │  Backend API     │         │ (PostgreSQL)│
+└─────────────────┘         └──────────────────┘         └─────────────┘
 ```
 
-## Prerequisites
+**Pros:**
+- ✅ Free tier available (Netlify: 100GB bandwidth, Railway: $5 credit)
+- ✅ Automatic deployments from GitHub
+- ✅ Built-in SSL/HTTPS
+- ✅ Good for small-medium traffic
 
-1. Python 3.11+ installed locally
-2. OpenAI API key
-3. ngrok account (free tier works fine)
-4. Streamlit Cloud account
+**Cost:** $5-10/month (after free tier exhausted)
 
-## Setup Instructions
+### Option 2: Vercel + Render
 
-### Part 1: Set Up Local Backend
-
-#### 1. Install Dependencies
-
-```bash
-pip install -r requirements.txt
+```
+┌─────────────────┐         ┌──────────────────┐         ┌─────────────┐
+│   Vercel        │         │   Render.com     │         │   Neon/     │
+│  (React Build)  │────────>│  (FastAPI)       │────────>│  Supabase   │
+│  Static Hosting │  HTTPS  │  Backend API     │         │ (PostgreSQL)│
+└─────────────────┘         └──────────────────┘         └─────────────┘
 ```
 
-#### 2. Set Environment Variables
+**Pros:**
+- ✅ Similar to Netlify + Railway
+- ✅ Render free tier includes PostgreSQL
+- ✅ Great developer experience
 
-Create a `.env` file in the project root:
+**Cost:** $7-10/month (Render Web Service)
 
-```bash
-OPENAI_API_KEY=your-openai-api-key-here
+### Option 3: AWS/GCP/Azure (Advanced)
+
+For high traffic or enterprise use. Not covered in this guide.
+
+---
+
+## Part 1: Deploy Backend (Railway)
+
+### Prerequisites
+- GitHub account
+- Railway account (https://railway.app)
+- PostgreSQL database (recommended: Neon or Supabase)
+
+### Step 1: Prepare Database
+
+#### Using Neon (Free PostgreSQL)
+
+1. Go to https://neon.tech
+2. Sign up with GitHub
+3. Create new project: "human-hunter-db"
+4. Copy connection string from dashboard
+5. Keep this for Step 4
+
+#### Using Supabase (Alternative)
+
+1. Go to https://supabase.com
+2. Create new project
+3. Go to Settings → Database → Connection string
+4. Copy the connection string
+5. Keep this for Step 4
+
+### Step 2: Create Railway Project
+
+1. Go to https://railway.app
+2. Sign in with GitHub
+3. Click "New Project"
+4. Select "Deploy from GitHub repo"
+5. Choose your repository
+6. Select `main` branch
+
+### Step 3: Configure Build Settings
+
+Railway should auto-detect Python, but verify:
+
+| Setting | Value |
+|---------|-------|
+| **Root Directory** | `/` (project root) |
+| **Build Command** | `pip install -r backend/requirements.txt` |
+| **Start Command** | `cd backend && uvicorn backend.main:app --host 0.0.0.0 --port $PORT` |
+
+### Step 4: Add Environment Variables
+
+In Railway dashboard, go to Variables tab and add:
+
+```env
+# Required
+OPENAI_API_KEY=sk-your-key-here
+DATABASE_URL=postgresql+asyncpg://user:pass@host/db
+
+# Security (generate with: python -c "import secrets; print(secrets.token_urlsafe(32))")
+JWT_SECRET_KEY=your-secure-random-key
+JWT_COMPLETION_SECRET=another-secure-random-key
+ENVIRONMENT=production
+
+# Game Settings
+NUM_AI_PLAYERS=4
+DISCUSSION_TIME=240
+VOTING_TIME=120
+ROUNDS_TO_WIN=1
+AI_MODEL_NAME=gpt-5.1-nano
+AI_TEMPERATURE=0.8
+
+# CORS (update after deploying frontend)
+CORS_ALLOWED_ORIGINS=https://your-netlify-site.netlify.app
+
+# Optional: MTurk
+AWS_ACCESS_KEY_ID=your-aws-key
+AWS_SECRET_ACCESS_KEY=your-aws-secret
+MTURK_ENVIRONMENT=sandbox
+CASHOUT_HIT_ID=your-hit-id
+MINIMUM_CASHOUT_AMOUNT=2.00
 ```
 
-Or export directly:
+### Step 5: Deploy
 
-```bash
-export OPENAI_API_KEY='your-openai-api-key-here'
+1. Click "Deploy"
+2. Wait 3-5 minutes for deployment
+3. Railway will provide a public URL like: `https://your-app.up.railway.app`
+4. Test it: Visit `https://your-app.up.railway.app/health`
+
+---
+
+## Part 2: Deploy Frontend (Netlify)
+
+### Step 1: Configure Build Settings
+
+1. Go to https://netlify.com
+2. Sign in with GitHub
+3. Click "Add new site" → "Import an existing project"
+4. Choose GitHub → Select your repository
+5. Configure settings:
+
+| Setting | Value |
+|---------|-------|
+| **Branch to deploy** | `main` |
+| **Base directory** | `frontend` |
+| **Build command** | `npm run build` |
+| **Publish directory** | `frontend/dist` |
+
+### Step 2: Add Environment Variables
+
+In Netlify dashboard → Site settings → Environment variables:
+
+```env
+VITE_BACKEND_URL=https://your-railway-app.up.railway.app
 ```
 
-#### 3. Start the Backend
+Replace with your Railway backend URL from Part 1, Step 5.
 
-```bash
-python run_backend_local.py
+### Step 3: Deploy
+
+1. Click "Deploy site"
+2. Wait 2-3 minutes for build
+3. Your site will be live at: `https://random-name-12345.netlify.app`
+
+### Step 4: Update Backend CORS
+
+Go back to Railway → Variables and update:
+
+```env
+CORS_ALLOWED_ORIGINS=https://your-netlify-site.netlify.app,http://localhost:5173
 ```
 
-You should see:
-```
-🚀 Starting Local Backend Server
-✅ All required environment variables are set
-📡 Backend will be available at: http://localhost:8000
-📊 API docs at: http://localhost:8000/docs
-```
+Redeploy backend (click "Redeploy" in Railway).
 
-Test it: Open http://localhost:8000/health in your browser. You should see `{"status":"healthy"}`
+### Step 5: Test Everything
 
-### Part 2: Expose Backend via Tunneling
+1. Visit your Netlify URL
+2. Create a room
+3. Play a game
+4. Check that everything works!
 
-You need to expose your local backend to the internet. **Multiple options available - choose one:**
+---
 
-#### Option A: ngrok (Recommended) - Already Installed! ✅
+## Alternative Backend Hosting
 
-**No sudo required** - ngrok is already downloaded in your project directory.
+### Render.com
 
-1. **Authenticate ngrok** (one-time):
+**Pros:** Includes free PostgreSQL, simple setup
+**Cons:** Free tier spins down after inactivity (slow cold starts)
+
+**Setup:**
+1. Go to https://render.com
+2. Create new "Web Service"
+3. Connect GitHub repo
+4. Configure:
+   - **Build Command:** `pip install -r backend/requirements.txt`
+   - **Start Command:** `cd backend && uvicorn backend.main:app --host 0.0.0.0 --port $PORT`
+5. Add environment variables (same as Railway)
+6. Deploy
+
+### Heroku
+
+**Pros:** Mature platform, good documentation
+**Cons:** No free tier anymore ($7/month minimum)
+
+**Setup:**
+1. Install Heroku CLI
+2. Create `Procfile` in project root:
+   ```
+   web: cd backend && uvicorn backend.main:app --host 0.0.0.0 --port $PORT
+   ```
+3. Deploy:
    ```bash
-   # Sign up at https://ngrok.com (free)
-   # Get token from: https://dashboard.ngrok.com/get-started/your-authtoken
-   ./ngrok config add-authtoken YOUR_AUTH_TOKEN
+   heroku create your-app-name
+   heroku config:set OPENAI_API_KEY=sk-...
+   git push heroku main
    ```
 
-2. **Start tunnel**:
-   ```bash
-   ./ngrok http 8000
-   ```
+### Fly.io
 
-3. **Copy the HTTPS URL** from output (e.g., `https://abc123def456.ngrok-free.app`)
+**Pros:** Edge deployment, global distribution
+**Cons:** More complex setup
 
-4. **Test it**:
-   ```bash
-   curl https://your-ngrok-url.ngrok-free.app/health
-   ```
+See Fly.io documentation for details.
 
-⚠️ **Important:** Keep this terminal window open! Closing it will stop the tunnel.
+---
 
-#### Option B: localhost.run - Zero Installation! 🚀
+## Database Migration
 
-No installation or signup required:
+If you're migrating from SQLite (development) to PostgreSQL (production):
+
+### Step 1: Backup SQLite Data (if needed)
 
 ```bash
-ssh -R 80:localhost:8000 nokey@localhost.run
+# Export users and sessions
+sqlite3 backend/group_chat.db .dump > backup.sql
 ```
 
-Copy the HTTPS URL from output (e.g., `https://abc123.localhost.run`)
+### Step 2: Update DATABASE_URL
 
-#### Option C: Other Tunneling Services
+```env
+# Old (SQLite)
+DATABASE_URL=sqlite+aiosqlite:///./group_chat.db
 
-See **[TUNNELING_OPTIONS.md](TUNNELING_OPTIONS.md)** for more options including:
-- **Cloudflare Tunnel** (free permanent URL)
-- **serveo.net** (no installation)
-- **bore** (simple Rust tool)
-- **Cloud deployment** (Railway, Render, Fly.io)
+# New (PostgreSQL)
+DATABASE_URL=postgresql+asyncpg://user:pass@host:5432/database
+```
 
-#### Test Your Public URL
-
-Open `https://your-tunnel-url/health` in your browser.
-You should see `{"status":"healthy"}`
-
-### Part 3: Deploy Frontend to Streamlit Cloud
-
-#### 1. Push Code to GitHub
-
-If not already done:
+### Step 3: Run Migrations
 
 ```bash
-git add .
-git commit -m "Add local backend + cloud frontend setup"
-git push origin main
+cd backend
+python -m alembic upgrade head
 ```
 
-#### 2. Create Streamlit Cloud App
+Tables will be created automatically in PostgreSQL.
 
-1. Go to https://share.streamlit.io/
-2. Click "New app"
-3. Select your repository
-4. Set **Main file path** to: `streamlit_cloud_app.py`
-5. Click "Advanced settings"
+### Step 4: Migrate Data (if needed)
 
-#### 3. Configure Secrets
+If you have existing users/sessions to migrate, see [SQLITE_TO_POSTGRESQL.md](SQLITE_TO_POSTGRESQL.md) for detailed migration scripts.
 
-In the "Secrets" section, add:
+---
 
-```toml
-BACKEND_URL = "https://your-ngrok-url.ngrok-free.app"
-```
+## Production Checklist
 
-Replace with your actual ngrok URL from Part 2, Step 3.
+Before going live:
 
-#### 4. Deploy
+### Security
+- [ ] Generate strong JWT secrets (not defaults)
+- [ ] Set `ENVIRONMENT=production`
+- [ ] Configure CORS for your domain only
+- [ ] Use PostgreSQL (not SQLite)
+- [ ] Enable HTTPS (automatic with Netlify/Railway)
+- [ ] Review [PRODUCTION_DEPLOYMENT_SECURITY_CHECKLIST.md](PRODUCTION_DEPLOYMENT_SECURITY_CHECKLIST.md)
 
-Click "Deploy" and wait for the app to start.
+### Configuration
+- [ ] Set appropriate API key(s) with rate limits
+- [ ] Configure game timing (DISCUSSION_TIME, VOTING_TIME)
+- [ ] Set gem economy parameters
+- [ ] Configure MTurk if using cashouts
+- [ ] Test with multiple concurrent users
 
-## Usage
+### Monitoring
+- [ ] Set up error logging (Railway/Render provide logs)
+- [ ] Monitor API usage (OpenAI dashboard)
+- [ ] Check database performance
+- [ ] Set up uptime monitoring (UptimeRobot, Pingdom)
 
-### Starting Everything
+### Testing
+- [ ] Test user registration and login
+- [ ] Test single-human game flow
+- [ ] Test multi-human game with stakes
+- [ ] Test gem earning and cashout
+- [ ] Test WebSocket reconnection
+- [ ] Test with multiple simultaneous games
 
-1. **Start backend** (terminal 1):
-   ```bash
-   python run_backend_local.py
-   ```
+---
 
-2. **Start ngrok** (terminal 2):
-   ```bash
-   ngrok http 8000
-   ```
+## Cost Estimates
 
-3. **Update Streamlit secrets** (if ngrok URL changed):
-   - Go to your Streamlit Cloud app settings
-   - Update `BACKEND_URL` with the new ngrok URL
-   - Reboot the app
+### Minimal Setup (Free Tier)
+- **Frontend:** Netlify Free (100GB bandwidth/month)
+- **Backend:** Railway $5 credit → ~2-3 days free, then $5-10/month
+- **Database:** Neon Free (3GB storage)
+- **Total:** $5-10/month after free tier
 
-4. **Access your app**:
-   - Open your Streamlit Cloud URL: `https://your-app.streamlit.app`
+### Recommended Setup
+- **Frontend:** Netlify Free
+- **Backend:** Railway Pro ($10/month) or Render ($7/month)
+- **Database:** Neon Free or Supabase Free
+- **Total:** $7-10/month
 
-### Stopping Everything
+### High-Traffic Setup (100+ concurrent users)
+- **Frontend:** Netlify Pro ($19/month) or Vercel Pro ($20/month)
+- **Backend:** Railway Pro ($20/month) or multiple instances
+- **Database:** Neon Pro ($19/month) or Supabase Pro ($25/month)
+- **Total:** $60-70/month
 
-1. Stop ngrok: `Ctrl+C` in terminal 2
-2. Stop backend: `Ctrl+C` in terminal 1
+---
+
+## Environment Variables Reference
+
+### Required
+
+| Variable | Example | Notes |
+|----------|---------|-------|
+| `OPENAI_API_KEY` | `sk-proj-...` | OpenAI API key |
+| `DATABASE_URL` | `postgresql+asyncpg://...` | PostgreSQL connection string |
+| `JWT_SECRET_KEY` | `random-32-char-string` | Generate with secrets.token_urlsafe(32) |
+| `JWT_COMPLETION_SECRET` | `another-random-string` | Different from JWT_SECRET_KEY |
+| `ENVIRONMENT` | `production` | Enables production security checks |
+| `CORS_ALLOWED_ORIGINS` | `https://yoursite.netlify.app` | Frontend URL(s), comma-separated |
+
+### Optional Game Settings
+
+| Variable | Default | Notes |
+|----------|---------|-------|
+| `NUM_AI_PLAYERS` | `4` | Number of AI opponents |
+| `DISCUSSION_TIME` | `240` | Discussion phase seconds |
+| `VOTING_TIME` | `120` | Voting phase seconds |
+| `ROUNDS_TO_WIN` | `1` | Rounds to survive |
+| `AI_MODEL_NAME` | `gpt-5.1-nano` | AI model to use |
+| `AI_TEMPERATURE` | `0.8` | LLM temperature |
+
+### Optional MTurk/Gem Settings
+
+| Variable | Default | Notes |
+|----------|---------|-------|
+| `AWS_ACCESS_KEY_ID` | - | Required for MTurk cashouts |
+| `AWS_SECRET_ACCESS_KEY` | - | Required for MTurk cashouts |
+| `MTURK_ENVIRONMENT` | `sandbox` | Use `production` for real money |
+| `CASHOUT_HIT_ID` | - | Standing HIT for cashouts |
+| `MINIMUM_CASHOUT_AMOUNT` | `2.00` | Minimum USD for cashout |
+| `SINGLE_HUMAN_BASE_GEMS` | `50` | Gems for single-human games |
+| `MULTI_HUMAN_BASE_GEMS` | `100` | Base gems for multi-human games |
+
+For complete reference, see [ENVIRONMENT_REFERENCE.md](../ENVIRONMENT_REFERENCE.md).
+
+---
+
+## Monitoring & Maintenance
+
+### Backend Logs
+
+**Railway:**
+- Dashboard → Your project → Deployments → View logs
+
+**Render:**
+- Dashboard → Your service → Logs tab
+
+### Database Monitoring
+
+**Neon:**
+- Dashboard → Your project → Monitoring
+
+**Supabase:**
+- Dashboard → Your project → Database → Logs
+
+### Frontend Analytics
+
+Netlify provides:
+- Traffic analytics
+- Build history
+- Error logs
+
+### Error Tracking
+
+Consider adding:
+- Sentry (error tracking)
+- LogRocket (session replay)
+- PostHog (analytics)
+
+---
 
 ## Troubleshooting
 
-### Frontend shows "Backend URL not configured"
+### Deployment Fails
 
-- Make sure you added `BACKEND_URL` to Streamlit Cloud secrets
-- Reboot the Streamlit app after adding secrets
+**Backend build fails:**
+- Check `backend/requirements.txt` is complete
+- Verify Python version (3.8+ required)
+- Check build logs for specific errors
 
-### Frontend can't connect to backend
+**Frontend build fails:**
+- Check `frontend/package.json` dependencies
+- Verify Node.js version (18+ required)
+- Check Netlify build logs
 
-- Check if backend is running: http://localhost:8000/health
-- Check if ngrok is running and URL is correct
-- Verify `BACKEND_URL` in Streamlit secrets matches your ngrok URL
-- Try accessing the ngrok URL directly: `https://your-url.ngrok-free.app/health`
+### Connection Issues
 
-### ngrok URL keeps changing
+**Frontend can't reach backend:**
+- Verify `VITE_BACKEND_URL` is set correctly
+- Check CORS configuration in backend
+- Test backend URL directly: `https://your-backend.com/health`
 
-Free ngrok URLs change on each restart. Options:
-- Use a paid ngrok plan for a permanent URL
-- Update Streamlit secrets each time ngrok restarts
-- Consider deploying backend to a cloud service (AWS, GCP, Railway, Render)
+**WebSocket not connecting:**
+- Ensure backend supports WebSocket (Railway/Render do by default)
+- Check for proxy/firewall blocking WSS connections
+- Verify WebSocket URL format: `wss://your-backend.com/ws/game/{code}`
 
-### Backend is slow
+### Database Issues
 
-This is normal for LangGraph agents with OpenAI API calls. The backend processes AI responses asynchronously, but initial setup takes time.
+**Connection failed:**
+- Verify DATABASE_URL is correct
+- Check database service is running
+- Ensure connection string uses `postgresql+asyncpg://`
 
-## Alternative: Cloud Backend
+**Tables not created:**
+- Run migrations: `python -m alembic upgrade head`
+- Check if tables exist in database dashboard
 
-If you want to avoid ngrok and run everything in the cloud:
+### Performance Issues
 
-### Option 1: Railway/Render (Recommended)
+**Slow responses:**
+- Check OpenAI API rate limits
+- Monitor database query performance
+- Consider upgrading backend plan
+- Add Redis caching (advanced)
 
-1. Deploy backend to Railway.app or Render.com
-2. Get the public URL (e.g., `https://your-app.up.railway.app`)
-3. Set this as `BACKEND_URL` in Streamlit secrets
+---
 
-### Option 2: Full Streamlit Cloud (Original)
+## Scaling Considerations
 
-Use `deploy.py` instead, but note it will be slow due to Streamlit Cloud's resource limits.
+### Traffic Levels
 
-## Tips
+**0-50 users:**
+- Netlify Free + Railway Hobby + Free PostgreSQL
+- Cost: $5-10/month
 
-- **Development**: Test locally first with `streamlit run streamlit_app.py` and `BACKEND_URL=http://localhost:8000`
-- **Production**: Keep ngrok and backend running 24/7, or deploy backend to a cloud service
-- **Monitoring**: Check backend logs in terminal 1 for errors
-- **Performance**: Local backend is much faster than Streamlit Cloud for AI operations
+**50-200 users:**
+- Netlify Free + Railway Pro + Neon Pro
+- Cost: $30-40/month
 
-## File Overview
+**200+ users:**
+- Consider:
+  - Multiple backend instances
+  - Load balancer
+  - Redis for session storage
+  - CDN for static assets
+  - Dedicated PostgreSQL
 
-- `streamlit_cloud_app.py` - Frontend-only entry point for Streamlit Cloud
-- `run_backend_local.py` - Local backend startup script
-- `streamlit_app.py` - Main Streamlit UI (imported by streamlit_cloud_app.py)
-- `backend/main.py` - FastAPI backend with LangGraph agents
-- `deploy.py` - (Legacy) Combined deployment for Streamlit Cloud
+---
 
+## Alternative Deployment Options
+
+### Local Backend + Cloud Frontend (Hybrid)
+
+See [DEPLOYMENT_GUIDE_NGROK_NETLIFY.md](../DEPLOYMENT_GUIDE_NGROK_NETLIFY.md) for:
+- ngrok tunnel to local backend
+- Netlify for frontend
+- Cost: $20/month (ngrok paid plan)
+- **Pros:** Full control, easy debugging
+- **Cons:** Requires keeping your computer running
+
+### Docker Deployment
+
+Create `Dockerfile` in backend/:
+
+```dockerfile
+FROM python:3.11-slim
+
+WORKDIR /app
+COPY backend/requirements.txt .
+RUN pip install -r requirements.txt
+
+COPY backend/ ./backend/
+COPY .env .env
+
+CMD ["uvicorn", "backend.main:app", "--host", "0.0.0.0", "--port", "8000"]
+```
+
+Deploy to:
+- Fly.io
+- Google Cloud Run
+- AWS ECS
+- DigitalOcean App Platform
+
+---
+
+## Post-Deployment Tasks
+
+### 1. Create Admin User
+
+```bash
+# SSH into your backend server or run locally with production DATABASE_URL
+python create_admin.py
+```
+
+Enter admin credentials when prompted.
+
+### 2. Test All Features
+
+- [ ] User registration and login
+- [ ] Create single-human room
+- [ ] Create multi-human room with stakes
+- [ ] Play complete game
+- [ ] Verify gem earning
+- [ ] Test wallet and cashout (if MTurk enabled)
+- [ ] Test admin panel
+
+### 3. Monitor First Users
+
+Watch logs for:
+- Authentication errors
+- Database connection issues
+- OpenAI API errors
+- WebSocket disconnections
+- Gem calculation errors
+
+### 4. Set Up Backups
+
+**Database:**
+- Neon: Automatic backups included
+- Supabase: Automatic backups included
+- Self-hosted: Set up daily backups with pg_dump
+
+**Configuration:**
+- Keep `.env` file backed up securely
+- Document all environment variables
+- Store secrets in password manager
+
+---
+
+## Updating Deployed App
+
+### Frontend Updates
+
+```bash
+# Make changes locally
+git add .
+git commit -m "Update frontend"
+git push
+
+# Netlify auto-deploys in ~2 minutes
+```
+
+### Backend Updates
+
+```bash
+# Make changes locally
+git add .
+git commit -m "Update backend"
+git push
+
+# Railway auto-deploys in ~3-5 minutes
+```
+
+### Database Migrations
+
+```bash
+# Create migration
+cd backend
+alembic revision --autogenerate -m "Add new column"
+
+# Test locally first
+alembic upgrade head
+
+# Commit and push
+git add backend/alembic/versions/
+git commit -m "Add migration"
+git push
+
+# Railway auto-applies migrations on deploy
+```
+
+---
+
+## Support & Resources
+
+- **Railway Docs:** https://docs.railway.app
+- **Netlify Docs:** https://docs.netlify.com
+- **Neon Docs:** https://neon.tech/docs
+- **Supabase Docs:** https://supabase.com/docs
+- **Project Docs:** [README.md](../README.md), [TUTORIAL.md](../TUTORIAL.md)
+
+---
+
+This deployment approach provides a production-ready setup with automatic deployments, SSL, and scalability for the Human Hunter game.

@@ -3,7 +3,7 @@
  * Displays a room in the lobby with join button
  */
 
-import { useLanguage } from '../context/LanguageContext';
+import { useLanguage } from '../contexts/LanguageContext';
 import { Languages } from 'lucide-react';
 
 const RoomCard = ({ room, onJoin, userGemBalance }) => {

@@ -430,6 +430,56 @@ Netlify automatically deploys when you push to GitHub:
 
 ---
 
+## Optional: Enable Gem Economy & MTurk Payments
+
+To enable the gem earning and cashout system:
+
+### Step 1: Configure MTurk Credentials
+
+Add to your `.env` file:
+
+```env
+# MTurk Configuration (optional)
+AWS_ACCESS_KEY_ID=your-aws-access-key
+AWS_SECRET_ACCESS_KEY=your-aws-secret-key
+MTURK_ENVIRONMENT=sandbox  # or 'production' for real money
+
+# Gem Economy
+MINIMUM_CASHOUT_AMOUNT=2.00
+SINGLE_HUMAN_BASE_GEMS=50
+MULTI_HUMAN_BASE_GEMS=100
+```
+
+### Step 2: Create Standing HIT
+
+```bash
+cd backend
+python create_standing_hit.py
+```
+
+Copy the HIT ID and add to `.env`:
+
+```env
+CASHOUT_HIT_ID=your-hit-id-here
+```
+
+### Step 3: Restart Backend
+
+```bash
+# Restart to load new config
+python main.py
+```
+
+Now users can:
+- Earn gems by playing games
+- View balance in dashboard (`/dashboard`)
+- Request cashouts via wallet page (`/wallet`)
+- Get paid via MTurk
+
+For complete setup, see [MTURK_SETUP.md](MTURK_SETUP.md).
+
+---
+
 ## Alternative: Full Cloud Deployment
 
 If you prefer not to run the backend on your local machine (even with ngrok paid plan):

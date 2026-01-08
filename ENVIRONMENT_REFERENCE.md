@@ -89,7 +89,8 @@ NUM_AI_PLAYERS=6
 Duration of the discussion phase where players chat.
 
 ```env
-DISCUSSION_TIME=180  # 3 minutes
+DISCUSSION_TIME=240  # 4 minutes (default)
+DISCUSSION_TIME=180  # 3 minutes (shorter games)
 ```
 
 ### `VOTING_TIME`
@@ -101,7 +102,8 @@ DISCUSSION_TIME=180  # 3 minutes
 Duration of the voting phase.
 
 ```env
-VOTING_TIME=60  # 1 minute
+VOTING_TIME=120  # 2 minutes (default)
+VOTING_TIME=60   # 1 minute (faster games)
 ```
 
 ### `ROUNDS_TO_WIN`
@@ -395,11 +397,13 @@ Conversion rate: 1000 gems = $1.00 USD. Not configurable via environment.
 **Required**: No  
 **Default**: `0.5` (50%)
 
-Percentage of gem balance used as stake in games.
+Default percentage of gem balance used as stake in multi-human games. This is used only when room creator doesn't specify a percentage. Players can choose from 0%, 10%, 30%, 50%, or 100% when creating a room.
 
 ```env
-STAKE_PERCENTAGE=0.5
+STAKE_PERCENTAGE=0.5  # Default 50% if not specified by room creator
 ```
+
+**Note**: This is a backend default. Room creators select stake percentage when creating multi-human rooms (0%, 10%, 30%, 50%, 100% options available).
 
 ### `SINGLE_HUMAN_BASE_GEMS`
 
@@ -429,11 +433,14 @@ MULTI_HUMAN_BASE_GEMS=100
 **Default**: `2.00`  
 **Unit**: USD
 
-Minimum USD value required to request a cashout.
+Minimum USD value required to request a cashout via MTurk.
 
 ```env
-MINIMUM_CASHOUT_AMOUNT=2.00  # Requires 2000 gems
+MINIMUM_CASHOUT_AMOUNT=2.00  # Requires 2000 gems (default)
+MINIMUM_CASHOUT_AMOUNT=5.00  # Requires 5000 gems (higher threshold)
 ```
+
+**Conversion**: 1000 gems = $1.00 USD, so $2.00 minimum = 2000 gems required.
 
 ### `CASHOUT_MONITOR_INTERVAL`
 
@@ -480,7 +487,8 @@ OPENAI_API_KEY=sk-proj-your-key-here
 # Everything else uses defaults:
 # - SQLite database
 # - 4 AI players
-# - 4 min discussion, 2 min voting
+# - 4 min discussion (240s), 2 min voting (120s)
+# - 1 round to win
 # - Development mode (relaxed security)
 ```
 
@@ -490,10 +498,10 @@ OPENAI_API_KEY=sk-proj-your-key-here
 # API Key
 OPENAI_API_KEY=sk-proj-your-key-here
 
-# Game settings
+# Game settings (showing defaults)
 NUM_AI_PLAYERS=4
-DISCUSSION_TIME=180
-VOTING_TIME=60
+DISCUSSION_TIME=240
+VOTING_TIME=120
 ROUNDS_TO_WIN=1
 
 # AI Model
@@ -516,8 +524,8 @@ OPENAI_API_KEYS=sk-key1...,sk-key2...,sk-key3...
 
 # Game settings
 NUM_AI_PLAYERS=5
-DISCUSSION_TIME=180
-VOTING_TIME=60
+DISCUSSION_TIME=240
+VOTING_TIME=120
 ROUNDS_TO_WIN=3
 
 # AI Model
@@ -548,7 +556,7 @@ MINIMUM_CASHOUT_AMOUNT=2.00
 # 5+ API keys for high concurrency
 OPENAI_API_KEYS=sk-key1,sk-key2,sk-key3,sk-key4,sk-key5
 
-# Faster games for higher throughput
+# Faster games for higher throughput (custom shorter durations)
 DISCUSSION_TIME=120
 VOTING_TIME=45
 NUM_AI_PLAYERS=4

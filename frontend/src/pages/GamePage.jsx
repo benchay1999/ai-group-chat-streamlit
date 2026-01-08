@@ -5,7 +5,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useGame } from '../context/GameContext';
+import { useGame } from '../contexts/GameContext';
 import { useWebSocket } from '../hooks/useWebSocket';
 import { useHeartbeat } from '../hooks/useHeartbeat';
 import { roomAPI } from '../services/api';

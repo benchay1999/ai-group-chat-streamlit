@@ -1,4 +1,4 @@
-# System Architecture - Matching Room System
+# System Architecture - Human Hunter
 
 ## High-Level Overview
 
@@ -6,22 +6,24 @@
 ┌─────────────────────────────────────────────────────────────────┐
 │                        User's Browser                            │
 │  ┌──────────────────────────────────────────────────────────┐  │
-│  │            Streamlit Frontend (Port 8501)                 │  │
+│  │              React Frontend (Port 5173)                   │  │
+│  │              Vite Dev Server / Production Build           │  │
 │  │                                                            │  │
 │  │  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐ │  │
-│  │  │  Lobby   │  │   Join   │  │ Waiting  │  │   Game   │ │  │
-│  │  │   Page   │  │   Page   │  │  Screen  │  │   Page   │ │  │
-│  │  └────┬─────┘  └────┬─────┘  └────┬─────┘  └────┬─────┘ │  │
-│  │       │             │              │             │        │  │
-│  │       └─────────────┴──────────────┴─────────────┘        │  │
+│  │  │  Lobby   │  │ Waiting  │  │   Game   │  │Dashboard │ │  │
+│  │  │   Page   │  │   Page   │  │   Page   │  │   Page   │ │  │
+│  │  └──────────┘  └──────────┘  └──────────┘  └──────────┘ │  │
+│  │  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐ │  │
+│  │  │  Wallet  │  │GemsInfo  │  │  Admin   │  │ Profile  │ │  │
+│  │  │   Page   │  │   Page   │  │   Panel  │  │   Page   │ │  │
+│  │  └──────────┘  └──────────┘  └──────────┘  └──────────┘ │  │
 │  │                         │                                  │  │
-│  │                   Navigation State                         │  │
-│  │              (st.session_state.current_page)               │  │
+│  │                React Router (Client-Side)                  │  │
+│  │                WebSocket + HTTP API                        │  │
 │  └────────────────────────┬───────────────────────────────────┘  │
 └───────────────────────────┼───────────────────────────────────────┘
                             │
-                    HTTP REST API
-                    (Polling-based)
+                    HTTP REST + WebSocket
                             │
 ┌───────────────────────────┼───────────────────────────────────────┐
 │                           ▼                                        │
@@ -29,12 +31,30 @@
 │  │        FastAPI Backend (Port 8000)                       │    │
 │  │                                                            │    │
 │  │  ┌───────────────────────────────────────────────────┐  │    │
-│  │  │             Matching Room Endpoints                │  │    │
+│  │  │              Room Endpoints                        │  │    │
 │  │  │                                                     │  │    │
 │  │  │  POST /api/rooms/create                           │  │    │
 │  │  │  GET  /api/rooms/list                             │  │    │
 │  │  │  GET  /api/rooms/{code}/info                      │  │    │
-│  │  │  POST /api/rooms/{code}/join  (modified)          │  │    │
+│  │  │  POST /api/rooms/{code}/join                      │  │    │
+│  │  │  POST /api/rooms/{code}/leave                     │  │    │
+│  │  └───────────────────────────────────────────────────┘  │    │
+│  │                                                            │    │
+│  │  ┌───────────────────────────────────────────────────┐  │    │
+│  │  │           Auth & User Endpoints                    │  │    │
+│  │  │                                                     │  │    │
+│  │  │  POST /api/auth/register                          │  │    │
+│  │  │  POST /api/auth/login                             │  │    │
+│  │  │  GET  /api/auth/me                                │  │    │
+│  │  │  GET  /api/users/earnings                         │  │    │
+│  │  └───────────────────────────────────────────────────┘  │    │
+│  │                                                            │    │
+│  │  ┌───────────────────────────────────────────────────┐  │    │
+│  │  │            Gem Economy Endpoints                   │  │    │
+│  │  │                                                     │  │    │
+│  │  │  GET  /api/wallet/balance                         │  │    │
+│  │  │  POST /api/wallet/cashout                         │  │    │
+│  │  │  GET  /api/wallet/cashout-history                 │  │    │
 │  │  └───────────────────────────────────────────────────┘  │    │
 │  │                                                            │    │
 │  │  ┌───────────────────────────────────────────────────┐  │    │
@@ -43,7 +63,7 @@
 │  │  │  GET  /api/rooms/{code}/state                     │  │    │
 │  │  │  POST /api/rooms/{code}/message                   │  │    │
 │  │  │  POST /api/rooms/{code}/vote                      │  │    │
-│  │  │  WS   /ws/{code}/{player_id}                      │  │    │
+│  │  │  WS   /ws/game/{code}                             │  │    │
 │  │  └───────────────────────────────────────────────────┘  │    │
 │  │                                                            │    │
 │  │  ┌───────────────────────────────────────────────────┐  │    │
@@ -58,6 +78,10 @@
 │  │  │    - total_players: int                           │  │    │
 │  │  │    - room_status: str                             │  │    │
 │  │  │    - current_humans: List[str]                    │  │    │
+│  │  │    - stake_percentage: int                        │  │    │
+│  │  │    - player_stakes: Dict                          │  │    │
+│  │  │    - minimum_stake: int                           │  │    │
+│  │  │    - player_user_map: Dict                        │  │    │
 │  │  │    - created_at: float                            │  │    │
 │  │  └───────────────────────────────────────────────────┘  │    │
 │  │                                                            │    │
@@ -67,38 +91,58 @@
 │  │  │  - AI Agent Orchestration                         │  │    │
 │  │  │  - Game State Management                          │  │    │
 │  │  │  - Phase Transitions                              │  │    │
+│  │  │  - Multi-Human Mode Support                       │  │    │
+│  │  └───────────────────────────────────────────────────┘  │    │
+│  │                                                            │    │
+│  │  ┌───────────────────────────────────────────────────┐  │    │
+│  │  │          Database (SQLite/PostgreSQL)              │  │    │
+│  │  │                                                     │  │    │
+│  │  │  - Users (auth, gem balance)                      │  │    │
+│  │  │  - Sessions (game history)                        │  │    │
+│  │  │  - CashoutTransactions                            │  │    │
+│  │  │  - RoomStakes                                     │  │    │
 │  │  └───────────────────────────────────────────────────┘  │    │
 │  └──────────────────────────┬─────────────────────────────────┘    │
 └─────────────────────────────┼─────────────────────────────────────┘
                               │
-                         OpenAI API
-                              │
-                              ▼
-                      GPT-4 Mini (AI Players)
+                    ┌─────────┴──────────┐
+                    │                    │
+                    ▼                    ▼
+              ┌──────────┐         ┌──────────┐
+              │ OpenAI   │         │  MTurk   │
+              │   API    │         │   API    │
+              │          │         │          │
+              │ gpt-5.1  │         │ Cashout  │
+              │  -nano   │         │  HITs    │
+              └──────────┘         └──────────┘
 ```
 
 ---
 
 ## Data Flow Diagrams
 
-### 1. Create Room Flow
+### 1. Create Room Flow (React Frontend)
 
 ```
-User                 Frontend              Backend              LangGraph
+User                 React App            Backend              LangGraph
  │                      │                     │                     │
  │  Click "Create"      │                     │                     │
  ├─────────────────────>│                     │                     │
  │                      │                     │                     │
- │  Fill Form           │                     │                     │
+ │  Fill Form (Modal)   │                     │                     │
  │  - Name: "Test"      │                     │                     │
  │  - Humans: 2         │                     │                     │
  │  - Total: 5          │                     │                     │
+ │  - Stakes: 10%       │                     │                     │
  │                      │                     │                     │
  │  Submit              │  POST /rooms/create │                     │
  ├─────────────────────>├────────────────────>│                     │
  │                      │                     │                     │
  │                      │                     │  generate_room_code()
  │                      │                     │  → "AB12CD"         │
+ │                      │                     │                     │
+ │                      │                     │  validate stakes    │
+ │                      │                     │  (if multi-human)   │
  │                      │                     │                     │
  │                      │                     │  create_game_for_room()
  │                      │                     ├────────────────────>│
@@ -109,183 +153,201 @@ User                 Frontend              Backend              LangGraph
  │                      │                     │<────────────────────┤
  │                      │                     │  GameState          │
  │                      │                     │                     │
- │                      │                     │  Store room:        │
- │                      │                     │  {                  │
- │                      │                     │    state: GameState │
- │                      │                     │    room_name: "..."│
- │                      │                     │    max_humans: 2   │
- │                      │                     │    total_players: 5│
- │                      │                     │    room_status:    │
- │                      │                     │      'waiting'     │
- │                      │                     │    current_humans: []
- │                      │                     │  }                  │
+ │                      │                     │  Store room with    │
+ │                      │                     │  gem stakes config  │
  │                      │                     │                     │
  │                      │  Response:          │                     │
- │                      │  {room_code,name}   │                     │
+ │                      │  {room_code,        │                     │
+ │                      │   room_name,        │                     │
+ │                      │   player_id}        │                     │
  │                      │<────────────────────┤                     │
  │                      │                     │                     │
- │                      │  POST /rooms/join   │                     │
- │                      │  (auto-join creator)│                     │
- │                      ├────────────────────>│                     │
- │                      │                     │                     │
- │                      │  current_humans.    │                     │
- │                      │  append(creator)    │                     │
- │                      │                     │                     │
- │                      │  {can_start: false} │                     │
- │  Waiting Screen      │<────────────────────┤                     │
+ │                      │  Auto-navigate to   │                     │
+ │                      │  waiting or game    │                     │
+ │  Waiting/Game Page   │                     │                     │
  │<─────────────────────┤                     │                     │
  │                      │                     │                     │
 ```
 
-### 2. Join Room Flow
+### 2. Join Room Flow (React + WebSocket)
 
 ```
-Player 2             Frontend              Backend              Game
+Player              React App            Backend              Game
  │                      │                     │                     │
  │  View Lobby          │  GET /rooms/list    │                     │
  ├─────────────────────>├────────────────────>│                     │
  │                      │                     │                     │
- │                      │  Filter by status   │                     │
- │                      │  'waiting'          │                     │
- │                      │                     │                     │
+ │                      │  Filter & display   │                     │
  │  Room List           │  [rooms...]         │                     │
  │<─────────────────────┤<────────────────────┤                     │
  │                      │                     │                     │
  │  Click "Join"        │                     │                     │
  ├─────────────────────>│                     │                     │
  │                      │                     │                     │
- │  Enter name          │                     │                     │
- ├─────────────────────>│                     │                     │
- │                      │                     │                     │
- │  Submit              │  POST /rooms/join   │                     │
+ │  Navigate to /join   │  POST /rooms/join   │                     │
  ├─────────────────────>├────────────────────>│                     │
  │                      │                     │                     │
- │                      │                     │  Check capacity:    │
- │                      │                     │  len(current_humans)│
- │                      │                     │  < max_humans? ✓    │
+ │                      │                     │  Check capacity     │
+ │                      │                     │  Check gem balance  │
+ │                      │                     │  (if stakes > 0)    │
  │                      │                     │                     │
- │                      │                     │  current_humans.    │
- │                      │                     │  append("Player2")  │
+ │                      │  {                  │                     │
+ │                      │    player_id,       │                     │
+ │                      │    can_start: bool  │                     │
+ │                      │  }                  │                     │
+ │                      │<────────────────────┤                     │
  │                      │                     │                     │
- │                      │                     │  Check if full:     │
- │                      │                     │  len == max_humans? │
- │                      │                     │  ✓ YES              │
+ │  Waiting/Game Page   │  Establish WebSocket│                     │
+ │<─────────────────────┤  /ws/game/{code}    │                     │
+ │                      ├────────────────────>│                     │
  │                      │                     │                     │
- │                      │                     │  room_status =      │
- │                      │                     │  'in_progress'      │
- │                      │                     │                     │
- │                      │                     │  initialize_game()  │
- │                      │                     ├────────────────────>│
- │                      │                     │                     │
- │                      │                     │  Start discussion   │
- │                      │                     │  phase              │
- │                      │                     │                     │
- │  Game Page           │  {can_start: true}  │                     │
- │<─────────────────────┤<────────────────────┤                     │
+ │                      │  Real-time updates  │                     │
+ │                      │<────────────────────┤                     │
  │                      │                     │                     │
 ```
 
-### 3. Waiting Screen Polling
+### 3. Game Flow (Single-Human Mode)
 
 ```
-User                 Frontend              Backend
- │                      │                     │
- │  On Waiting Screen   │                     │
- │                      │                     │
- │                      │  Every 2 seconds:   │
- │                      │                     │
- │                      │  GET /rooms/{code}  │
- │                      │       /info         │
- │                      ├────────────────────>│
- │                      │                     │
- │                      │  {                  │
- │                      │    current_humans,  │
- │                      │    max_humans,      │
- │                      │    room_status      │
- │                      │  }                  │
- │                      │<────────────────────┤
- │                      │                     │
- │                      │  Update UI:         │
- │                      │  "2/3 Players"      │
- │                      │                     │
- │  "2/3 Players"       │                     │
- │<─────────────────────┤                     │
- │                      │                     │
- │                      │  ... wait 2s ...    │
- │                      │                     │
- │                      │  GET /rooms/{code}  │
- │                      │       /info         │
- │                      ├────────────────────>│
- │                      │                     │
- │                      │  {                  │
- │                      │    room_status:     │
- │                      │    'in_progress'    │
- │                      │  }                  │
- │                      │<────────────────────┤
- │                      │                     │
- │                      │  Navigate to game   │
- │                      │                     │
- │  Game Started!       │                     │
- │<─────────────────────┤                     │
- │                      │                     │
+Players            Frontend            Backend            LangGraph
+ │                     │                   │                   │
+ │  In game page       │                   │                   │
+ │                     │                   │                   │
+ │                     │  WebSocket open   │  run_discussion() │
+ │                     │<──────────────────┼──────────────────>│
+ │                     │                   │                   │
+ │  Discussion Phase   │  Timer sync msgs  │  AI agents chat   │
+ │  (240s default)     │<──────────────────┤<──────────────────┤
+ │                     │                   │                   │
+ │  Human types msg    │  POST /message    │                   │
+ ├────────────────────>├──────────────────>│  Broadcast to all │
+ │                     │                   ├──────────────────>│
+ │                     │  Broadcast msg    │                   │
+ │  See all messages   │<──────────────────┤                   │
+ │<────────────────────┤                   │                   │
+ │                     │                   │                   │
+ │  Phase: Voting      │  "phase": "Voting"│  run_voting()     │
+ │  (120s default)     │<──────────────────┼──────────────────>│
+ │                     │                   │                   │
+ │  Cast vote          │  POST /vote       │                   │
+ ├────────────────────>├──────────────────>│  Store vote       │
+ │                     │                   │                   │
+ │                     │                   │  AI agents vote   │
+ │                     │                   │<──────────────────┤
+ │                     │                   │                   │
+ │  Game Over          │  "phase":         │  complete_voting()│
+ │                     │  "GameOver"       │                   │
+ │<────────────────────┤<──────────────────┤  Determine winner │
+ │                     │                   │  Calculate gems   │
+ │  +50 gems credited  │  Show results     │  (50 gems each)   │
+ │<────────────────────┤                   │                   │
+ │                     │                   │                   │
+```
+
+### 4. Game Flow (Multi-Human Mode with Stakes)
+
+```
+Players            Frontend            Backend            LangGraph
+ │                     │                   │                   │
+ │  Join multi-human   │                   │  Validate:        │
+ │  game (10% stakes)  │  POST /join       │  - gem_balance    │
+ ├────────────────────>├──────────────────>│    >= 250         │
+ │                     │                   │  Calculate stakes │
+ │                     │                   │  minimum_stake    │
+ │                     │                   │                   │
+ │  Discussion Phase   │  WebSocket msgs   │  run_discussion() │
+ │  (240s)             │<──────────────────┤                   │
+ │                     │                   │  AI agents don't  │
+ │                     │                   │  vote in multi-   │
+ │                     │                   │  human mode       │
+ │                     │                   │                   │
+ │  Voting Phase       │  "phase": "Voting"│  run_voting()     │
+ │  (120s)             │<──────────────────┤                   │
+ │                     │                   │                   │
+ │  Vote for N-1       │  POST /vote       │  Store votes      │
+ │  humans (all but    │  {voted_for: [...]}│  Validate count  │
+ │  yourself)          ├──────────────────>│  (must be N-1)    │
+ │                     │                   │                   │
+ │  Game Over          │                   │  complete_voting()│
+ │                     │                   │                   │
+ │                     │                   │  Deduct stakes:   │
+ │                     │                   │  -minimum_stake   │
+ │                     │                   │                   │
+ │                     │                   │  Determine winners│
+ │                     │                   │  (most votes)     │
+ │                     │                   │                   │
+ │                     │                   │  Calculate gems:  │
+ │                     │                   │  - Base: 100      │
+ │                     │                   │  - Winners: get   │
+ │                     │                   │    refund + share │
+ │                     │                   │  - Losers: lose   │
+ │                     │                   │    stake          │
+ │                     │                   │                   │
+ │  Results shown      │  "game_over" msg  │                   │
+ │  Gems credited      │<──────────────────┤  Update balances  │
+ │<────────────────────┤                   │  atomically       │
+ │                     │                   │                   │
 ```
 
 ---
 
 ## Component Interactions
 
-### Frontend Components
+### Frontend Components (React)
 
 ```
 ┌─────────────────────────────────────────────────────────┐
-│                    Streamlit App                         │
+│                    React Application                     │
 │                                                           │
 │  ┌────────────────────────────────────────────────────┐ │
-│  │         Session State (st.session_state)           │ │
+│  │         Global State & Contexts                    │ │
 │  │                                                     │ │
-│  │  - current_page: 'lobby' | 'join' | 'waiting' |   │ │
-│  │                  'game'                            │ │
-│  │  - room_code: str                                  │ │
-│  │  - player_id: str                                  │ │
-│  │  - joined: bool                                    │ │
-│  │  - selected_room_code: str                         │ │
-│  │  - waiting_for_players: bool                       │ │
-│  │  - show_create_form: bool                          │ │
-│  │  - current_lobby_page: int                         │ │
-│  │  ... (20+ state variables)                         │ │
+│  │  - AuthContext (user, token, login, logout)       │ │
+│  │  - GameContext (room, player, session)            │ │
+│  │  - LanguageContext (English/Korean)               │ │
+│  │  - React Router (client-side routing)             │ │
 │  └────────────────────────────────────────────────────┘ │
 │                                                           │
 │  ┌────────────────────────────────────────────────────┐ │
-│  │                Page Router (main)                  │ │
+│  │                  Page Components                   │ │
 │  │                                                     │ │
-│  │  if current_page == 'lobby':                       │ │
-│  │      render_lobby_page()                           │ │
-│  │  elif current_page == 'join':                      │ │
-│  │      render_join_page()                            │ │
-│  │  elif current_page == 'waiting':                   │ │
-│  │      render_waiting_screen()                       │ │
-│  │  elif current_page == 'game':                      │ │
-│  │      render_game_ui()                              │ │
+│  │  LobbyPage      - Room list, create, join         │ │
+│  │  WaitingPage    - Wait for players                 │ │
+│  │  GamePage       - Main game UI with WebSocket      │ │
+│  │  DashboardPage  - Earnings, gem balance, stats    │ │
+│  │  WalletPage     - Gem balance, cashout button     │ │
+│  │  GemsInfoPage   - Gem system guide                 │ │
+│  │  AdminPage      - Admin panel, analytics           │ │
+│  │  ProfilePage    - User profile, MTurk Worker ID    │ │
 │  └────────────────────────────────────────────────────┘ │
 │                                                           │
-│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐     │
-│  │   Lobby     │  │    Join     │  │  Waiting    │     │
-│  │   render_   │  │   render_   │  │   render_   │     │
-│  │   lobby_    │  │   join_     │  │   waiting_  │     │
-│  │   page()    │  │   page()    │  │   screen()  │     │
-│  │             │  │             │  │             │     │
-│  │ - Room grid │  │ - Name form │  │ - Counter   │     │
-│  │ - Create btn│  │ - Room info │  │ - Player    │     │
-│  │ - Pagination│  │ - Join btn  │  │   list      │     │
-│  └─────────────┘  └─────────────┘  └─────────────┘     │
+│  ┌────────────────────────────────────────────────────┐ │
+│  │              Shared Components                     │ │
+│  │                                                     │ │
+│  │  - ChatWindow (message display)                    │ │
+│  │  - MessageInput (typing interface)                 │ │
+│  │  - PlayerList (player status)                      │ │
+│  │  - PhaseTimer (countdown timer)                    │ │
+│  │  - RoomCard (lobby room display)                   │ │
+│  │  - GameOver (results modal)                        │ │
+│  │  - CreateRoomModal (room creation form)            │ │
+│  └────────────────────────────────────────────────────┘ │
 │                                                           │
 │  ┌────────────────────────────────────────────────────┐ │
-│  │              API Helper Functions                  │ │
+│  │                Custom Hooks                        │ │
 │  │                                                     │ │
-│  │  - fetch_room_list(page)                           │ │
-│  │  - create_room_api(...)                            │ │
-│  │  - get_room_info(code)                             │ │
-│  │  - join_room(code, player)                         │ │
+│  │  - useWebSocket (WebSocket connection)             │ │
+│  │  - useHeartbeat (online status tracking)           │ │
+│  │  - useAuth (authentication state)                  │ │
+│  └────────────────────────────────────────────────────┘ │
+│                                                           │
+│  ┌────────────────────────────────────────────────────┐ │
+│  │              API Services                          │ │
+│  │                                                     │ │
+│  │  - api.js (axios instance, JWT interceptor)        │ │
+│  │  - roomAPI (room operations)                       │ │
+│  │  - walletAPI (gem operations)                      │ │
+│  │  - sessionsAPI (game history)                      │ │
 │  └────────────────────────────────────────────────────┘ │
 └───────────────────────────────────────────────────────────┘
 ```
@@ -297,230 +359,92 @@ User                 Frontend              Backend
 │                   FastAPI Backend                        │
 │                                                           │
 │  ┌────────────────────────────────────────────────────┐ │
-│  │              Routing Layer                         │ │
+│  │              Router Layer                          │ │
 │  │                                                     │ │
-│  │  @app.post("/api/rooms/create")                    │ │
-│  │  @app.get("/api/rooms/list")                       │ │
-│  │  @app.get("/api/rooms/{code}/info")                │ │
-│  │  @app.post("/api/rooms/{code}/join")               │ │
-│  │  @app.get("/api/rooms/{code}/state")               │ │
-│  │  @app.post("/api/rooms/{code}/message")            │ │
-│  │  @app.post("/api/rooms/{code}/vote")               │ │
-│  │  @app.websocket("/ws/{code}/{player}")             │ │
+│  │  auth.py        - Login, register, JWT auth        │ │
+│  │  rooms.py       - Room CRUD, join, leave           │ │
+│  │  wallet.py      - Gem balance, cashout             │ │
+│  │  sessions.py    - Game history                     │ │
+│  │  admin.py       - Admin APIs                       │ │
+│  │  websocket.py   - WebSocket handler                │ │
+│  │  general.py     - Health, online users             │ │
 │  └────────────────────────────────────────────────────┘ │
 │                                                           │
 │  ┌────────────────────────────────────────────────────┐ │
-│  │           Business Logic Layer                     │ │
+│  │           Service Layer                            │ │
 │  │                                                     │ │
-│  │  - generate_room_code()                            │ │
-│  │  - validate_room_params()                          │ │
-│  │  - check_capacity()                                │ │
-│  │  - auto_start_game()                               │ │
+│  │  game_coordinator.py  - Phase management           │ │
+│  │  room_management.py   - Room lifecycle             │ │
+│  │  stats_service.py     - Gem calculations           │ │
+│  │  messaging.py         - WebSocket broadcast        │ │
+│  │  cashout_service.py   - MTurk integration          │ │
+│  │  cashout_monitor.py   - Background HIT monitor     │ │
 │  └────────────────────────────────────────────────────┘ │
 │                                                           │
 │  ┌────────────────────────────────────────────────────┐ │
-│  │            Data Layer (In-Memory)                  │ │
+│  │            Data Layer                              │ │
 │  │                                                     │ │
-│  │  rooms: Dict[str, Dict] = {                        │ │
-│  │    'AB12CD': {                                     │ │
-│  │      'state': GameState,                           │ │
-│  │      'connections': {},                            │ │
-│  │      'room_name': 'Test Room',                     │ │
-│  │      'max_humans': 2,                              │ │
-│  │      'total_players': 5,                           │ │
-│  │      'room_status': 'waiting',                     │ │
-│  │      'current_humans': ['Player1'],                │ │
-│  │      'created_at': 1234567890,                     │ │
-│  │      'creator_id': 'Player1'                       │ │
-│  │    }                                                │ │
-│  │  }                                                  │ │
+│  │  In-Memory (rooms dict):                           │ │
+│  │    - Active game state                             │ │
+│  │    - WebSocket connections                         │ │
+│  │    - Player presence                               │ │
+│  │                                                     │ │
+│  │  Database (SQLite/PostgreSQL):                     │ │
+│  │    - Users (auth, gems)                            │ │
+│  │    - Sessions (history)                            │ │
+│  │    - CashoutTransactions                           │ │
+│  │    - RoomStakes                                    │ │
 │  └────────────────────────────────────────────────────┘ │
 │                                                           │
 │  ┌────────────────────────────────────────────────────┐ │
 │  │          Game Engine (LangGraph)                   │ │
 │  │                                                     │ │
-│  │  - create_game_for_room(code, num_ai)              │ │
-│  │  - initialize_game_node(state)                     │ │
-│  │  - process_human_message(state, msg)               │ │
-│  │  - process_human_vote(state, vote)                 │ │
-│  │  - run_discussion_phase(code)                      │ │
-│  │  - run_voting_phase(code)                          │ │
-│  │  - trigger_agent_decisions(code)                   │ │
+│  │  langgraph_game.py:                                │ │
+│  │    - GameGraph class                               │ │
+│  │    - AI agent nodes                                │ │
+│  │    - State transitions                             │ │
+│  │                                                     │ │
+│  │  langgraph_state.py:                               │ │
+│  │    - GameState TypedDict                           │ │
+│  │    - Phase enum                                    │ │
+│  │    - Player models                                 │ │
 │  └────────────────────────────────────────────────────┘ │
 └───────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## State Transitions
-
-### Room Status Lifecycle
-
-```
-                    ┌──────────┐
-                    │  CREATE  │
-                    │   ROOM   │
-                    └────┬─────┘
-                         │
-                         ▼
-                  ┌─────────────┐
-                  │   WAITING   │
-                  │             │
-                  │ - Created   │
-                  │ - Accepting │
-                  │   players   │
-                  └──────┬──────┘
-                         │
-                         │ len(current_humans)
-                         │ == max_humans
-                         │
-                         ▼
-                  ┌─────────────┐
-                  │ IN_PROGRESS │
-                  │             │
-                  │ - Game      │
-                  │   started   │
-                  │ - No more   │
-                  │   joins     │
-                  └──────┬──────┘
-                         │
-                         │ Game ends
-                         │
-                         ▼
-                  ┌─────────────┐
-                  │  COMPLETED  │
-                  │             │
-                  │ - Game over │
-                  │ - Stats     │
-                  │   saved     │
-                  └─────────────┘
-```
-
-### Page Navigation Flow
-
-```
-    ┌───────┐
-    │ LOBBY │◄─────────────────┐
-    └───┬───┘                  │
-        │                      │
-        │ Select room          │
-        │                      │
-        ▼                      │
-    ┌──────┐                  │
-    │ JOIN │                  │
-    └───┬──┘                  │
-        │                      │
-        │ Enter name           │
-        │                      │
-        ▼                      │
-  ┌─────────┐                 │
-  │ WAITING │                 │
-  └────┬────┘                 │
-       │                      │
-       │ Room full            │
-       │                      │
-       ▼                      │
-   ┌──────┐                  │
-   │ GAME │                  │
-   └───┬──┘                  │
-       │                      │
-       │ Leave room           │
-       │                      │
-       └──────────────────────┘
-```
-
----
-
 ## Key Design Decisions
 
-### 1. In-Memory Storage
-- **Choice**: Store rooms in Python dict
-- **Rationale**: Simple, fast, sufficient for prototype
-- **Trade-off**: No persistence across restarts
-- **Future**: Could add Redis/PostgreSQL
+### 1. React vs Streamlit
+- **Choice**: React 18 + Vite frontend
+- **Rationale**: Better UX, WebSocket support, modern tooling
+- **Trade-off**: More complex setup than Streamlit
+- **Benefits**: Real-time updates, smooth navigation, better scalability
 
-### 2. Polling vs WebSocket
-- **Choice**: Polling for waiting screen (2s interval)
-- **Rationale**: Simpler than WebSocket, sufficient for low-frequency updates
-- **Trade-off**: Slight delay, more HTTP requests
-- **Future**: Could upgrade to WebSocket for instant updates
+### 2. WebSocket vs Polling
+- **Choice**: WebSocket for real-time game updates
+- **Rationale**: Instant updates, reduced bandwidth, better scalability
+- **Trade-off**: More complex connection management
+- **Benefits**: 25x reduction in requests, <100ms latency
 
-### 3. Auto-Start vs Ready-Up
-- **Choice**: Auto-start when capacity reached
-- **Rationale**: Simpler UX, fewer clicks
-- **Trade-off**: No player control over start timing
-- **Future**: Could add ready-up system
+### 3. In-Memory + Database Hybrid
+- **Choice**: In-memory for active games, database for persistence
+- **Rationale**: Fast game state access, persistent user data
+- **Trade-off**: Game state lost on restart (acceptable for short games)
+- **Benefits**: Optimal performance for real-time gameplay
 
-### 4. Page-Based Navigation
-- **Choice**: Single-page app with state-based routing
-- **Rationale**: Streamlit limitation, but works well
-- **Trade-off**: Full reloads on navigation
-- **Future**: Could migrate to React for smoother transitions
+### 4. Gem-Based Economy
+- **Choice**: Gems as intermediate currency (1000 gems = $1 USD)
+- **Rationale**: Flexible reward system, gamification, MTurk integration
+- **Trade-off**: Additional complexity
+- **Benefits**: Engaging reward system, research participant compensation
 
-### 5. Room Code Format
-- **Choice**: 6-char alphanumeric (A-Z, 0-9)
-- **Rationale**: Easy to share, read, type
-- **Trade-off**: 36^6 = 2.1B possible codes (sufficient)
-- **Future**: Could add shorter codes with word list
-
----
-
-## Performance Characteristics
-
-### Backend
-- **Room Creation**: O(1) - constant time
-- **Room List**: O(n) - linear in number of rooms
-- **Room Join**: O(1) - constant time
-- **Game Start**: O(m) - linear in AI players
-
-### Frontend
-- **Lobby Render**: O(r) - linear in rooms per page (max 10)
-- **Waiting Poll**: O(1) - single HTTP request
-- **Game Render**: O(p) - linear in players (max 12)
-
-### Network
-- **Create Room**: 1 request
-- **Join Room**: 2 requests (info + join)
-- **Waiting**: 1 request per 2 seconds
-- **Game**: Multiple requests (polling + actions)
-
----
-
-## Security Model
-
-### Current (Development)
-- No authentication required
-- All rooms public
-- No rate limiting
-- Trust-based system
-
-### Production Recommendations
-- Add user authentication (JWT tokens)
-- Implement rate limiting (10 req/min per IP)
-- Add input validation (XSS prevention)
-- Configure CORS properly
-- Add room passwords for privacy
-- Implement admin controls
-- Log suspicious activity
-
----
-
-## Scalability Considerations
-
-### Current Limits
-- ~100 concurrent rooms (in-memory)
-- ~1000 concurrent users (single server)
-- No horizontal scaling
-- No load balancing
-
-### Scaling Strategy (if needed)
-1. **Short-term**: Add Redis for room storage
-2. **Medium-term**: Add database (PostgreSQL)
-3. **Long-term**: Microservices architecture
-   - Room service
-   - Game service
-   - User service
-   - Load balancer
+### 5. Stakes System (Multi-Human)
+- **Choice**: Optional risk/reward with voting accuracy
+- **Rationale**: Competitive gameplay, strategic depth
+- **Trade-off**: Requires minimum balance, can lose gems
+- **Benefits**: Incentivizes careful play and human identification
 
 ---
 
@@ -530,12 +454,14 @@ User                 Frontend              Backend
 ┌─────────────────────────────────────┐
 │         Frontend Layer              │
 │                                     │
-│  - Streamlit 1.x                    │
-│  - Python 3.8+                      │
-│  - Custom CSS                       │
-│  - HTML Components                  │
+│  - React 18                         │
+│  - Vite (build tool)                │
+│  - React Router                     │
+│  - Tailwind CSS                     │
+│  - Axios (HTTP client)              │
+│  - WebSocket API                    │
 └──────────────┬──────────────────────┘
-               │ HTTP/REST
+               │ HTTP REST + WebSocket
                │
 ┌──────────────▼──────────────────────┐
 │         Backend Layer               │
@@ -544,19 +470,22 @@ User                 Frontend              Backend
 │  - Uvicorn (ASGI server)            │
 │  - Python 3.8+                      │
 │  - Async/await                      │
+│  - SQLAlchemy (async)               │
+│  - JWT (python-jose)                │
+│  - Argon2 (password hashing)        │
 └──────────────┬──────────────────────┘
                │
-     ┌─────────┴─────────┐
-     │                   │
-     ▼                   ▼
-┌──────────┐     ┌──────────────┐
-│LangGraph │     │  OpenAI API  │
-│          │     │              │
-│- Game    │     │ - GPT-4 Mini │
-│  State   │     │ - AI Players │
-│- AI      │     │              │
-│  Agents  │     │              │
-└──────────┘     └──────────────┘
+     ┌─────────┴─────────┬────────────┐
+     │                   │            │
+     ▼                   ▼            ▼
+┌──────────┐     ┌──────────────┐  ┌────────┐
+│LangGraph │     │  OpenAI API  │  │ MTurk  │
+│          │     │              │  │  API   │
+│- Game    │     │- gpt-5.1-nano│  │        │
+│  State   │     │  (or config) │  │- Worker│
+│- AI      │     │- AI Players  │  │  HITs  │
+│  Agents  │     │              │  │        │
+└──────────┘     └──────────────┘  └────────┘
 ```
 
 ---
@@ -565,34 +494,94 @@ User                 Frontend              Backend
 
 ### Development (Current)
 ```
-localhost:8501 (Streamlit) → localhost:8000 (FastAPI) → OpenAI API
+localhost:5173 (React/Vite) → localhost:8000 (FastAPI) → OpenAI API
+                                    ↓
+                            SQLite Database
 ```
 
 ### Production (Recommended)
 ```
                     ┌──────────┐
-                    │  Nginx   │ (Reverse Proxy)
-                    │  :80/443 │
+                    │ Netlify/ │ (React Frontend - Static)
+                    │  Vercel  │
                     └────┬─────┘
+                         │ HTTPS
+                         ▼
+                  ┌─────────────┐
+                  │   Railway/  │ (FastAPI Backend)
+                  │   Render    │
+                  └──────┬──────┘
                          │
-             ┌───────────┴───────────┐
-             │                       │
-             ▼                       ▼
-      ┌─────────────┐         ┌─────────────┐
-      │  Streamlit  │         │   FastAPI   │
-      │   :8501     │───────> │    :8000    │
-      └─────────────┘         └──────┬──────┘
-                                     │
-                              ┌──────┴──────┐
-                              │             │
-                              ▼             ▼
-                         ┌────────┐   ┌─────────┐
-                         │ Redis  │   │ OpenAI  │
-                         │  :6379 │   │   API   │
-                         └────────┘   └─────────┘
+              ┌──────────┴──────────┬────────────┐
+              │                     │            │
+              ▼                     ▼            ▼
+         ┌────────┐          ┌──────────┐  ┌──────────┐
+         │ Neon/  │          │ OpenAI   │  │  MTurk   │
+         │Supabase│          │   API    │  │   API    │
+         │ (PG)   │          │          │  │          │
+         └────────┘          └──────────┘  └──────────┘
 ```
 
 ---
 
-This architecture provides a solid foundation for the matching room system while maintaining simplicity and extensibility for future enhancements.
+## Performance Characteristics
 
+### Backend
+- **Room Creation**: O(1) - constant time
+- **Room List**: O(n) - linear in number of rooms (paginated)
+- **Room Join**: O(1) - constant time + gem validation
+- **Game Start**: O(m) - linear in AI players
+- **Gem Calculation**: O(h²) - quadratic in humans (voting accuracy matrix)
+
+### Frontend
+- **Lobby Render**: O(r) - linear in rooms per page (max 10)
+- **Game Render**: O(p + m) - linear in players + messages
+- **WebSocket Updates**: O(1) - instant state updates
+
+### Network
+- **Create Room**: 1-2 requests (create + auto-join)
+- **Join Room**: 1 request
+- **Game**: WebSocket (persistent connection, event-driven)
+- **Bandwidth**: ~10 messages/second for 100 users (vs 250 req/s with polling)
+
+---
+
+## Scalability Considerations
+
+### Current Limits
+- ~200 concurrent rooms (in-memory)
+- ~200+ concurrent users (with WebSocket)
+- Single server (no horizontal scaling yet)
+
+### Scaling Strategy
+1. **Short-term**: PostgreSQL for persistence
+2. **Medium-term**: Redis for session storage
+3. **Long-term**: Microservices
+   - Separate game engine service
+   - Load balancer
+   - Horizontal scaling
+
+---
+
+## Security Model
+
+### Current (Production)
+- JWT authentication (Argon2 password hashing)
+- Rate limiting (10 req/min per IP on API endpoints)
+- CORS configured for specific origins
+- Input validation on all endpoints
+- WebSocket authentication required
+- Gem transaction atomicity (prevent race conditions)
+- MTurk worker ID validation
+
+### Additional Recommendations
+- HTTPS in production (required)
+- Database connection encryption
+- API key rotation
+- Audit logging for admin actions
+- Monitoring and alerting
+- DDoS protection (via CDN)
+
+---
+
+This architecture provides a scalable, real-time gaming platform with integrated gem economy and MTurk payment system for research purposes.

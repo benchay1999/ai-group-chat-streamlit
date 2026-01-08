@@ -44,9 +44,9 @@ JWT_COMPLETION_SECRET=your-completion-secret-here
 # Optional: Game configuration
 NUM_AI_PLAYERS=4
 AI_MODEL_NAME=gpt-4o-mini
-DISCUSSION_TIME=180
-VOTING_TIME=60
-ROUNDS_TO_WIN=3
+DISCUSSION_TIME=240           # 4 minutes (default)
+VOTING_TIME=120               # 2 minutes (default)
+ROUNDS_TO_WIN=1               # 1 round (default)
 ```
 
 **Generate secure JWT secrets:**
@@ -163,15 +163,47 @@ You should see:
    - **Voting Phase**: Vote for who you think is AI (or human, if you're AI)
    - **Survive**: Make it through multiple rounds to win!
 
-## Optional: MTurk Payment System
+## Understanding the Gem System
 
-If you want to enable the gem economy and MTurk payment system:
+The game features a gem-based economy where players earn gems through gameplay and can convert them to real money.
 
+### Quick Overview
+
+**Earning Gems:**
+
+- **Single-Human Games** (1 human vs AI): 50 gems for everyone (no stakes, no risk)
+- **Multi-Human Games** (2+ humans): 100 base gems + stakes system with performance-based rewards
+  - Requires minimum 250 gems to join
+  - Optional stakes: 0%, 10%, 30%, 50%, or 100% of balance
+  - Winners get stake refund + share of loser pool (based on voting accuracy)
+  - Losers forfeit their stake
+
+**Conversion Rate:** 1000 gems = $1.00 USD
+
+**Viewing Balance:**
+- Dashboard page shows total earnings and balance
+- Wallet page (`/wallet`) for detailed balance and cashout options
+
+**Learn More:**
+- Visit `/gems-info` page in the app for detailed mechanics, examples, and formulas
+- See [markdowns/RULES.md](markdowns/RULES.md) for game mode differences
+
+### Cashing Out (Optional)
+
+To convert gems to real money via MTurk:
+
+1. **Add MTurk Worker ID** in profile page
+2. **Minimum:** $2.00 (2000 gems)
+3. **Request cashout** in wallet page
+4. **Complete MTurk HIT** when notified
+5. **Get paid** via MTurk (auto-approved within 1 hour)
+
+**Setup MTurk Integration:**
 1. **Set up AWS MTurk credentials** - See [MTURK_SETUP.md](MTURK_SETUP.md)
 2. **Configure cashout settings** in `.env`
 3. **Create admin user** for managing payments
 
-This is optional and not required for basic gameplay.
+MTurk integration is optional and not required for basic gameplay. You can play and earn gems without it.
 
 ## Game Configuration
 

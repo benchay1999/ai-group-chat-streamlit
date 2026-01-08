@@ -6,7 +6,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { roomAPI } from '../services/api';
-import { useGame } from '../context/GameContext';
+import { useGame } from '../contexts/GameContext';
 import toast from 'react-hot-toast';
 
 const JoinPage = () => {
