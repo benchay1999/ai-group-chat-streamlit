@@ -37,20 +37,26 @@ Open http://localhost:5173 and start playing!
 
 ## Documentation
 
-### For New Developers
+### Comprehensive Guides
 
-Start with the comprehensive tutorial that covers everything you need to understand and work on this project:
+| Guide | Description |
+|-------|-------------|
+| **[MARKDOWN_FILES_GUIDE.md](MARKDOWN_FILES_GUIDE.md)** | Complete map of all documentation files, organized by topic. Find the right doc quickly with the "What are you looking for?" reference table. |
+| **[CODE_EXPLANATION.md](CODE_EXPLANATION.md)** | Detailed explanation of every code file (~90+ files). Understand any file's purpose, responsibilities, and relationships. |
+| **[TUTORIAL.md](TUTORIAL.md)** | Complete project tutorial with architecture, codebase walkthrough, and development guide. Start here for deep learning. |
 
-**[TUTORIAL.md](TUTORIAL.md)** - Complete project tutorial with architecture, codebase walkthrough, and development guide
+### Quick Reference
 
-### Additional Documentation
-
-- **[START_HERE.md](START_HERE.md)** - Quick setup guide with troubleshooting
-- **[DEPLOYMENT_GUIDE_NGROK_NETLIFY.md](DEPLOYMENT_GUIDE_NGROK_NETLIFY.md)** - Step-by-step deployment with ngrok & Netlify
-- **[ENVIRONMENT_REFERENCE.md](ENVIRONMENT_REFERENCE.md)** - Complete environment variable reference
-- **[MTURK_SETUP.md](MTURK_SETUP.md)** - MTurk integration and payment system
-- **[env.example](env.example)** - Configuration template
-- **[markdowns/](markdowns/)** - Technical documentation (see [markdowns/README.md](markdowns/README.md) for index)
+| What You Need | Go To |
+|---------------|-------|
+| First-time setup | [START_HERE.md](START_HERE.md) |
+| Environment variables | [ENVIRONMENT_REFERENCE.md](ENVIRONMENT_REFERENCE.md) |
+| Deployment guide | [DEPLOYMENT_GUIDE_NGROK_NETLIFY.md](DEPLOYMENT_GUIDE_NGROK_NETLIFY.md) |
+| MTurk & payments | [MTURK_SETUP.md](MTURK_SETUP.md) |
+| Game rules | [markdowns/RULES.md](markdowns/RULES.md) |
+| System architecture | [markdowns/SYSTEM_ARCHITECTURE.md](markdowns/SYSTEM_ARCHITECTURE.md) |
+| Configuration template | [env.example](env.example) |
+| All technical docs | [markdowns/](markdowns/) (see [index](markdowns/README.md)) |
 
 ## How It Works
 
@@ -225,10 +231,12 @@ Contributions welcome! See [markdowns/DEVELOPER_GUIDE.md](markdowns/DEVELOPER_GU
 
 ## Support
 
-- Check [START_HERE.md](START_HERE.md) for troubleshooting
-- Review [markdowns/](markdowns/) for detailed technical docs
-- Check backend logs: `uvicorn backend.main:app --reload`
-- Check browser console for frontend errors
+- **Find the right doc:** Use [MARKDOWN_FILES_GUIDE.md](MARKDOWN_FILES_GUIDE.md) to locate documentation by topic
+- **Understand any code file:** Check [CODE_EXPLANATION.md](CODE_EXPLANATION.md) for detailed file descriptions
+- **Setup issues:** Follow [START_HERE.md](START_HERE.md) for troubleshooting
+- **Technical details:** Review [markdowns/](markdowns/) for in-depth documentation
+- **Backend logs:** Run `uvicorn backend.main:app --reload` to see debug output
+- **Frontend errors:** Check browser console (F12 → Console tab)
 
 ## License
 
